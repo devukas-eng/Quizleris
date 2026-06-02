@@ -246,6 +246,7 @@ export function getTopicBundles() {
             id: "algebra-linear-beginner",
             title: "Algebra: Linear Equations",
             language: "en",
+            category: "math",
             difficulty: "beginner",
             estimatedMinutes: 15,
             mode: "practice",
@@ -270,6 +271,7 @@ export function getTopicBundles() {
             id: "algebra-quadratic-intermediate",
             title: "Algebra: Quadratic Equations",
             language: "en",
+            category: "math",
             difficulty: "intermediate",
             estimatedMinutes: 20,
             mode: "practice",
@@ -286,17 +288,18 @@ export function getTopicBundles() {
                 { id: "alg_quad_i_8", prompt: "Using the quadratic formula, solve: \\(x^2 + 2x - 3 = 0\\)", choices: [{ id: "a", text: "\\(x = 1, -3\\)", isCorrect: true }, { id: "b", text: "\\(x = -1, 3\\)", isCorrect: false }, { id: "c", text: "\\(x = 2, -2\\)", isCorrect: false }, { id: "d", text: "\\(x = 3, -1\\)", isCorrect: false }] },
                 { id: "alg_quad_i_9", prompt: "What is the axis of symmetry of \\(y = x^2 - 4x + 3\\)?", choices: [{ id: "a", text: "\\(x = 2\\)", isCorrect: true }, { id: "b", text: "\\(x = -2\\)", isCorrect: false }, { id: "c", text: "\\(x = 4\\)", isCorrect: false }, { id: "d", text: "\\(x = 1\\)", isCorrect: false }] },
                 { id: "alg_quad_i_10", prompt: "Solve: \\(x^2 - 1 = 0\\)", choices: [{ id: "a", text: "\\(x = \\pm 1\\)", isCorrect: true }, { id: "b", text: "\\(x = 1\\)", isCorrect: false }, { id: "c", text: "\\(x = 0\\)", isCorrect: false }, { id: "d", text: "No solution", isCorrect: false }] },
-                { id: "alg_quad_i_11", prompt: "Solve: \\(x^2 + 3x + 2 = 0\\)", choices: [{ id: "a", text: "\\(x = -1, -2\\)", isCorrect: true }, { id: "b", text: "\\(x = 1, 2\\)", isCorrect: false }, { id: "c", text: "\\(x = -3, -2\\)", isCorrect: false }, { id: "d", text: "\\(x = 2, 3\\)", isCorrect: false }] },
+                { id: "alg_quad_i_11", prompt: "Solve: \\(x^2 + 3x + 2 = 0\\)", choices: [{ id: "a", text: "\\(x = -1, -2\\)", isCorrect: true }, { id: "b", text: "\\(x = 1, 2\\)", isCorrect: false }, { id: "c", text: "\\-3, -2\\", isCorrect: false }, { id: "d", text: "\\(2, 3\\)", isCorrect: false }] },
                 { id: "alg_quad_i_12", prompt: "For the quadratic \\(x^2 - 6x + 9\\), the discriminant is:", choices: [{ id: "a", text: "0", isCorrect: true }, { id: "b", text: "1", isCorrect: false }, { id: "c", text: "36", isCorrect: false }, { id: "d", text: "-1", isCorrect: false }] },
                 { id: "alg_quad_i_13", prompt: "Solve: \\(4x^2 - 25 = 0\\)", choices: [{ id: "a", text: "\\(x = \\pm \\frac{5}{2}\\)", isCorrect: true }, { id: "b", text: "2.5", isCorrect: true }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "25", isCorrect: false }] },
                 { id: "alg_quad_i_14", prompt: "What are the roots of \\(y = (x-1)(x+4)\\)?", choices: [{ id: "a", text: "\\(x = 1, -4\\)", isCorrect: true }, { id: "b", text: "\\(x = -1, 4\\)", isCorrect: false }, { id: "c", text: "\\(x = 1, 4\\)", isCorrect: false }, { id: "d", text: "\\(x = -1, -4\\)", isCorrect: false }] },
-                { id: "alg_quad_i_15", prompt: "Solve: \\(x^2 - 10x + 25 = 0\\)", choices: [{ id: "a", text: "\\(x = 5\\)", isCorrect: true }, { id: "b", text: "\\(x = -5\\)", isCorrect: false }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "\\(x = 10\\)", isCorrect: false }] }
+                { id: "alg_quad_i_15", prompt: "Solve: \\(x^2 - 10x + 25 = 0\\)", choices: [{ id: "a", text: "\\(x = 5\\)", isCorrect: true }, { id: "b", text: "\\(x = -5\\)", isCorrect: false }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "10", isCorrect: false }] }
             ]
         },
         {
             id: "algebra-polynomials-intermediate",
             title: "Algebra: Polynomials & Factoring",
             language: "en",
+            category: "math",
             difficulty: "intermediate",
             estimatedMinutes: 18,
             mode: "practice",
@@ -318,9 +321,63 @@ export function getTopicBundles() {
             ]
         },
         {
+            id: "physics-mechanics-intermediate",
+            title: "Physics: Classical Mechanics",
+            language: "en",
+            category: "math",
+            difficulty: "intermediate",
+            estimatedMinutes: 20,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 60 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "phys_mech_1",
+                    prompt: "What is the kinetic energy \\(E_k\\) of an object of mass \\(m\\) moving with velocity \\(v\\)?",
+                    choices: [
+                        { id: "a", text: "\\(E_k = \\frac{1}{2}mv^2\\)", isCorrect: true },
+                        { id: "b", text: "\\(E_k = mv\\)", isCorrect: false },
+                        { id: "c", text: "\\(E_k = mgh\\)", isCorrect: false },
+                        { id: "d", text: "\\(E_k = \\frac{1}{2}mv\\)", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "phys_mech_2",
+                    prompt: "According to Newton's Second Law, force \\(F\\) is equal to:",
+                    choices: [
+                        { id: "a", text: "\\(F = ma\\) (mass × acceleration)", isCorrect: true },
+                        { id: "b", text: "\\(F = mv\\) (mass × velocity)", isCorrect: false },
+                        { id: "c", text: "\\(F = \\frac{m}{a}\\)", isCorrect: false },
+                        { id: "d", text: "\\(F = mgh\\)", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "phys_mech_3",
+                    prompt: "What is the gravitational potential energy \\(E_p\\) of an object near Earth's surface?",
+                    choices: [
+                        { id: "a", text: "\\(E_p = mgh\\)", isCorrect: true },
+                        { id: "b", text: "\\(E_p = \\frac{1}{2}mv^2\\)", isCorrect: false },
+                        { id: "c", text: "\\(E_p = Fd\\)", isCorrect: false },
+                        { id: "d", text: "\\(E_p = mg\\)", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "phys_mech_4",
+                    prompt: "Which of the following describes the escape velocity \\(v_e\\) from a spherical planet of mass \\(M\\) and radius \\(R\\)?",
+                    choices: [
+                        { id: "a", text: "\\(v_e = \\sqrt{\\frac{2GM}{R}}\\)", isCorrect: true },
+                        { id: "b", text: "\\(v_e = \\sqrt{\\frac{GM}{R}}\\)", isCorrect: false },
+                        { id: "c", text: "\\(v_e = \\frac{2GM}{R}\\)", isCorrect: false },
+                        { id: "d", text: "\\(v_e = \\sqrt{2gR}\\)", isCorrect: true }
+                    ]
+                }
+            ]
+        },
+        {
             id: "combinatorics-counting-beginner",
             title: "Combinatorics: Counting Principles",
             language: "en",
+            category: "math",
             difficulty: "beginner",
             estimatedMinutes: 16,
             mode: "practice",
@@ -345,6 +402,7 @@ export function getTopicBundles() {
             id: "combinatorics-permutations-intermediate",
             title: "Combinatorics: Permutations & Combinations",
             language: "en",
+            category: "math",
             difficulty: "intermediate",
             estimatedMinutes: 22,
             mode: "practice",
@@ -372,6 +430,7 @@ export function getTopicBundles() {
             id: "combinatorics-binomial-advanced",
             title: "Combinatorics: Binomial Theorem",
             language: "en",
+            category: "math",
             difficulty: "advanced",
             estimatedMinutes: 18,
             mode: "practice",
@@ -388,6 +447,145 @@ export function getTopicBundles() {
                 { id: "comb_bin_a_8", prompt: "What is the sum of all coefficients in \\((x+y)^5\\)?", choices: [{ id: "a", text: "32", isCorrect: true }, { id: "b", text: "25", isCorrect: false }, { id: "c", text: "10", isCorrect: false }, { id: "d", text: "120", isCorrect: false }] },
                 { id: "comb_bin_a_9", prompt: "Expand \\((1-x)^4\\) using the binomial theorem.", choices: [{ id: "a", text: "\\(1 - 4x + 6x^2 - 4x^3 + x^4\\)", isCorrect: true }, { id: "b", text: "\\(1 - 4x + 4x^2\\)", isCorrect: false }, { id: "c", text: "\\(1 - x^4\\)", isCorrect: false }, { id: "d", text: "\\(1 + 4x + 6x^2 + 4x^3 + x^4\\)", isCorrect: false }] },
                 { id: "comb_bin_a_10", prompt: "What is the middle term in the expansion of \\((2a+b)^6\\)?", choices: [{ id: "a", text: "\\(160a^3b^3\\)", isCorrect: true }, { id: "b", text: "\\(64a^3b^3\\)", isCorrect: false }, { id: "c", text: "\\(240a^2b^4\\)", isCorrect: false }, { id: "d", text: "\\(8a^6b\\)", isCorrect: false }] }
+            ]
+        },
+        {
+            id: "cs-javascript-beginner",
+            title: "JavaScript Fundamentals",
+            language: "en",
+            category: "cs",
+            difficulty: "beginner",
+            estimatedMinutes: 12,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 45 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "cs_js_1",
+                    prompt: "What is the value of `typeof null` in JavaScript?",
+                    choices: [
+                        { id: "a", text: '`"object"`', isCorrect: true },
+                        { id: "b", text: '`"null"`', isCorrect: false },
+                        { id: "c", text: '`"undefined"`', isCorrect: false },
+                        { id: "d", text: '`"function"`', isCorrect: false }
+                    ]
+                },
+                {
+                    id: "cs_js_2",
+                    prompt: "Which keyword declares a block-scoped variable that cannot be reassigned?",
+                    choices: [
+                        { id: "a", text: "`const`", isCorrect: true },
+                        { id: "b", text: "`let`", isCorrect: false },
+                        { id: "c", text: "`var`", isCorrect: false },
+                        { id: "d", text: "`static`", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "cs_js_3",
+                    prompt: "What is the result of `\"5\" + 2` in JavaScript?",
+                    choices: [
+                        { id: "a", text: '`\"52\"`', isCorrect: true },
+                        { id: "b", text: "`7`", isCorrect: false },
+                        { id: "c", text: "`NaN`", isCorrect: false },
+                        { id: "d", text: "`TypeError`", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "cs_js_4",
+                    prompt: "Which array method creates a new array with all elements that pass a test?",
+                    choices: [
+                        { id: "a", text: "`.filter()`", isCorrect: true },
+                        { id: "b", text: "`.map()`", isCorrect: false },
+                        { id: "c", text: "`.forEach()`", isCorrect: false },
+                        { id: "d", text: "`.reduce()`", isCorrect: false }
+                    ]
+                }
+            ]
+        },
+        {
+            id: "cs-algorithms-intermediate",
+            title: "Data Structures & Algorithms",
+            language: "en",
+            category: "cs",
+            difficulty: "intermediate",
+            estimatedMinutes: 15,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 60 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "cs_algo_1",
+                    prompt: "What is the average time complexity of searching in a Balanced Binary Search Tree (like an AVL tree)?",
+                    choices: [
+                        { id: "a", text: "\\(O(\\log n)\\)", isCorrect: true },
+                        { id: "b", text: "\\(O(n)\\)", isCorrect: false },
+                        { id: "c", text: "\\(O(1)\\)", isCorrect: false },
+                        { id: "d", text: "\\(O(n \\log n)\\)", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "cs_algo_2",
+                    prompt: "Which sorting algorithm has a worst-case time complexity of \\(O(n^2)\\) but is highly efficient for small datasets?",
+                    choices: [
+                        { id: "a", text: "Insertion Sort", isCorrect: true },
+                        { id: "b", text: "Merge Sort", isCorrect: false },
+                        { id: "c", text: "Heap Sort", isCorrect: false },
+                        { id: "d", text: "Radix Sort", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "cs_algo_3",
+                    prompt: "Which of the following abstract data types operates on a LIFO (Last-In, First-Out) basis?",
+                    choices: [
+                        { id: "a", text: "Stack", isCorrect: true },
+                        { id: "b", text: "Queue", isCorrect: false },
+                        { id: "c", text: "Min-Heap", isCorrect: false },
+                        { id: "d", text: "Linked List", isCorrect: false }
+                    ]
+                }
+            ]
+        },
+        {
+            id: "lang-english-grammar-intermediate",
+            title: "English: Advanced Idioms & Grammar",
+            language: "en",
+            category: "lang",
+            difficulty: "intermediate",
+            estimatedMinutes: 10,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 30 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "lang_en_1",
+                    prompt: "Complete the sentence: 'If I ___ you, I would have accepted the offer immediately.'",
+                    choices: [
+                        { id: "a", text: "had been", isCorrect: true },
+                        { id: "b", text: "were", isCorrect: false },
+                        { id: "c", text: "was", isCorrect: false },
+                        { id: "d", text: "would be", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lang_en_2",
+                    prompt: "What does the idiom 'bite the bullet' mean?",
+                    choices: [
+                        { id: "a", text: "To face a difficult situation with courage and get it over with", isCorrect: true },
+                        { id: "b", text: "To speak without thinking carefully first", isCorrect: false },
+                        { id: "c", text: "To refuse to accept a bad decision", isCorrect: false },
+                        { id: "d", text: "To waste resources on an impossible task", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lang_en_3",
+                    prompt: "Choose the grammatically correct sentence:",
+                    choices: [
+                        { id: "a", text: "The team has finished their preparations for the upcoming tournament.", isCorrect: true },
+                        { id: "b", text: "Each of the students are required to submit their homework.", isCorrect: false },
+                        { id: "c", text: "Neither the teacher nor the students was happy with the schedule change.", isCorrect: false },
+                        { id: "d", text: "Between you and I, this decision is highly controversial.", isCorrect: false }
+                    ]
+                }
             ]
         }
     ];
