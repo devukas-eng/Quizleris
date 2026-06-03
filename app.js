@@ -14,6 +14,23 @@ function initApp() {
     try {
         // Initialize language system first
         initLanguage();
+        
+        // Initialize theme switching system
+        const themeSelector = document.getElementById("theme-selector");
+        const applyTheme = (theme) => {
+            document.body.classList.remove("theme-emerald", "theme-cyberpunk", "theme-solar", "theme-slate-dark");
+            document.body.classList.add(`theme-${theme}`);
+        };
+        if (themeSelector) {
+            const savedTheme = localStorage.getItem("selected_theme") || "emerald";
+            themeSelector.value = savedTheme;
+            applyTheme(savedTheme);
+            themeSelector.addEventListener("change", (e) => {
+                const theme = e.target.value;
+                localStorage.setItem("selected_theme", theme);
+                applyTheme(theme);
+            });
+        }
         // Callbacks
         const onHome = () => renderStartMenu();
         const onAdmin = () => toggleAdminMode();

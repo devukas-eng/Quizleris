@@ -31,6 +31,12 @@ let adminShuffleQuestions;
 let adminShuffleAnswers;
 let btnShuffleQuestions;
 let btnShuffleAnswers;
+let adminBulkImportBtn;
+let bulkImportOverlay;
+let bulkImportCloseBtn;
+let bulkImportCancelBtn;
+let bulkImportSubmitBtn;
+let bulkImportTextarea;
 let goHome = () => {
 };
 function refreshAdminToggleVisibility() {
@@ -74,6 +80,12 @@ function setupAdmin(callbacks) {
   adminShuffleAnswers = getRequiredElement("admin-shuffle-answers");
   btnShuffleQuestions = getRequiredElement("btn-shuffle-questions");
   btnShuffleAnswers = getRequiredElement("btn-shuffle-answers");
+  adminBulkImportBtn = getRequiredElement("admin-bulk-import-btn");
+  bulkImportOverlay = getRequiredElement("bulk-import-modal-overlay");
+  bulkImportCloseBtn = getRequiredElement("bulk-import-close-btn");
+  bulkImportCancelBtn = getRequiredElement("bulk-import-cancel-btn");
+  bulkImportSubmitBtn = getRequiredElement("bulk-import-submit-btn");
+  bulkImportTextarea = getRequiredElement("bulk-import-textarea");
   setupSegmentedControl();
   setupQuizModeSegmentedControl();
   setupShuffleToggles();
@@ -102,7 +114,6 @@ function toggleAdminMode() {
   }
 }
 function renderAdminForm() {
-  if (!adminQuiz) return;
   if (!adminQuiz) return;
   adminQuizTitle.value = adminQuiz.title;
   if (!adminQuiz.timerConfig) {
@@ -163,16 +174,40 @@ function renderAdminForm() {
         ${t("admin.promptLabel")}
         <textarea class="admin-question-prompt" data-qidx="${qIdx}">${q.prompt}</textarea>
       </label>
+
+      <!-- Real-Time LaTeX/Text Preview -->
+      <div class="live-preview-container" id="live-preview-${qIdx}" style="margin: 10px 0 15px 0; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15);">
+        <small style="color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px; font-size: 0.8rem;">${t('admin.livePreview') || 'Live Preview'}</small>
+        <div class="live-preview-content" style="color: white; min-height: 20px; font-size: 1rem; white-space: pre-wrap;"></div>
+      </div>
       
       <div class="admin-q-config-area" data-qidx="${qIdx}">
         ${renderQuestionConfig(q, qIdx)}
       </div>
 
-      <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between;">
-        <button class="admin-remove-question-btn btn btn-danger" data-qidx="${qIdx}">${t("admin.removeQuestion")}</button>
+      <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; width: 100%;">
+        <button class="admin-remove-question-btn btn btn-danger" data-qidx="${qIdx}" style="margin-right: auto;">${t("admin.removeQuestion")}</button>
+        <button class="admin-move-up-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === 0 ? "disabled" : ""} style="padding: 6px 12px; font-size: 0.85rem;">⬆️ ${t('admin.moveUp') || 'Up'}</button>
+        <button class="admin-move-down-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === adminQuiz.questions.length - 1 ? "disabled" : ""} style="padding: 6px 12px; font-size: 0.85rem;">⬇️ ${t('admin.moveDown') || 'Down'}</button>
+        <button class="admin-duplicate-question-btn btn btn-secondary" data-qidx="${qIdx}" style="padding: 6px 12px; font-size: 0.85rem; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3);">📄 ${t('admin.duplicate') || 'Clone'}</button>
       </div>
     `;
     adminQuestionsList.appendChild(qDiv);
+
+    // Initial Live Preview Render
+    const pDiv = qDiv.querySelector(`#live-preview-${qIdx} .live-preview-content`);
+    if (pDiv) {
+      pDiv.textContent = q.prompt || "...";
+      try {
+        window.renderMathInElement(pDiv, {
+          delimiters: [
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true },
+          ],
+        });
+      } catch (e) { console.error(e); }
+    }
+
     const typeSelector = qDiv.querySelector(".admin-q-type-selector");
     typeSelector.onchange = () => {
       if (!adminQuiz) return;
@@ -195,6 +230,8 @@ function renderAdminForm() {
     qDiv.querySelectorAll(".admin-num-answer, .admin-num-tolerance, .admin-num-tolerance-type, .admin-blank-answer").forEach((input) => {
       input.addEventListener("input", () => updateQuizFromDOM());
     });
+
+    // Real-time LaTeX preview handler
     qDiv.querySelector(".admin-question-prompt")?.addEventListener("input", (e) => {
       if (!adminQuiz) return;
       const target = e.target;
@@ -202,10 +239,26 @@ function renderAdminForm() {
       const oldBlankCount = (adminQuiz.questions[qIdx].prompt.match(/___/g) || []).length;
       const newBlankCount = (prompt.match(/___/g) || []).length;
       adminQuiz.questions[qIdx].prompt = prompt;
+
+      // Update live preview!
+      const previewDiv = qDiv.querySelector(`#live-preview-${qIdx} .live-preview-content`);
+      if (previewDiv) {
+        previewDiv.textContent = prompt || "...";
+        try {
+          window.renderMathInElement(previewDiv, {
+            delimiters: [
+              { left: "\\(", right: "\\)", display: false },
+              { left: "\\[", right: "\\]", display: true },
+            ],
+          });
+        } catch (err) { console.error(err); }
+      }
+
       if (adminQuiz.questions[qIdx].type === "fill-blank" && oldBlankCount !== newBlankCount) {
         renderAdminForm();
       }
     });
+
     qDiv.querySelectorAll(".admin-choice-text").forEach((input) => input.addEventListener("input", () => updateQuizFromDOM()));
     qDiv.querySelector(".admin-insert-blank-btn")?.addEventListener("click", () => {
       const promptEl = qDiv.querySelector(".admin-question-prompt");
@@ -260,6 +313,36 @@ function renderAdminForm() {
         });
       });
     }
+
+    // Reordering: Move Up
+    qDiv.querySelector(".admin-move-up-btn")?.addEventListener("click", () => {
+      if (!adminQuiz || qIdx === 0) return;
+      updateQuizFromDOM();
+      const questions = adminQuiz.questions;
+      [questions[qIdx], questions[qIdx - 1]] = [questions[qIdx - 1], questions[qIdx]];
+      renderAdminForm();
+    });
+
+    // Reordering: Move Down
+    qDiv.querySelector(".admin-move-down-btn")?.addEventListener("click", () => {
+      if (!adminQuiz || qIdx === adminQuiz.questions.length - 1) return;
+      updateQuizFromDOM();
+      const questions = adminQuiz.questions;
+      [questions[qIdx], questions[qIdx + 1]] = [questions[qIdx + 1], questions[qIdx]];
+      renderAdminForm();
+    });
+
+    // Duplicate/Clone Question
+    qDiv.querySelector(".admin-duplicate-question-btn")?.addEventListener("click", () => {
+      if (!adminQuiz) return;
+      updateQuizFromDOM();
+      const cloned = JSON.parse(JSON.stringify(adminQuiz.questions[qIdx]));
+      cloned.id = `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      adminQuiz.questions.splice(qIdx + 1, 0, cloned);
+      renderAdminForm();
+      alert(t('admin.duplicateSuccess') || "Question duplicated!");
+    });
+
     qDiv.querySelector(`.admin-remove-question-btn`).addEventListener("click", () => {
       if (!adminQuiz) return;
       if (!confirm(t("admin.confirmRemoveQuestion"))) return;
@@ -302,7 +385,7 @@ function renderAdminForm() {
           if (file && adminQuiz) {
             try {
               const resizedBase64 = await resizeImage(file, 480);
-              adminQuiz.questions[qIdx].choices[cIdx].image = resizedBase64;
+               adminQuiz.questions[qIdx].choices[cIdx].image = resizedBase64;
               renderAdminForm();
             } catch (err) {
               alert("Error processing image: " + err);
@@ -569,6 +652,101 @@ async function handleOCRUpload(event) {
     adminScanQuestionBtn.textContent = t("admin.scanOCR");
   }
 }
+function parseBulkImportText(text) {
+  const blocks = text.split(/\n\s*\n+/);
+  const questions = [];
+  for (let block of blocks) {
+    block = block.trim();
+    if (!block) continue;
+    const lines = block.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) continue;
+    let prompt = "";
+    const choices = [];
+    let isTF = false;
+    let isTrue = false;
+    let firstLine = lines[0];
+    if (firstLine.toUpperCase().startsWith("Q:") || firstLine.toUpperCase().startsWith("KLAUSIMAS:")) {
+      prompt = firstLine.replace(/^(Q:|KLAUSIMAS:)\s*/i, "").trim();
+    } else {
+      prompt = firstLine;
+    }
+    const choiceLines = lines.slice(1);
+    const tfKeywords = ["TAIP", "NE", "TRUE", "FALSE", "TEISINGA", "NETEISINGA"];
+    const singleWordTF = choiceLines.length === 1 && tfKeywords.includes(choiceLines[0].toUpperCase());
+    if (singleWordTF) {
+      isTF = true;
+      const val = choiceLines[0].toUpperCase();
+      isTrue = (val === "TAIP" || val === "TRUE" || val === "TEISINGA");
+    } else {
+      for (let line of choiceLines) {
+        const choiceMatch = line.match(/^(\*)?\s*([A-Za-z0-9]+[\.\)])\s*(.*)$/);
+        if (choiceMatch) {
+          const isCorrect = !!choiceMatch[1];
+          const textVal = choiceMatch[3].trim();
+          choices.push({
+            id: String.fromCharCode(97 + choices.length),
+            text: textVal,
+            isCorrect: isCorrect
+          });
+        } else {
+          let isCorrect = line.startsWith("*") || line.endsWith("*");
+          let cleanLine = line.replace(/^\*\s*/, "").replace(/\s*\*$/, "").trim();
+          const choiceMatchClean = cleanLine.match(/^([A-Za-z0-9]+[\.\)])\s*(.*)$/);
+          if (choiceMatchClean) {
+            choices.push({
+              id: String.fromCharCode(97 + choices.length),
+              text: choiceMatchClean[2].trim(),
+              isCorrect: isCorrect
+            });
+          } else {
+            if (cleanLine.toUpperCase() === "TAIP" || cleanLine.toUpperCase() === "TRUE" || cleanLine.toUpperCase() === "TEISINGA" ||
+                cleanLine.toUpperCase() === "NE" || cleanLine.toUpperCase() === "FALSE" || cleanLine.toUpperCase() === "NETEISINGA") {
+              isTF = true;
+              if (isCorrect) {
+                isTrue = (cleanLine.toUpperCase() === "TAIP" || cleanLine.toUpperCase() === "TRUE" || cleanLine.toUpperCase() === "TEISINGA");
+              }
+            } else {
+              choices.push({
+                id: String.fromCharCode(97 + choices.length),
+                text: cleanLine,
+                isCorrect: isCorrect
+              });
+            }
+          }
+        }
+      }
+    }
+    if (isTF) {
+      questions.push({
+        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        prompt: prompt,
+        type: "true-false",
+        isTrue: isTrue
+      });
+    } else if (choices.length > 0) {
+      if (!choices.some(c => c.isCorrect)) {
+        choices[0].isCorrect = true;
+      }
+      const correctCount = choices.filter(c => c.isCorrect).length;
+      questions.push({
+        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        prompt: prompt,
+        type: "multiple-choice",
+        allowMultipleAnswers: correctCount > 1,
+        choices: choices
+      });
+    } else {
+      questions.push({
+        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        prompt: prompt,
+        type: "text",
+        isLongAnswer: false,
+        expectedKeywords: []
+      });
+    }
+  }
+  return questions;
+}
 function setupAdminEventsInternal() {
   adminToggle.addEventListener("click", toggleAdminMode);
   adminAddQuestionBtn.addEventListener("click", () => {
@@ -610,6 +788,31 @@ function setupAdminEventsInternal() {
   });
   adminCancelBtn.addEventListener("click", () => {
     if (confirm(t("admin.confirmCancel"))) toggleAdminMode();
+  });
+
+  // Bulk Import Events
+  adminBulkImportBtn.addEventListener("click", () => {
+    if (!adminQuiz) adminQuiz = { id: generateQuizId(), title: "New Quiz", questions: [] };
+    bulkImportTextarea.value = "";
+    bulkImportOverlay.style.display = "flex";
+    bulkImportTextarea.focus();
+  });
+  const hideBulkImport = () => {
+    bulkImportOverlay.style.display = "none";
+  };
+  bulkImportCloseBtn.addEventListener("click", hideBulkImport);
+  bulkImportCancelBtn.addEventListener("click", hideBulkImport);
+  bulkImportSubmitBtn.addEventListener("click", () => {
+    const text = bulkImportTextarea.value;
+    const parsed = parseBulkImportText(text);
+    if (parsed.length > 0) {
+      updateQuizFromDOM();
+      adminQuiz.questions.push(...parsed);
+      renderAdminForm();
+      hideBulkImport();
+    } else {
+      alert("Neradome jokių klausimų. Patikrinkite formatą.");
+    }
   });
   document.getElementById("admin-btn-back")?.addEventListener("click", () => {
     if (adminMode) toggleAdminMode();

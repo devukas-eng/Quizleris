@@ -1,4 +1,4 @@
-:root {
+:root, .theme-emerald {
     --bg: #FFFFFF;
     --panel: #F3F4F6;
     --text: #1F2937;
@@ -10,7 +10,92 @@
     --radius: 12px;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     --font: "Inter", system-ui, -apple-system, sans-serif;
+    
+    --bg-grad: radial-gradient(circle at 20% 20%, rgba(27, 155, 126, 0.06), transparent 35%),
+               radial-gradient(circle at 80% 0%, rgba(34, 201, 151, 0.06), transparent 35%),
+               #FFFFFF;
+    --app-bg: rgba(255, 255, 255, 0.95);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --input-bg: #ffffff;
+    --btn-bg: #ffffff;
+    --btn-hover-bg: #f8fafc;
+    --summary-bg: #ffffff;
+    --card-bg: #ffffff;
+    --glow-color: rgba(27, 155, 126, 0.25);
 }
+
+.theme-cyberpunk {
+    --bg: #0b071e;
+    --panel: rgba(25, 16, 59, 0.6);
+    --text: #f3f0ff;
+    --accent: #ff007f; /* Hot Pink */
+    --accent-strong: #00f0ff; /* Bright Cyan */
+    --danger: #ff3366;
+    --success: #05ffc5;
+    --muted: #a59bbd;
+    --shadow: 0 15px 35px rgba(255, 0, 127, 0.25);
+    
+    --bg-grad: radial-gradient(circle at 20% 20%, rgba(255, 0, 127, 0.15), transparent 45%),
+               radial-gradient(circle at 80% 80%, rgba(0, 240, 255, 0.15), transparent 45%),
+               #090514;
+    --app-bg: rgba(13, 8, 34, 0.82);
+    --border-color: rgba(255, 0, 127, 0.25);
+    --input-bg: rgba(18, 12, 47, 0.8);
+    --btn-bg: rgba(25, 16, 59, 0.8);
+    --btn-hover-bg: rgba(255, 255, 255, 0.1);
+    --summary-bg: rgba(18, 12, 47, 0.6);
+    --card-bg: rgba(18, 12, 47, 0.6);
+    --glow-color: rgba(255, 0, 127, 0.4);
+}
+
+.theme-solar {
+    --bg: #120e0a;
+    --panel: rgba(32, 24, 18, 0.65);
+    --text: #fff3e6;
+    --accent: #ff9100; /* Amber Orange */
+    --accent-strong: #ff4d00; /* Solar Orange-Red */
+    --danger: #ef4444;
+    --success: #10b981;
+    --muted: #a69282;
+    --shadow: 0 15px 35px rgba(255, 145, 0, 0.2);
+    
+    --bg-grad: radial-gradient(circle at 15% 20%, rgba(255, 145, 0, 0.15), transparent 45%),
+               radial-gradient(circle at 85% 80%, rgba(255, 77, 0, 0.12), transparent 45%),
+               #100b07;
+    --app-bg: rgba(20, 15, 11, 0.85);
+    --border-color: rgba(255, 145, 0, 0.2);
+    --input-bg: rgba(28, 21, 16, 0.8);
+    --btn-bg: rgba(32, 24, 18, 0.8);
+    --btn-hover-bg: rgba(255, 255, 255, 0.08);
+    --summary-bg: rgba(24, 18, 14, 0.6);
+    --card-bg: rgba(24, 18, 14, 0.6);
+    --glow-color: rgba(255, 145, 0, 0.45);
+}
+
+.theme-slate-dark {
+    --bg: #0f172a; /* Slate 900 */
+    --panel: rgba(30, 41, 59, 0.55); /* Slate 800 translucent */
+    --text: #f8fafc; /* Slate 50 */
+    --accent: #38bdf8; /* Sky 400 */
+    --accent-strong: #0ea5e9; /* Sky 500 */
+    --danger: #f87171; /* Red 400 */
+    --success: #34d399; /* Emerald 400 */
+    --muted: #94a3b8; /* Slate 400 */
+    --shadow: 0 15px 35px rgba(15, 23, 42, 0.6);
+    
+    --bg-grad: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 40%),
+               radial-gradient(circle at 80% 80%, rgba(14, 165, 233, 0.1), transparent 40%),
+               #020617; /* Slate 950 */
+    --app-bg: rgba(15, 23, 42, 0.8);
+    --border-color: rgba(255, 255, 255, 0.12);
+    --input-bg: rgba(30, 41, 59, 0.7);
+    --btn-bg: rgba(30, 41, 59, 0.7);
+    --btn-hover-bg: rgba(255, 255, 255, 0.06);
+    --summary-bg: rgba(30, 41, 59, 0.4);
+    --card-bg: rgba(30, 41, 59, 0.4);
+    --glow-color: rgba(56, 189, 248, 0.35);
+}
+
 
 ::placeholder {
     color: #9E9E9E;
@@ -20,18 +105,18 @@
 
 .input-field {
     width: 100%;
-    background: #ffffff;
-    border: 1px solid #E3E8EF;
+    background: var(--input-bg, #ffffff);
+    border: 1px solid var(--border-color, #E3E8EF);
     border-radius: var(--radius);
     padding: 10px 16px;
     color: var(--text);
     font-family: var(--font);
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.4s ease, color 0.4s ease;
 }
 
 .input-field:focus {
-    border-color: #06C167;
-    box-shadow: 0 0 0 2px rgba(6, 193, 103, 0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--glow-color);
     outline: none;
 }
 
@@ -44,9 +129,7 @@
 body {
     margin: 0;
     min-height: 100vh;
-    background: radial-gradient(circle at 20% 20%, rgba(27, 155, 126, 0.04), transparent 30%),
-        radial-gradient(circle at 80% 0%, rgba(34, 201, 151, 0.04), transparent 30%),
-        var(--bg);
+    background: var(--bg-grad);
     color: var(--text);
     font-family: var(--font);
     display: flex;
@@ -54,15 +137,19 @@ body {
     justify-content: center;
     align-items: center;
     padding: 32px;
+    transition: background 0.4s ease, color 0.4s ease;
 }
 
 #app-root {
     width: min(900px, 100%);
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--app-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     padding: 24px 28px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
 }
 
 .quiz-header {
@@ -142,10 +229,11 @@ body {
     gap: 6px;
     padding: 6px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: #ffffff;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    background: var(--btn-bg, #ffffff);
     color: var(--text);
     font-weight: 600;
+    transition: all 0.3s ease;
 }
 
 .question-counter {
@@ -180,9 +268,10 @@ body {
     gap: 16px;
     margin-bottom: 24px;
     padding: 20px;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--summary-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--radius);
+    transition: all 0.3s ease;
 }
 
 .results-score {
@@ -222,11 +311,12 @@ body {
 }
 
 .result-question-item {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
     border-radius: var(--radius);
     padding: 16px;
     margin-bottom: 12px;
+    transition: all 0.3s ease;
 }
 
 .result-question-header {
@@ -257,8 +347,8 @@ body {
 
 /* Admin UI styles */
 .admin-toggle-btn {
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--btn-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
     border-radius: var(--radius);
     padding: 8px 16px;
     color: var(--text);
@@ -272,10 +362,11 @@ body {
 
 .admin-panel {
     margin-top: 24px;
-    background: #ffffff;
+    background: var(--panel, #ffffff);
     border-radius: var(--radius);
     padding: 20px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    transition: all 0.3s ease;
 }
 
 .admin-panel h2 {
@@ -298,14 +389,15 @@ body {
 /* Segmented Control */
 .segmented-control {
     display: flex;
-    background: #f1f5f9;
+    background: var(--panel, #f1f5f9);
     backdrop-filter: blur(8px);
     border-radius: 12px;
     padding: 2px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     gap: 2px;
     margin-top: 8px;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+    transition: all 0.3s ease;
 }
 
 .segment-btn {
@@ -401,15 +493,15 @@ body {
     height: 36px;
     padding: 0 10px;
     border-radius: 999px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
     /* Soft border */
-    background-color: #ffffff !important;
-    /* Ensure white pill background */
+    background-color: var(--btn-bg, #ffffff) !important;
     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06) !important;
     cursor: pointer;
     font-size: 1.2rem;
     line-height: 1;
     margin-left: 4px;
+    color: var(--text);
     transition: all 0.2s ease;
 }
 
@@ -425,21 +517,21 @@ body {
 .admin-form select,
 .admin-form textarea {
     width: 100%;
-    background: #ffffff;
-    border: 1px solid #E3E8EF;
+    background: var(--input-bg, #ffffff);
+    border: 1px solid var(--border-color, #E3E8EF);
     border-radius: var(--radius);
     padding: 10px 16px;
     color: var(--text);
     font-family: var(--font);
     margin-top: 4px;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.4s ease, color 0.4s ease;
 }
 
 .admin-form input:focus,
 .admin-form select:focus,
 .admin-form textarea:focus {
-    border-color: #06C167;
-    box-shadow: 0 0 0 2px rgba(6, 193, 103, 0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--glow-color);
     outline: none;
 }
 
@@ -540,21 +632,21 @@ body {
     gap: 8px;
     padding: 10px 20px;
     border-radius: var(--radius);
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
     font-family: var(--font);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
     text-decoration: none;
-    background: #ffffff;
+    background: var(--btn-bg, #ffffff);
     color: var(--text);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     font-size: 0.95rem;
 }
 
 .btn:hover {
-    background: #f8fafc;
-    border-color: rgba(0, 0, 0, 0.15);
+    background: var(--btn-hover-bg, #f8fafc);
+    border-color: var(--accent);
 }
 
 .btn:active {
@@ -658,13 +750,14 @@ body {
     max-width: 460px;
     margin: 10px auto;
     padding: 1.8rem;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--app-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
     border-radius: 24px;
     backdrop-filter: blur(20px);
     box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
     text-align: center;
     animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.3s ease;
 }
 
 @keyframes slideUpFade {
@@ -690,12 +783,12 @@ body {
 }
 
 .join-quiz-info {
-    background: #f8fafc;
+    background: var(--panel, #f8fafc);
     border-radius: 16px;
     padding: 1.2rem;
     margin-bottom: 1.5rem;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    transition: transform 0.3s ease;
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
+    transition: transform 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .join-quiz-info:hover {
@@ -731,19 +824,19 @@ body {
 
 .join-input {
     width: 100%;
-    background: #ffffff;
-    border: 1px solid #E3E8EF;
+    background: var(--input-bg, #ffffff);
+    border: 1px solid var(--border-color, #E3E8EF);
     border-radius: var(--radius);
     padding: 1rem 1.2rem;
     color: var(--text);
     font-size: 1.1rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .join-input:focus {
-    border-color: #06C167;
-    background: #ffffff;
-    box-shadow: 0 0 0 2px rgba(6, 193, 103, 0.18);
+    border-color: var(--accent);
+    background: var(--input-bg, #ffffff);
+    box-shadow: 0 0 0 2px var(--glow-color);
     outline: none;
 }
 
@@ -838,28 +931,29 @@ body {
 .dashboard-table {
     width: 100%;
     border-collapse: collapse;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--panel, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--radius);
     overflow: hidden;
     margin-bottom: 24px;
+    transition: all 0.3s ease;
 }
 
 .dashboard-table th,
 .dashboard-table td {
     padding: 16px;
     text-align: left;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
 }
 
 .dashboard-table th {
-    background: #f8fafc;
+    background: rgba(0, 0, 0, 0.1);
     color: var(--muted);
     font-weight: 600;
 }
 
 .dashboard-table tr:hover {
-    background: #f1f5f9;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .score-good {
@@ -879,9 +973,10 @@ body {
     text-align: center;
     color: var(--muted);
     padding: 40px;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--panel, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--radius);
+    transition: all 0.3s ease;
 }
 
 .text-danger {
@@ -900,12 +995,15 @@ body {
     width: min(800px, 95vw);
     max-height: 90vh;
     z-index: 2000;
-    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow);
     overflow-y: auto;
-    background: #ffffff;
+    background: var(--app-bg, #ffffff);
     padding: 30px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
     border-radius: var(--radius);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: all 0.3s ease;
 }
 
 /* --- Advanced Question Types & Exam Mode --- */
@@ -916,9 +1014,10 @@ body {
     margin-bottom: 24px;
     justify-content: center;
     padding: 15px;
-    background: #f8fafc;
+    background: var(--panel, #f8fafc);
     border-radius: var(--radius);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
+    transition: all 0.3s ease;
 }
 
 .nav-dot {
@@ -956,14 +1055,14 @@ body {
 
 .quiz-input {
     width: 100%;
-    background: #ffffff;
-    border: 1px solid #E3E8EF;
+    background: var(--input-bg, #ffffff);
+    border: 1px solid var(--border-color, #E3E8EF);
     color: var(--text);
     padding: 14px;
     border-radius: var(--radius);
     font-family: inherit;
     font-size: 1.1rem;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.4s ease, border-color 0.4s ease;
 }
 
 .quiz-input:focus {
@@ -1105,6 +1204,7 @@ body {
 
 @media (max-width: 768px) {
     #app-logo {
+        position: absolute;
         height: 32px;
         top: 10px;
         left: 15px;
@@ -1130,3 +1230,149 @@ body {
         font-size: 1.5rem !important;
     }
 }
+
+/* Modal Overlay Styling */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1500;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal-window {
+    background: var(--app-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    color: var(--text);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+
+/* Results Card Premium Styling */
+.results-card {
+    background: var(--summary-bg, #ffffff);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
+    border-radius: var(--radius);
+    padding: 30px;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+/* Confetti Particle Styling */
+.confetti-particle {
+    position: absolute;
+    pointer-events: none;
+    z-index: 9999;
+    will-change: transform, opacity;
+}
+
+@keyframes confetti-pop {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate3d(var(--tx), var(--ty), 0) rotate(720deg) scale(0);
+        opacity: 0;
+    }
+}
+
+/* Streak Badge Keyframes */
+@keyframes streak-pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 8px rgba(255, 78, 80, 0.4);
+    }
+    100% {
+        transform: scale(1.06);
+        box-shadow: 0 0 20px rgba(255, 78, 80, 0.8);
+    }
+}
+
+/* XP Rank Card and Progression */
+.xp-rank-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.xp-rank-card:hover {
+    transform: translateY(-4px);
+}
+
+.xp-value-glow {
+    text-shadow: 0 0 10px var(--accent);
+}
+
+/* Rank Glow animations and stylings */
+.rank-badge {
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.rank-novice .rank-badge {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+
+.rank-apprentice .rank-badge {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #3b82f6 !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+.rank-adept .rank-badge {
+    background: rgba(139, 92, 246, 0.15) !important;
+    color: #8b5cf6 !important;
+    border-color: rgba(139, 92, 246, 0.3) !important;
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+}
+
+.rank-master .rank-badge {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #f59e0b !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
+    animation: rank-glow-gold 1.5s infinite alternate;
+}
+
+.rank-genius .rank-badge {
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(139, 92, 246, 0.2)) !important;
+    color: #ec4899 !important;
+    border-color: rgba(236, 72, 153, 0.4) !important;
+    text-shadow: 0 0 8px rgba(236, 72, 153, 0.5);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), inset 0 0 10px rgba(236, 72, 153, 0.2);
+    animation: rank-glow-cosmic 2s infinite alternate;
+}
+
+@keyframes rank-glow-gold {
+    0% {
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+    100% {
+        box-shadow: 0 0 22px rgba(245, 158, 11, 0.6);
+    }
+}
+
+@keyframes rank-glow-cosmic {
+    0% {
+        box-shadow: 0 0 12px rgba(139, 92, 246, 0.3), 0 0 4px rgba(236, 72, 153, 0.2);
+        transform: scale(1);
+    }
+    100% {
+        box-shadow: 0 0 25px rgba(139, 92, 246, 0.6), 0 0 10px rgba(236, 72, 153, 0.4);
+        transform: scale(1.03);
+    }
+}

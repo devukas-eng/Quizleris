@@ -7,6 +7,8 @@ export class QuizState {
         this.currentIndex = 0;
         this.hasAnswered = false; // Only used for Practice mode flow control
         this.score = 0;
+        this.streak = 0;
+        this.maxStreak = 0;
         this.startTime = Date.now();
         // Map question ID to user answer (string, number, string[], base64)
         this.userAnswers = new Map();
@@ -65,8 +67,17 @@ export class QuizState {
         const grading = this.gradeQuestion(targetQ, answer);
         if (this.quiz.mode !== 'exam') {
             this.hasAnswered = true;
-            if (grading.isCorrect)
+            if (grading.isCorrect) {
                 this.score += 1;
+                this.streak += 1;
+                if (this.streak > this.maxStreak) {
+                    this.maxStreak = this.streak;
+                }
+            } else {
+                if (!grading.pendingReview) {
+                    this.streak = 0;
+                }
+            }
             return grading.isCorrect;
         }
         return false; // Result not immediately relevant in Exam Mode

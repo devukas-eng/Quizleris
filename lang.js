@@ -171,10 +171,10 @@ const translations = {
         'dashboard.time': 'Visas laikas',
         'dashboard.avgTime': 'Vid. laikas per klausimą',
         'dashboard.review': 'Peržiūra',
-        'topics.title': 'Anglų kalbos testų temos',
+        'topics.title': 'Paruoštų testų temos',
         'student.premadeEnglish': 'Anglų kalbos paruošti testai',
-        'student.premadeLithuanianSoon': 'Lietuviški testai (Netrukus)',
-        'student.premadeLithuanianHint': 'Lietuviški testai bus paruošti netrukus',
+        'student.premadeLithuanianSoon': 'Lietuviški paruošti testai',
+        'student.premadeLithuanianHint': 'Lietuviški paruošti testai',
         // Premium Expansion Keys
         'topics.categories.all': 'Visi',
         'topics.categories.math': 'Matematika ir Fizika',
@@ -195,12 +195,18 @@ const translations = {
         'admin.bulkImportHint': 'Naudokite formatą:\nQ: Klausimo tekstas\nA) Pirmas variantas\n*B) Antras variantas (teisingas, su *)\nC) Trečias variantas\n\nSkirkite klausimus tuščia eilute.',
         'admin.importBtn': 'Importuoti',
         'admin.duplicateSuccess': 'Klausimas sėkmingai nukopijuotas!',
-        'quiz.streak': '🔥 STREAKAS',
-        'quiz.streakMultiplier': 'Dvigubi taškai!',
-        'theme.label': 'Tema:',
         'theme.emerald': 'Smaragdas',
         'theme.cyberpunk': 'Kiberpankas',
         'theme.solar': 'Saulės blyksnis',
+        'theme.slateDark': 'Tamsus režimas',
+        'quiz.streak': '🔥 STREAKAS',
+        'quiz.xpEarned': 'Gauti taškai (XP)',
+        'quiz.rank': 'Pasiektas Rangas!',
+        'rank.novice': 'Naujokas 🥬',
+        'rank.apprentice': 'Mokinys 📖',
+        'rank.adept': 'Ekspertas 🧠',
+        'rank.master': 'Meistras ⚡',
+        'rank.genius': 'Mokslo Genijus 🌌',
     },
     en: {
         // Start Menu
@@ -373,10 +379,10 @@ const translations = {
         'dashboard.time': 'Total Time',
         'dashboard.avgTime': 'Avg Time per Question',
         'dashboard.review': 'Review',
-        'topics.title': 'English Quiz Topics',
+        'topics.title': 'Premade Quiz Topics',
         'student.premadeEnglish': 'English Premade Quizzes',
-        'student.premadeLithuanianSoon': 'Lithuanian Quizzes (Coming Soon)',
-        'student.premadeLithuanianHint': 'Lithuanian quizzes coming soon',
+        'student.premadeLithuanianSoon': 'Lithuanian Premade Quizzes',
+        'student.premadeLithuanianHint': 'Lithuanian Premade Quizzes',
         // Premium Expansion Keys
         'topics.categories.all': 'All',
         'topics.categories.math': 'Math & Physics',
@@ -403,6 +409,14 @@ const translations = {
         'theme.emerald': 'Emerald Glass',
         'theme.cyberpunk': 'Cyber Midnight',
         'theme.solar': 'Solar Flare',
+        'theme.slateDark': 'Slate Dark',
+        'quiz.xpEarned': 'Experience Points (XP)',
+        'quiz.rank': 'Rank Achieved!',
+        'rank.novice': 'Novice 🥬',
+        'rank.apprentice': 'Apprentice 📖',
+        'rank.adept': 'Adept 🧠',
+        'rank.master': 'Master ⚡',
+        'rank.genius': 'Science Genius 🌌',
     }
 };
 let currentLanguage = 'lt'; // Default to Lithuanian
@@ -428,6 +442,12 @@ export function t(key) {
 }
 // Update all translatable elements in the DOM
 export function updatePageLanguage() {
+    // Save current values of all select elements to prevent resets during option updates
+    const selectStates = new Map();
+    document.querySelectorAll('select').forEach(select => {
+        selectStates.set(select, select.value);
+    });
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n')?.trim();
         if (key) {
@@ -439,5 +459,10 @@ export function updatePageLanguage() {
         if (key && el instanceof HTMLInputElement) {
             el.placeholder = t(key);
         }
+    });
+
+    // Restore saved select values
+    selectStates.forEach((savedValue, select) => {
+        select.value = savedValue;
     });
 }

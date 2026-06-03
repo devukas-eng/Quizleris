@@ -376,6 +376,12 @@ export function t(key) {
 }
 // Update all translatable elements in the DOM
 export function updatePageLanguage() {
+    // Save current values of all select elements to prevent resets during option updates
+    const selectStates = new Map();
+    document.querySelectorAll('select').forEach(select => {
+        selectStates.set(select, select.value);
+    });
+
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n')?.trim();
         if (key) {
@@ -387,5 +393,10 @@ export function updatePageLanguage() {
         if (key && el instanceof HTMLInputElement) {
             el.placeholder = t(key);
         }
+    });
+
+    // Restore saved select values
+    selectStates.forEach((savedValue, select) => {
+        select.value = savedValue;
     });
 }

@@ -427,6 +427,38 @@ function renderImageUpload(q) {
         }
     }
 }
+function triggerCSSConfetti(target) {
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const x = rect.left + rect.width / 2 + window.scrollX;
+    const y = rect.top + rect.height / 2 + window.scrollY;
+    const colors = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"];
+    for (let i = 0; i < 20; i++) {
+        const p = document.createElement("div");
+        p.className = "confetti-particle";
+        p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        const size = Math.random() * 8 + 6;
+        p.style.width = `${size}px`;
+        p.style.height = `${size}px`;
+        const shape = Math.random();
+        if (shape < 0.33) {
+            p.style.borderRadius = "50%";
+        } else if (shape < 0.66) {
+            p.style.clipPath = "polygon(50% 0%, 0% 100%, 100% 100%)";
+        }
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = Math.random() * 120 + 60;
+        const tx = Math.cos(angle) * velocity;
+        const ty = Math.sin(angle) * velocity - (Math.random() * 80 + 20);
+        p.style.setProperty("--tx", `${tx}px`);
+        p.style.setProperty("--ty", `${ty}px`);
+        p.style.animation = `confetti-pop 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) forwards`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
+    }
+}
 /**
  * Handles the logic when a user provides an answer to a question.
  * Records the answer in the state and triggers a re-render for feedback if in Practice mode.
@@ -434,9 +466,19 @@ function renderImageUpload(q) {
 export function onAnswer(answer) {
     if (!quiz || (quiz.hasAnswered && quiz.quiz.mode !== 'exam'))
         return;
+    const grading = quiz.gradeQuestion(quiz.currentQuestion, answer);
+    const wasCorrect = grading.isCorrect && !grading.pendingReview;
     quiz.submitAnswer(answer);
     if (quiz.quiz.mode !== 'exam') {
         renderQuiz(); // Redraw with feedback
+        if (wasCorrect) {
+            const activeBtn = document.activeElement;
+            if (activeBtn && activeBtn.classList.contains("answer-btn")) {
+                triggerCSSConfetti(activeBtn);
+            } else {
+                triggerCSSConfetti(answersContainer);
+            }
+        }
     }
 }
 /**
@@ -536,6 +578,19 @@ export function renderStatus(message, kind) {
         scoreSpan.className = "badge";
         scoreSpan.textContent = scoreText;
         statusContainer.appendChild(scoreSpan);
+        
+        if (quiz && quiz.streak >= 3) {
+            const streakSpan = document.createElement("span");
+            streakSpan.className = "badge streak-badge animate-pulse";
+            streakSpan.style.background = "linear-gradient(135deg, #ff4e50, #f9d423)";
+            streakSpan.style.color = "white";
+            streakSpan.style.border = "none";
+            streakSpan.style.boxShadow = "0 0 10px rgba(255, 78, 80, 0.5)";
+            streakSpan.style.fontWeight = "bold";
+            streakSpan.style.animation = "streak-pulse 1s infinite alternate";
+            streakSpan.textContent = `${t('quiz.streak')}: x${quiz.streak}`;
+            statusContainer.appendChild(streakSpan);
+        }
     }
 }
 export function renderQuestionCounter() {
@@ -729,6 +784,105 @@ export function showResults() {
         previewInfo.textContent = t('quiz.previewFinished');
         card.appendChild(previewInfo);
     }
+    // Gamified XP & Rank Progression
+    const maxStreak = quiz.maxStreak || 0;
+    const accuracy = results.percentage; // 0 to 100
+    const score = results.score;
+    // XP Formula: (Score * 100) + (MaxStreak * 50) + (Accuracy * 5)
+    const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
+
+    // Determine rank
+    let rankTitle = t('rank.novice'); // Default
+    let rankClass = "rank-novice";
+    let nextLevelXp = 300;
+    if (xpEarned >= 1500) {
+        rankTitle = t('rank.genius');
+        rankClass = "rank-genius";
+        nextLevelXp = 1500;
+    } else if (xpEarned >= 1000) {
+        rankTitle = t('rank.master');
+        rankClass = "rank-master";
+        nextLevelXp = 1500;
+    } else if (xpEarned >= 600) {
+        rankTitle = t('rank.adept');
+        rankClass = "rank-adept";
+        nextLevelXp = 1000;
+    } else if (xpEarned >= 300) {
+        rankTitle = t('rank.apprentice');
+        rankClass = "rank-apprentice";
+        nextLevelXp = 600;
+    }
+
+    const rankCard = document.createElement("div");
+    rankCard.className = `xp-rank-card ${rankClass}`;
+    rankCard.style.marginTop = "25px";
+    rankCard.style.padding = "20px";
+    rankCard.style.borderRadius = "12px";
+    rankCard.style.background = "rgba(255, 255, 255, 0.05)";
+    rankCard.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+    rankCard.style.textAlign = "center";
+    rankCard.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.15)";
+    rankCard.style.backdropFilter = "blur(12px)";
+    rankCard.style.webkitBackdropFilter = "blur(12px)";
+
+    const xpTitle = document.createElement("h4");
+    xpTitle.style.margin = "0 0 10px 0";
+    xpTitle.style.fontSize = "1rem";
+    xpTitle.style.color = "var(--muted)";
+    xpTitle.textContent = t('quiz.xpEarned');
+    rankCard.appendChild(xpTitle);
+
+    const xpVal = document.createElement("div");
+    xpVal.className = "xp-value-glow";
+    xpVal.style.fontSize = "2.2rem";
+    xpVal.style.fontWeight = "800";
+    xpVal.style.color = "var(--accent)";
+    xpVal.style.marginBottom = "5px";
+    xpVal.textContent = `+${xpEarned} XP`;
+    rankCard.appendChild(xpVal);
+
+    const rankLabel = document.createElement("div");
+    rankLabel.style.fontSize = "0.9rem";
+    rankLabel.style.color = "var(--muted)";
+    rankLabel.style.marginBottom = "2px";
+    rankLabel.textContent = t('quiz.rank');
+    rankCard.appendChild(rankLabel);
+
+    const rankBadge = document.createElement("div");
+    rankBadge.className = "rank-badge";
+    rankBadge.style.fontSize = "1.5rem";
+    rankBadge.style.fontWeight = "700";
+    rankBadge.style.display = "inline-block";
+    rankBadge.style.padding = "6px 16px";
+    rankBadge.style.borderRadius = "20px";
+    rankBadge.style.background = "rgba(255, 255, 255, 0.08)";
+    rankBadge.style.marginTop = "5px";
+    rankBadge.textContent = rankTitle;
+    rankCard.appendChild(rankBadge);
+
+    // Progress bar to the next rank
+    const progressContainer = document.createElement("div");
+    progressContainer.style.width = "100%";
+    progressContainer.style.background = "rgba(0, 0, 0, 0.2)";
+    progressContainer.style.height = "8px";
+    progressContainer.style.borderRadius = "4px";
+    progressContainer.style.marginTop = "15px";
+    progressContainer.style.overflow = "hidden";
+
+    const progressBar = document.createElement("div");
+    progressBar.style.height = "100%";
+    progressBar.style.background = "var(--accent)";
+    progressBar.style.borderRadius = "4px";
+
+    const progressPercent = nextLevelXp > 0 ? (xpEarned / nextLevelXp) * 100 : 100;
+    progressBar.style.width = `${Math.min(100, progressPercent)}%`;
+    progressBar.style.transition = "width 1s ease-out";
+
+    progressContainer.appendChild(progressBar);
+    rankCard.appendChild(progressContainer);
+
+    card.appendChild(rankCard);
+
     const actions = document.createElement("div");
     actions.style.marginTop = "30px";
     actions.style.display = "flex";

@@ -587,6 +587,112 @@ export function getTopicBundles() {
                     ]
                 }
             ]
+        },
+        {
+            id: "lt-cs-javascript",
+            title: "JavaScript Pagrindai",
+            language: "lt",
+            category: "cs",
+            difficulty: "beginner",
+            estimatedMinutes: 10,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 45 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "lt_js_1",
+                    prompt: "Kokia yra reikšmė `typeof []` JavaScript kalboje?",
+                    choices: [
+                        { id: "a", text: '`"object"`', isCorrect: true },
+                        { id: "b", text: '`"array"`', isCorrect: false },
+                        { id: "c", text: '`"list"`', isCorrect: false },
+                        { id: "d", text: '`"undefined"`', isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_js_2",
+                    prompt: "Kuris raktinis žodis sukuria kintamąjį, kurio reikšmės negalima pakeisti?",
+                    choices: [
+                        { id: "a", text: "`const`", isCorrect: true },
+                        { id: "b", text: "`let`", isCorrect: false },
+                        { id: "c", text: "`var`", isCorrect: false },
+                        { id: "d", text: "`static`", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_js_3",
+                    prompt: "Ką grąžina reiškinys `NaN === NaN`?",
+                    choices: [
+                        { id: "a", text: "`false`", isCorrect: true },
+                        { id: "b", text: "`true`", isCorrect: false },
+                        { id: "c", text: "`undefined`", isCorrect: false },
+                        { id: "d", text: "`TypeError`", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_js_4",
+                    prompt: "Kuris masyvo metodas prideda elementą į jo pabaigą?",
+                    choices: [
+                        { id: "a", text: "`.push()`", isCorrect: true },
+                        { id: "b", text: "`.pop()`", isCorrect: false },
+                        { id: "c", text: "`.shift()`", isCorrect: false },
+                        { id: "d", text: "`.unshift()`", isCorrect: false }
+                    ]
+                }
+            ]
+        },
+        {
+            id: "lt-math-beginner",
+            title: "Tiesinės Lygtys",
+            language: "lt",
+            category: "math",
+            difficulty: "beginner",
+            estimatedMinutes: 12,
+            mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 45 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                {
+                    id: "lt_mat_1",
+                    prompt: "Išspręskite lygtį: \\(2x - 6 = 12\\)",
+                    choices: [
+                        { id: "a", text: "9", isCorrect: true },
+                        { id: "b", text: "6", isCorrect: false },
+                        { id: "c", text: "3", isCorrect: false },
+                        { id: "d", text: "12", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_mat_2",
+                    prompt: "Išspręskite lygtį: \\(3x + 4 = x + 10\\)",
+                    choices: [
+                        { id: "a", text: "3", isCorrect: true },
+                        { id: "b", text: "2", isCorrect: false },
+                        { id: "c", text: "4", isCorrect: false },
+                        { id: "d", text: "5", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_mat_3",
+                    prompt: "Išspręskite lygtį: \\(x/5 = 7\\)",
+                    choices: [
+                        { id: "a", text: "35", isCorrect: true },
+                        { id: "b", text: "12", isCorrect: false },
+                        { id: "c", text: "5", isCorrect: false },
+                        { id: "d", text: "1.4", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "lt_mat_4",
+                    prompt: "Kokia yra \\(x\\) reikšmė: \\(12 - 3x = 0\\)",
+                    choices: [
+                        { id: "a", text: "4", isCorrect: true },
+                        { id: "b", text: "3", isCorrect: false },
+                        { id: "c", text: "12", isCorrect: false },
+                        { id: "d", text: "0", isCorrect: false }
+                    ]
+                }
+            ]
         }
     ];
 }

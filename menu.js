@@ -278,21 +278,60 @@ export function handleStudentClick() {
             premadeList.appendChild(btn);
         }
         else {
-            const btn = document.createElement("button");
-            btn.className = "btn";
-            btn.disabled = true;
-            btn.style.width = "100%";
-            btn.style.padding = "10px 12px";
-            btn.style.fontSize = "0.9rem";
-            btn.style.border = "1px solid #D1D5DB";
-            btn.style.borderRadius = "12px";
-            btn.style.background = "#ffffff";
-            btn.style.opacity = "0.5";
-            btn.style.cursor = "not-allowed";
-            btn.setAttribute("data-i18n", "student.premadeLithuanianSoon");
-            btn.setAttribute("title", t("student.premadeLithuanianHint"));
-            btn.textContent = t("student.premadeLithuanianSoon");
-            premadeList.appendChild(btn);
+            const btnEn = document.createElement("button");
+            btnEn.className = "btn";
+            btnEn.style.width = "100%";
+            btnEn.style.padding = "10px 12px";
+            btnEn.style.fontSize = "0.9rem";
+            btnEn.style.border = "1px solid #D1D5DB";
+            btnEn.style.borderRadius = "12px";
+            btnEn.style.background = "#ffffff";
+            btnEn.style.transition = "all 0.2s";
+            btnEn.setAttribute("data-i18n", "student.premadeEnglish");
+            btnEn.textContent = t("student.premadeEnglish");
+            // Add focus handlers
+            btnEn.onfocus = () => {
+                btnEn.style.borderColor = "#06C167";
+                btnEn.style.boxShadow = "0 0 0 2px rgba(6, 193, 103, 0.18)";
+                btnEn.style.outline = "none";
+            };
+            btnEn.onblur = () => {
+                btnEn.style.borderColor = "#D1D5DB";
+                btnEn.style.boxShadow = "none";
+            };
+            btnEn.onclick = () => {
+                window.history.pushState({}, "", "/topics");
+                renderTopicsPage();
+            };
+            premadeList.appendChild(btnEn);
+
+            const btnLt = document.createElement("button");
+            btnLt.className = "btn";
+            btnLt.style.width = "100%";
+            btnLt.style.padding = "10px 12px";
+            btnLt.style.fontSize = "0.9rem";
+            btnLt.style.border = "1px solid #D1D5DB";
+            btnLt.style.borderRadius = "12px";
+            btnLt.style.background = "#ffffff";
+            btnLt.style.transition = "all 0.2s";
+            btnLt.style.marginTop = "8px";
+            btnLt.setAttribute("data-i18n", "student.premadeLithuanianSoon");
+            btnLt.textContent = t("student.premadeLithuanianSoon");
+            // Add focus handlers
+            btnLt.onfocus = () => {
+                btnLt.style.borderColor = "#06C167";
+                btnLt.style.boxShadow = "0 0 0 2px rgba(6, 193, 103, 0.18)";
+                btnLt.style.outline = "none";
+            };
+            btnLt.onblur = () => {
+                btnLt.style.borderColor = "#D1D5DB";
+                btnLt.style.boxShadow = "none";
+            };
+            btnLt.onclick = () => {
+                window.history.pushState({}, "", "/topics");
+                renderTopicsPage();
+            };
+            premadeList.appendChild(btnLt);
         }
     }
 }
