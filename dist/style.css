@@ -1218,12 +1218,16 @@ body {
 
 @media (max-width: 768px) {
     #app-logo {
-        position: absolute;
+        position: fixed !important;
         height: 32px;
         top: 10px;
         left: 15px;
     }
 
+    #quiz-back-btn,
+    #admin-btn-back,
+    #dashboard-close-btn,
+    #join-back-btn,
     #topics-back-btn {
         display: none !important;
     }
@@ -1458,29 +1462,433 @@ body {
 }
 
 /* --- Theme-Adaptive Dropdown Select and Options --- */
-select {
-    background-color: var(--input-bg, #1e293b);
-    color: var(--text, #f8fafc);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-    border-radius: var(--radius);
-    padding: 6px 12px;
+/* --- Admin Grid Layout and Advanced QoL Sidebar Styles --- */
+.admin-grid-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+}
+
+.admin-main-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-sidebar-column {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.admin-navigator-column {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background: var(--panel) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Horizontal mini-map on small/medium screens */
+@media (max-width: 1023px) {
+    .admin-navigator-column {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 12px !important;
+        gap: 12px;
+        align-items: center;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    
+    .navigator-header-actions,
+    .nav-stats-card {
+        display: none !important;
+    }
+}
+
+/* Glassmorphic & 3-Column layout for Large Screens */
+@media (min-width: 1024px) {
+    #app-root:has(.admin-grid-layout) {
+        width: min(1380px, 100%);
+        transition: width 0.3s ease;
+    }
+    
+    .admin-grid-layout {
+        display: grid;
+        grid-template-columns: 240px 1fr 320px;
+        align-items: start;
+    }
+    
+    .admin-navigator-column,
+    .admin-sidebar-column {
+        position: sticky;
+        top: 24px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        padding-right: 4px; /* Space for custom scrollbar */
+    }
+    
+    /* Scrollbars for sticky sidebars */
+    .admin-navigator-column::-webkit-scrollbar,
+    .admin-sidebar-column::-webkit-scrollbar {
+        width: 6px;
+    }
+    .admin-navigator-column::-webkit-scrollbar-track,
+    .admin-sidebar-column::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .admin-navigator-column::-webkit-scrollbar-thumb,
+    .admin-sidebar-column::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+    }
+    .admin-navigator-column::-webkit-scrollbar-thumb:hover,
+    .admin-sidebar-column::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+}
+
+/* --- Question Mini-Map Indicator Badges --- */
+.nav-badges-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 1023px) {
+    .nav-badges-grid {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 10px;
+    }
+}
+
+.nav-badge-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.nav-badge-item:hover {
+    transform: translateY(-2px) scale(1.05);
+    border-color: var(--accent);
+}
+
+.nav-badge-item.active {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--glow-color);
+}
+
+/* Validation status colors for badges */
+.nav-badge-item.valid {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+}
+.nav-badge-item.valid:hover {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.nav-badge-item.warning {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+    animation: badge-pulse-warn 2s infinite alternate;
+}
+.nav-badge-item.warning:hover {
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+}
+
+@keyframes badge-pulse-warn {
+    0% {
+        box-shadow: 0 0 4px rgba(245, 158, 11, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+    }
+}
+
+/* Miniature type label inside badge */
+.nav-badge-type {
+    position: absolute;
+    bottom: 2px;
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    opacity: 0.6;
+    text-transform: uppercase;
+}
+
+/* Validation Icon Indicator dot */
+.nav-badge-status-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.nav-badge-status-dot.valid {
+    background: #10b981;
+}
+.nav-badge-status-dot.warning {
+    background: #f59e0b;
+}
+
+/* Statistics Card */
+.nav-stats-card {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.nav-stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+    color: var(--muted);
+}
+.nav-stat-row:last-child {
+    margin-bottom: 0;
+}
+.nav-stat-row strong {
+    color: var(--text);
+}
+
+/* --- Drag and Drop Reordering Handles --- */
+.drag-handle {
+    cursor: grab;
+    padding: 6px 10px;
+    font-size: 1.1rem;
+    color: var(--muted);
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, transform 0.2s;
+    border-radius: 6px;
+}
+.drag-handle:hover {
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.05);
+    transform: scale(1.1);
+}
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Card drag classes */
+.admin-question-item.dragging {
+    opacity: 0.4;
+    border: 2px dashed var(--accent) !important;
+    transform: scale(0.98);
+    box-shadow: none !important;
+}
+
+.admin-question-item.drag-over {
+    border-top: 3px solid var(--accent) !important;
+    background: rgba(16, 185, 129, 0.03) !important;
+    transform: translateY(4px);
+    transition: transform 0.2s ease, border-top 0.2s ease;
+}
+
+/* --- Question Card Collapsing --- */
+.admin-question-item {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    border: 1px solid var(--border-color);
+}
+
+.admin-question-item.collapsed {
+    padding: 10px 16px;
+    border-left: 4px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.admin-question-item.collapsed.valid {
+    border-left-color: #10b981;
+}
+
+.admin-question-item.collapsed.warning {
+    border-left-color: #f59e0b;
+}
+
+.collapsed-card-layout {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    width: 100%;
+}
+
+.collapsed-card-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.collapsed-q-text {
+    flex: 1;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collapsed-q-text .katex {
+    font-size: 0.95rem;
+}
+
+.card-collapse-toggle {
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px;
+    border-radius: 4px;
+    transition: transform 0.25s ease, background-color 0.2s;
+    color: var(--muted);
+}
+.card-collapse-toggle:hover {
+    color: var(--text);
+    background: rgba(255,255,255,0.05);
+}
+
+/* Choice level math previews */
+.choice-live-preview {
+    font-size: 0.82rem;
+    margin-top: 4px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    color: var(--text);
+    display: inline-block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-left: 2px solid var(--accent);
+}
+
+.choice-live-preview .katex {
+    color: var(--accent) !important;
+}
+
+/* Glass Cards and Palette */
+.glass-card {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    background: var(--panel) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1) !important;
     transition: all 0.3s ease;
 }
 
-select option {
-    background-color: var(--bg, #0f172a);
-    color: var(--text, #f8fafc);
-    padding: 8px;
+.glass-card:hover {
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.15) !important;
 }
 
-/* Fix theme selection unreadable option tags and background consistency */
-#theme-selector {
-    background-color: var(--input-bg, #1e293b);
-    color: var(--text, #f8fafc);
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+/* Tabs scrollbar hide */
+.palette-tabs::-webkit-scrollbar {
+    display: none;
+}
+.palette-tabs {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
 
-#theme-selector option {
-    background-color: var(--bg, #0f172a);
-    color: var(--text, #f8fafc);
+/* Active and Hover States for Tab Buttons */
+.palette-tab-btn {
+    opacity: 0.7;
+}
+
+.palette-tab-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.palette-tab-btn.active {
+    opacity: 1;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* LaTeX Symbol Buttons Grid */
+.palette-btn {
+    position: relative;
+    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.palette-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 4px 12px var(--glow-color) !important;
+}
+
+.palette-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+/* LaTeX formula element colors inside math buttons */
+.palette-btn .katex {
+    color: inherit !important;
+    font-size: 1.05rem;
+}
+
+/* Wrapper Math Delimiters buttons */
+.palette-wrappers .wrapper-btn {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+/* Premium Keyboard Shortcuts Legend kbd Styling */
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 0.72rem;
+    font-family: var(--font), monospace;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    background-color: var(--btn-bg, rgba(255, 255, 255, 0.08)) !important;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15)) !important;
+    border-radius: 4px;
+    box-shadow: 0 2px 0 var(--border-color), 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+    margin: 0 1px;
+}
+
+/* Live Preview Text Color */
+.live-preview-content .katex {
+    color: var(--accent) !important;
 }

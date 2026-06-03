@@ -72,99 +72,221 @@
     </section>
     <!-- Admin panel (hidden by default) -->
     <section id="admin-panel" class="admin-panel" style="display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2 style="margin: 0;" data-i18n="admin.title">Create/Edit Quiz</h2>
-        <div style="display: flex; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+          <h2 style="margin: 0;" data-i18n="admin.title">Create/Edit Quiz</h2>
+          <!-- Auto-Save Status Badge -->
+          <span id="admin-draft-status" style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s ease;">
+            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
+            <span>Draft Saved</span>
+          </span>
+          <!-- Undo / Redo buttons -->
+          <div style="display: flex; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)">⏪</button>
+            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)">⏩</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <!-- Local Quiz Selector -->
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <select id="admin-local-selector" class="btn" style="font-size: 0.85rem; padding: 4px 10px; height: 35px; max-width: 180px; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: inherit;" title="Load Saved Quiz">
+              <option value="">-- Load Saved Quiz --</option>
+            </select>
+            <button id="admin-local-delete-btn" class="btn btn-danger btn-icon" style="height: 35px; padding: 0 10px; display: none;" title="Delete Selected Quiz">🗑️</button>
+          </div>
           <button id="admin-btn-back" class="btn" style="font-size: 0.9rem; padding: 6px 12px;"
             data-i18n="admin.backToMenu">Back to Menu</button>
         </div>
       </div>
-      <div class="admin-form">
-        <label>
-          <span data-i18n="admin.quizTitle">Quiz Title:</span>
-          <input type="text" id="admin-quiz-title" class="input-field"
-            data-i18n-placeholder="admin.quizTitlePlaceholder" placeholder="My Math Quiz" />
-        </label>
-        <div
-          style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
-          <div style="flex: 1;">
-            <label for="admin-timer-mode" style="display: block; margin-bottom: 5px;" data-i18n="admin.timerMode">Timer
-              Mode:</label>
-            <select id="admin-timer-mode" class="admin-form" style="width: 100%;">
-              <option value="question" data-i18n="admin.timerPerQuestion">Time per Question</option>
-              <option value="quiz" data-i18n="admin.timerWholeQuiz">Time for Whole Quiz</option>
-              <option value="none" data-i18n="admin.timerNone">No Timer (Stopwatch)</option>
-            </select>
-          </div>
-          <div style="flex: 1;">
-            <label for="admin-timer-limit" style="display: block; margin-bottom: 5px;" data-i18n="admin.timeLimit">Time
-              Limit (seconds):</label>
-            <input type="number" id="admin-timer-limit" class="input-field admin-form" value="30"
-              style="width: 100%;" />
-          </div>
-        </div>
-        <div
-          style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
-          <div style="flex: 1;">
-            <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.quizMode">Quiz
-              Mode:</span>
-            <div class="segmented-control" id="admin-quiz-mode-group" role="group">
-              <button type="button" class="segment-btn" data-value="practice" data-i18n="res_vis_det">Detailed
-                Review (Questions & Answers)</button>
-              <button type="button" class="segment-btn" data-value="exam" data-i18n="res_vis_sco">Score Only</button>
+      <div class="admin-grid-layout">
+        <!-- Sticky Left Sidebar Navigator (Mini-Map) -->
+        <nav id="admin-navigator" class="admin-navigator-column glass-card" style="padding: 18px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--panel);">
+          <!-- JavaScript will dynamically render navigator contents here -->
+        </nav>
+
+        <div class="admin-form admin-main-column">
+          <!-- Unsaved Draft Recovery Banner -->
+          <div id="admin-draft-banner" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 12px 18px; border-radius: 12px; margin-bottom: 20px; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b;">
+              <span>⚠️</span>
+              <span style="font-size: 0.9rem; font-weight: 500;" id="admin-draft-banner-text">Unsaved draft detected! Would you like to restore it?</span>
             </div>
-            <!-- Hidden select for backward compatibility with existing logic -->
-            <select id="admin-quiz-mode" class="admin-form"
-              style="position: absolute; opacity: 0; pointer-events: none; height: 0; width: 0; overflow: hidden;">
-              <option value="practice" data-i18n="admin.modePractice">Practice (instant feedback)</option>
-              <option value="exam" data-i18n="admin.modeExam">Exam (results after submission)</option>
-            </select>
-            <input type="hidden" id="admin-quiz-mode-value" value="practice">
-          </div>
-          <div style="flex: 1;">
-            <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.shuffleConfig">Shuffle
-              Settings:</span>
-            <div class="segmented-control" id="admin-shuffle-group">
-              <button type="button" class="segment-btn" id="btn-shuffle-questions"
-                data-i18n="admin.shuffleQuestions">Questions</button>
-              <button type="button" class="segment-btn" id="btn-shuffle-answers"
-                data-i18n="admin.shuffleAnswers">Choices</button>
+            <div style="display: flex; gap: 10px;">
+              <button id="admin-draft-restore-btn" class="btn btn-primary" style="background: #f59e0b; color: black; border: none; font-size: 0.85rem; padding: 6px 14px;">Restore</button>
+              <button id="admin-draft-dismiss-btn" class="btn" style="font-size: 0.85rem; padding: 6px 14px;">Dismiss</button>
             </div>
-            <!-- Hidden inputs for compatibility -->
-            <input type="checkbox" id="admin-shuffle-questions" style="display: none;" />
-            <input type="checkbox" id="admin-shuffle-answers" style="display: none;" />
           </div>
-        </div>
-        <!-- Result Visibility section - HIDDEN, state controlled by Quiz Mode above -->
-        <div class="form-group result-visibility-section" style="display: none;">
-          <span id="res-vis-title" style="display: block; margin-bottom: 8px; font-weight: bold;"
-            data-i18n="res_vis_label">Result
-            Visibility:</span>
-          <div class="segmented-control" id="admin-result-visibility-group" role="group"
-            aria-labelledby="res-vis-title">
-            <button type="button" class="segment-btn" data-value="detailed" data-i18n="res_vis_det">Detailed
-              Review</button>
-            <button type="button" class="segment-btn" data-value="score" data-i18n="res_vis_sco">Score Only</button>
+          <label>
+            <span data-i18n="admin.quizTitle">Quiz Title:</span>
+            <input type="text" id="admin-quiz-title" class="input-field"
+              data-i18n-placeholder="admin.quizTitlePlaceholder" placeholder="My Math Quiz" />
+          </label>
+          <div
+            style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+            <div style="flex: 1;">
+              <label for="admin-timer-mode" style="display: block; margin-bottom: 5px;" data-i18n="admin.timerMode">Timer
+                Mode:</label>
+              <select id="admin-timer-mode" class="admin-form" style="width: 100%;">
+                <option value="question" data-i18n="admin.timerPerQuestion">Time per Question</option>
+                <option value="quiz" data-i18n="admin.timerWholeQuiz">Time for Whole Quiz</option>
+                <option value="none" data-i18n="admin.timerNone">No Timer (Stopwatch)</option>
+              </select>
+            </div>
+            <div style="flex: 1;">
+              <label for="admin-timer-limit" style="display: block; margin-bottom: 5px;" data-i18n="admin.timeLimit">Time
+                Limit (seconds):</label>
+              <input type="number" id="admin-timer-limit" class="input-field admin-form" value="30"
+                style="width: 100%;" />
+            </div>
           </div>
-          <input type="hidden" id="admin-show-results-value" value="detailed">
+          <div
+            style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+            <div style="flex: 1;">
+              <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.quizMode">Quiz
+                Mode:</span>
+              <div class="segmented-control" id="admin-quiz-mode-group" role="group">
+                <button type="button" class="segment-btn" data-value="practice" data-i18n="res_vis_det">Detailed
+                  Review (Questions & Answers)</button>
+                <button type="button" class="segment-btn" data-value="exam" data-i18n="res_vis_sco">Score Only</button>
+              </div>
+              <!-- Hidden select for backward compatibility with existing logic -->
+              <select id="admin-quiz-mode" class="admin-form"
+                style="position: absolute; opacity: 0; pointer-events: none; height: 0; width: 0; overflow: hidden;">
+                <option value="practice" data-i18n="admin.modePractice">Practice (instant feedback)</option>
+                <option value="exam" data-i18n="admin.modeExam">Exam (results after submission)</option>
+              </select>
+              <input type="hidden" id="admin-quiz-mode-value" value="practice">
+            </div>
+            <div style="flex: 1;">
+              <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.shuffleConfig">Shuffle
+                Settings:</span>
+              <div class="segmented-control" id="admin-shuffle-group">
+                <button type="button" class="segment-btn" id="btn-shuffle-questions"
+                  data-i18n="admin.shuffleQuestions">Questions</button>
+                <button type="button" class="segment-btn" id="btn-shuffle-answers"
+                  data-i18n="admin.shuffleAnswers">Choices</button>
+              </div>
+              <!-- Hidden inputs for compatibility -->
+              <input type="checkbox" id="admin-shuffle-questions" style="display: none;" />
+              <input type="checkbox" id="admin-shuffle-answers" style="display: none;" />
+            </div>
+          </div>
+          <!-- Result Visibility section - HIDDEN, state controlled by Quiz Mode above -->
+          <div class="form-group result-visibility-section" style="display: none;">
+            <span id="res-vis-title" style="display: block; margin-bottom: 8px; font-weight: bold;"
+              data-i18n="res_vis_label">Result
+              Visibility:</span>
+            <div class="segmented-control" id="admin-result-visibility-group" role="group"
+              aria-labelledby="res-vis-title">
+              <button type="button" class="segment-btn" data-value="detailed" data-i18n="res_vis_det">Detailed
+                Review</button>
+              <button type="button" class="segment-btn" data-value="score" data-i18n="res_vis_sco">Score Only</button>
+            </div>
+            <input type="hidden" id="admin-show-results-value" value="detailed">
+          </div>
+          <div id="admin-questions-list"></div>
+          <div class="admin-question-actions">
+            <button id="admin-add-question" class="btn" data-i18n="admin.addQuestion">+ Add Question</button>
+            <button id="admin-scan-question" class="btn" data-i18n="admin.scanQuestion">📷 Scan Question (OCR)</button>
+            <button id="admin-bulk-import-btn" class="btn" data-i18n="admin.bulkImport">📝 Bulk Import</button>
+            <input type="file" id="admin-ocr-input" accept="image/*" style="display: none;" />
+          </div>
+          <div class="admin-actions">
+            <button id="admin-save" class="btn btn-primary" data-i18n="admin.saveQuiz">Save Quiz</button>
+            <button id="admin-preview" class="btn btn-secondary" style="background: var(--accent); color: black;"
+              data-i18n="admin.preview">Peržiūra</button>
+            <button id="admin-export" class="btn btn-secondary" data-i18n="admin.exportJson">Export JSON</button>
+            <button id="admin-import-btn" class="btn btn-secondary" data-i18n="admin.importJson">Import JSON</button>
+            <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
+            <button id="admin-cancel" class="btn" data-i18n="admin.cancel">Cancel</button>
+          </div>
+          <div id="admin-share-code" class="admin-share" style="display: none;"></div>
         </div>
-        <div id="admin-questions-list"></div>
-        <div class="admin-question-actions">
-          <button id="admin-add-question" class="btn" data-i18n="admin.addQuestion">+ Add Question</button>
-          <button id="admin-scan-question" class="btn" data-i18n="admin.scanQuestion">📷 Scan Question (OCR)</button>
-          <button id="admin-bulk-import-btn" class="btn" data-i18n="admin.bulkImport">📝 Bulk Import</button>
-          <input type="file" id="admin-ocr-input" accept="image/*" style="display: none;" />
-        </div>
-        <div class="admin-actions">
-          <button id="admin-save" class="btn btn-primary" data-i18n="admin.saveQuiz">Save Quiz</button>
-          <button id="admin-preview" class="btn btn-secondary" style="background: var(--accent); color: black;"
-            data-i18n="admin.preview">Peržiūra</button>
-          <button id="admin-export" class="btn btn-secondary" data-i18n="admin.exportJson">Export JSON</button>
-          <button id="admin-import-btn" class="btn btn-secondary" data-i18n="admin.importJson">Import JSON</button>
-          <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
-          <button id="admin-cancel" class="btn" data-i18n="admin.cancel">Cancel</button>
-        </div>
-        <div id="admin-share-code" class="admin-share" style="display: none;"></div>
+
+        <!-- Sticky Sidebar for LaTeX Quick Palette & Shortcuts -->
+        <aside class="admin-sidebar-column">
+          <!-- LaTeX Math Quick-Click Symbol Palette -->
+          <div id="admin-latex-palette" class="glass-card latex-palette-card" style="padding: 18px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--panel);">
+            <h3 class="palette-title" style="margin: 0 0 12px 0; font-size: 1.1rem; font-weight: bold; color: var(--accent);" data-i18n="admin.latexPaletteTitle">LaTeX & Simboliai</h3>
+            <div class="palette-tabs" style="display: flex; gap: 4px; margin-bottom: 12px; background: rgba(0,0,0,0.15); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto;">
+              <button type="button" class="palette-tab-btn active" data-tab="common" style="flex: 1; border: none; background: var(--accent); color: black; padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabCommon">Prasti</button>
+              <button type="button" class="palette-tab-btn" data-tab="greek" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabGreek">Graikų</button>
+              <button type="button" class="palette-tab-btn" data-tab="operators" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabOperators">Operatoriai</button>
+              <button type="button" class="palette-tab-btn" data-tab="advanced" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabAdvanced">Sudėtingi</button>
+            </div>
+            
+            <!-- Tab Contents -->
+            <div class="palette-tab-content active" id="tab-common">
+              <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                <button type="button" class="palette-btn" data-latex="\\frac{a}{b}" title="Fraction" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\frac{a}{b}\)</button>
+                <button type="button" class="palette-btn" data-latex="^{n}" title="Exponent" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(x^n\)</button>
+                <button type="button" class="palette-btn" data-latex="_{i}" title="Subscript" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(x_i\)</button>
+                <button type="button" class="palette-btn" data-latex="\\sqrt{x}" title="Square Root" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sqrt{x}\)</button>
+                <button type="button" class="palette-btn" data-latex="\\sqrt[3]{x}" title="Cube Root" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sqrt[3]{x}\)</button>
+                <button type="button" class="palette-btn" data-latex="\\left( x \\right)" title="Parentheses" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\((x)\)</button>
+                <button type="button" class="palette-btn" data-latex="\\left[ x \\right]" title="Brackets" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\([x]\)</button>
+                <button type="button" class="palette-btn" data-latex="\\log_{b}{x}" title="Logarithm" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\log_b x\)</button>
+              </div>
+            </div>
+            <div class="palette-tab-content" id="tab-greek" style="display: none;">
+              <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                <button type="button" class="palette-btn" data-latex="\\alpha" title="Alpha" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\alpha\)</button>
+                <button type="button" class="palette-btn" data-latex="\\beta" title="Beta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\beta\)</button>
+                <button type="button" class="palette-btn" data-latex="\\gamma" title="Gamma" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\gamma\)</button>
+                <button type="button" class="palette-btn" data-latex="\\theta" title="Theta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\theta\)</button>
+                <button type="button" class="palette-btn" data-latex="\\pi" title="Pi" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\pi\)</button>
+                <button type="button" class="palette-btn" data-latex="\\Delta" title="Delta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\Delta\)</button>
+                <button type="button" class="palette-btn" data-latex="\\sigma" title="Sigma" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sigma\)</button>
+                <button type="button" class="palette-btn" data-latex="\\lambda" title="Lambda" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\lambda\)</button>
+              </div>
+            </div>
+            <div class="palette-tab-content" id="tab-operators" style="display: none;">
+              <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                <button type="button" class="palette-btn" data-latex="\\pm" title="Plus-Minus" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\pm\)</button>
+                <button type="button" class="palette-btn" data-latex="\\times" title="Times" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\times\)</button>
+                <button type="button" class="palette-btn" data-latex="\\div" title="Divide" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\div\)</button>
+                <button type="button" class="palette-btn" data-latex="\\neq" title="Not Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\neq\)</button>
+                <button type="button" class="palette-btn" data-latex="\\approx" title="Approximate" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\approx\)</button>
+                <button type="button" class="palette-btn" data-latex="\\le" title="Less or Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\le\)</button>
+                <button type="button" class="palette-btn" data-latex="\\ge" title="Greater or Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\ge\)</button>
+                <button type="button" class="palette-btn" data-latex="\\infty" title="Infinity" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\infty\)</button>
+              </div>
+            </div>
+            <div class="palette-tab-content" id="tab-advanced" style="display: none;">
+              <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                <button type="button" class="palette-btn" data-latex="\\int_{a}^{b} x \\,dx" title="Definite Integral" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\int_a^b\)</button>
+                <button type="button" class="palette-btn" data-latex="\\sum_{i=1}^{n} x_i" title="Summation" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sum\)</button>
+                <button type="button" class="palette-btn" data-latex="\\lim_{x \\to \\infty}" title="Limit" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\lim\)</button>
+                <button type="button" class="palette-btn" data-latex="\\vec{v}" title="Vector" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\vec{v}\)</button>
+                <button type="button" class="palette-btn" data-latex="\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}" title="Matrix 2x2" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s; overflow: hidden; padding: 2px;">\(\begin{pmatrix}a&b\\c&d\end{pmatrix}\)</button>
+                <button type="button" class="palette-btn" data-latex="\\sin{x}" title="Sine" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sin\)</button>
+                <button type="button" class="palette-btn" data-latex="\\cos{x}" title="Cosine" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\cos\)</button>
+                <button type="button" class="palette-btn" data-latex="\\tan{x}" title="Tangent" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\tan\)</button>
+              </div>
+            </div>
+
+            <!-- Wrap selection helpers -->
+            <div class="palette-wrappers" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary wrapper-btn" id="palette-wrap-inline" style="flex:1; font-size: 0.75rem; padding: 6px; min-width: 0;" title="Wrap selection in inline math (Ctrl+M)">
+                Apgaubti \(...\)
+              </button>
+              <button type="button" class="btn btn-secondary wrapper-btn" id="palette-wrap-display" style="flex:1; font-size: 0.75rem; padding: 6px; min-width: 0;" title="Wrap selection in display math">
+                Apgaubti \[...\]
+              </button>
+            </div>
+          </div>
+
+          <!-- Keyboard Shortcuts Legend -->
+          <div id="admin-shortcuts-legend" class="glass-card shortcuts-legend-card" style="margin-top: 15px; padding: 15px; border-radius: var(--radius); border: 1px solid var(--border-color); background: var(--panel);">
+            <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; font-weight: bold; color: var(--accent);" data-i18n="admin.shortcutsTitle">Greitieji klavišai</h4>
+            <ul style="margin: 0; padding-left: 15px; font-size: 0.75rem; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; color: var(--text); list-style-type: disc;">
+              <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+S</kbd> / <kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Alt+S</kbd> <span data-i18n="admin.shortcutSave" style="opacity: 0.85; margin-left: 4px;">Išsaugoti</span></li>
+              <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Alt+N</kbd> <span data-i18n="admin.shortcutNew" style="opacity: 0.85; margin-left: 4px;">Naujas kl.</span></li>
+              <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+M</kbd> <span data-i18n="admin.shortcutWrap" style="opacity: 0.85; margin-left: 4px;">LaTeX apgaub.</span></li>
+              <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+Z</kbd> / <kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Y</kbd> <span data-i18n="admin.shortcutUndoRedo" style="opacity: 0.85; margin-left: 4px;">Atšaukti/Grąžinti</span></li>
+            </ul>
+          </div>
+        </aside>
       </div>
     </section>
   </div>
