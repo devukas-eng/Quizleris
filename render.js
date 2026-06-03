@@ -794,22 +794,27 @@ export function showResults() {
     // Determine rank
     let rankTitle = t('rank.novice'); // Default
     let rankClass = "rank-novice";
+    let rankComment = t('rank.novice.desc');
     let nextLevelXp = 300;
     if (xpEarned >= 1500) {
         rankTitle = t('rank.genius');
         rankClass = "rank-genius";
+        rankComment = t('rank.genius.desc');
         nextLevelXp = 1500;
     } else if (xpEarned >= 1000) {
         rankTitle = t('rank.master');
         rankClass = "rank-master";
+        rankComment = t('rank.master.desc');
         nextLevelXp = 1500;
     } else if (xpEarned >= 600) {
         rankTitle = t('rank.adept');
         rankClass = "rank-adept";
+        rankComment = t('rank.adept.desc');
         nextLevelXp = 1000;
     } else if (xpEarned >= 300) {
         rankTitle = t('rank.apprentice');
         rankClass = "rank-apprentice";
+        rankComment = t('rank.apprentice.desc');
         nextLevelXp = 600;
     }
 
@@ -859,6 +864,20 @@ export function showResults() {
     rankBadge.style.marginTop = "5px";
     rankBadge.textContent = rankTitle;
     rankCard.appendChild(rankBadge);
+
+    // Humorous/motivational rank comment
+    const rankCommentEl = document.createElement("div");
+    rankCommentEl.className = "rank-comment-glow";
+    rankCommentEl.style.fontSize = "1rem";
+    rankCommentEl.style.fontStyle = "italic";
+    rankCommentEl.style.color = "var(--text)";
+    rankCommentEl.style.marginTop = "15px";
+    rankCommentEl.style.marginBottom = "5px";
+    rankCommentEl.style.lineHeight = "1.45";
+    rankCommentEl.style.opacity = "0.95";
+    rankCommentEl.style.fontWeight = "500";
+    rankCommentEl.textContent = rankComment;
+    rankCard.appendChild(rankCommentEl);
 
     // Progress bar to the next rank
     const progressContainer = document.createElement("div");

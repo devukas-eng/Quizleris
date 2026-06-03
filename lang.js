@@ -203,10 +203,15 @@ const translations = {
         'quiz.xpEarned': 'Gauti taškai (XP)',
         'quiz.rank': 'Pasiektas Rangas!',
         'rank.novice': 'Naujokas 🥬',
+        'rank.novice.desc': 'Tikras naujokas! 🥬 Dar yra kur pasistengti, bet pradžia padaryta!',
         'rank.apprentice': 'Mokinys 📖',
+        'rank.apprentice.desc': 'Mokinys — jau geriau! 📖 Knygos po pagalve pradeda veikti!',
         'rank.adept': 'Ekspertas 🧠',
+        'rank.adept.desc': 'Ekspertas! 🧠 Tavo smegenų vingiai dirba visu pajėgumu!',
         'rank.master': 'Meistras ⚡',
+        'rank.master.desc': 'Tikras meistras! ⚡ Klasė nuščiuvo, mokytojas verkia iš laimės.',
         'rank.genius': 'Mokslo Genijus 🌌',
+        'rank.genius.desc': 'Mokslo Genijus! 🌌 Tavo IQ viršija kosmoso greitį, Einsteinas ploja atsistojęs!',
     },
     en: {
         // Start Menu
@@ -413,10 +418,15 @@ const translations = {
         'quiz.xpEarned': 'Experience Points (XP)',
         'quiz.rank': 'Rank Achieved!',
         'rank.novice': 'Novice 🥬',
+        'rank.novice.desc': 'A true rookie! 🥬 There is room for improvement, but the journey has begun!',
         'rank.apprentice': 'Apprentice 📖',
+        'rank.apprentice.desc': 'Apprentice — getting better! 📖 The books under your pillow are starting to work!',
         'rank.adept': 'Adept 🧠',
+        'rank.adept.desc': 'Adept! 🧠 Your brain cells are firing at maximum capacity!',
         'rank.master': 'Master ⚡',
+        'rank.master.desc': 'A true master! ⚡ The class fell silent, the teacher is crying tears of joy.',
         'rank.genius': 'Science Genius 🌌',
+        'rank.genius.desc': 'Science Genius! 🌌 Your IQ exceeds the speed of light, Einstein is standing and applauding!',
     }
 };
 let currentLanguage = 'lt'; // Default to Lithuanian
