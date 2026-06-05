@@ -455,7 +455,7 @@ export function getTopicBundles() {
             language: "en",
             category: "cs",
             difficulty: "beginner",
-            estimatedMinutes: 12,
+            estimatedMinutes: 20,
             mode: "practice",
             timerConfig: { mode: 'question', limitSeconds: 45 },
             shuffleConfig: { questions: true, answers: true },
@@ -499,7 +499,13 @@ export function getTopicBundles() {
                         { id: "c", text: "`.forEach()`", isCorrect: false },
                         { id: "d", text: "`.reduce()`", isCorrect: false }
                     ]
-                }
+                },
+                { id: "cs_js_5", prompt: "What does `===` check in JavaScript?", choices: [{ id: "a", text: "Value AND type", isCorrect: true }, { id: "b", text: "Only value", isCorrect: false }, { id: "c", text: "Reference equality", isCorrect: false }, { id: "d", text: "Truthiness", isCorrect: false }] },
+                { id: "cs_js_6", prompt: "Which method converts a JSON string into a JavaScript object?", choices: [{ id: "a", text: "`JSON.parse()`", isCorrect: true }, { id: "b", text: "`JSON.stringify()`", isCorrect: false }, { id: "c", text: "`JSON.decode()`", isCorrect: false }, { id: "d", text: "`Object.parse()`", isCorrect: false }] },
+                { id: "cs_js_7", prompt: "What is a closure in JavaScript?", choices: [{ id: "a", text: "A function that retains access to its outer scope after the outer function returns", isCorrect: true }, { id: "b", text: "A way to close the browser window", isCorrect: false }, { id: "c", text: "A syntax for defining classes", isCorrect: false }, { id: "d", text: "A loop that runs indefinitely", isCorrect: false }] },
+                { id: "cs_js_8", prompt: "What is the output of `Boolean(0)`?", choices: [{ id: "a", text: "`false`", isCorrect: true }, { id: "b", text: "`true`", isCorrect: false }, { id: "c", text: "`0`", isCorrect: false }, { id: "d", text: "`undefined`", isCorrect: false }] },
+                { id: "cs_js_9", prompt: "Which of the following is NOT a JavaScript primitive type?", choices: [{ id: "a", text: "Object", isCorrect: true }, { id: "b", text: "String", isCorrect: false }, { id: "c", text: "Boolean", isCorrect: false }, { id: "d", text: "Symbol", isCorrect: false }] },
+                { id: "cs_js_10", prompt: "What does the spread operator `...` do when used in a function call?", choices: [{ id: "a", text: "Expands an iterable into individual arguments", isCorrect: true }, { id: "b", text: "Combines multiple arrays", isCorrect: false }, { id: "c", text: "Declares a rest parameter", isCorrect: false }, { id: "d", text: "Creates a shallow copy of an object", isCorrect: false }] }
             ]
         },
         {
@@ -515,7 +521,7 @@ export function getTopicBundles() {
             questions: [
                 {
                     id: "cs_algo_1",
-                    prompt: "What is the average time complexity of searching in a Balanced Binary Search Tree (like an AVL tree)?",
+                    prompt: "What is the average time complexity of searching in a Balanced Binary Search Tree?",
                     choices: [
                         { id: "a", text: "\\(O(\\log n)\\)", isCorrect: true },
                         { id: "b", text: "\\(O(n)\\)", isCorrect: false },
@@ -525,7 +531,7 @@ export function getTopicBundles() {
                 },
                 {
                     id: "cs_algo_2",
-                    prompt: "Which sorting algorithm has a worst-case time complexity of \\(O(n^2)\\) but is highly efficient for small datasets?",
+                    prompt: "Which sorting algorithm has a worst-case time complexity of \\(O(n^2)\\) but is efficient for small datasets?",
                     choices: [
                         { id: "a", text: "Insertion Sort", isCorrect: true },
                         { id: "b", text: "Merge Sort", isCorrect: false },
@@ -535,14 +541,21 @@ export function getTopicBundles() {
                 },
                 {
                     id: "cs_algo_3",
-                    prompt: "Which of the following abstract data types operates on a LIFO (Last-In, First-Out) basis?",
+                    prompt: "Which abstract data type operates on a LIFO (Last-In, First-Out) basis?",
                     choices: [
                         { id: "a", text: "Stack", isCorrect: true },
                         { id: "b", text: "Queue", isCorrect: false },
                         { id: "c", text: "Min-Heap", isCorrect: false },
                         { id: "d", text: "Linked List", isCorrect: false }
                     ]
-                }
+                },
+                { id: "cs_algo_4", prompt: "What data structure uses FIFO (First-In, First-Out) ordering?", choices: [{ id: "a", text: "Queue", isCorrect: true }, { id: "b", text: "Stack", isCorrect: false }, { id: "c", text: "Tree", isCorrect: false }, { id: "d", text: "Graph", isCorrect: false }] },
+                { id: "cs_algo_5", prompt: "What is the time complexity of accessing an element in an array by index?", choices: [{ id: "a", text: "\\(O(1)\\)", isCorrect: true }, { id: "b", text: "\\(O(n)\\)", isCorrect: false }, { id: "c", text: "\\(O(\\log n)\\)", isCorrect: false }, { id: "d", text: "\\(O(n^2)\\)", isCorrect: false }] },
+                { id: "cs_algo_6", prompt: "Which algorithm traverses every vertex of a graph level-by-level from a source?", choices: [{ id: "a", text: "Breadth-First Search (BFS)", isCorrect: true }, { id: "b", text: "Depth-First Search (DFS)", isCorrect: false }, { id: "c", text: "Dijkstra's Algorithm", isCorrect: false }, { id: "d", text: "Merge Sort", isCorrect: false }] },
+                { id: "cs_algo_7", prompt: "What is the best-case time complexity of Bubble Sort?", choices: [{ id: "a", text: "\\(O(n)\\)", isCorrect: true }, { id: "b", text: "\\(O(n^2)\\)", isCorrect: false }, { id: "c", text: "\\(O(\\log n)\\)", isCorrect: false }, { id: "d", text: "\\(O(1)\\)", isCorrect: false }] },
+                { id: "cs_algo_8", prompt: "In a max-heap, where is the largest element always located?", choices: [{ id: "a", text: "The root", isCorrect: true }, { id: "b", text: "The last leaf", isCorrect: false }, { id: "c", text: "The middle node", isCorrect: false }, { id: "d", text: "A random position", isCorrect: false }] },
+                { id: "cs_algo_9", prompt: "Which of the following sorting algorithms has \\(O(n \\log n)\\) time complexity in all cases?", choices: [{ id: "a", text: "Merge Sort", isCorrect: true }, { id: "b", text: "Quick Sort", isCorrect: false }, { id: "c", text: "Bubble Sort", isCorrect: false }, { id: "d", text: "Insertion Sort", isCorrect: false }] },
+                { id: "cs_algo_10", prompt: "What does a hash table use to map keys to values?", choices: [{ id: "a", text: "A hash function", isCorrect: true }, { id: "b", text: "A binary tree", isCorrect: false }, { id: "c", text: "A sorted array", isCorrect: false }, { id: "d", text: "A doubly linked list", isCorrect: false }] }
             ]
         },
         {
@@ -570,22 +583,27 @@ export function getTopicBundles() {
                     id: "lang_en_2",
                     prompt: "What does the idiom 'bite the bullet' mean?",
                     choices: [
-                        { id: "a", text: "To face a difficult situation with courage and get it over with", isCorrect: true },
-                        { id: "b", text: "To speak without thinking carefully first", isCorrect: false },
-                        { id: "c", text: "To refuse to accept a bad decision", isCorrect: false },
-                        { id: "d", text: "To waste resources on an impossible task", isCorrect: false }
+                        { id: "a", text: "To endure a painful situation with courage", isCorrect: true },
+                        { id: "b", text: "To speak without thinking", isCorrect: false },
+                        { id: "c", text: "To refuse a bad decision", isCorrect: false },
+                        { id: "d", text: "To waste resources", isCorrect: false }
                     ]
                 },
                 {
                     id: "lang_en_3",
                     prompt: "Choose the grammatically correct sentence:",
                     choices: [
-                        { id: "a", text: "The team has finished their preparations for the upcoming tournament.", isCorrect: true },
-                        { id: "b", text: "Each of the students are required to submit their homework.", isCorrect: false },
-                        { id: "c", text: "Neither the teacher nor the students was happy with the schedule change.", isCorrect: false },
-                        { id: "d", text: "Between you and I, this decision is highly controversial.", isCorrect: false }
+                        { id: "a", text: "The team has finished their preparations.", isCorrect: true },
+                        { id: "b", text: "Each of the students are required to submit homework.", isCorrect: false },
+                        { id: "c", text: "Neither the teacher nor the students was happy.", isCorrect: false },
+                        { id: "d", text: "Between you and I, this is controversial.", isCorrect: false }
                     ]
-                }
+                },
+                { id: "lang_en_4", prompt: "What does 'spill the beans' mean?", choices: [{ id: "a", text: "To reveal a secret accidentally", isCorrect: true }, { id: "b", text: "To make a mess", isCorrect: false }, { id: "c", text: "To exaggerate a story", isCorrect: false }, { id: "d", text: "To waste food", isCorrect: false }] },
+                { id: "lang_en_5", prompt: "Which sentence uses the subjunctive mood correctly?", choices: [{ id: "a", text: "I suggest that he be present at the meeting.", isCorrect: true }, { id: "b", text: "I suggest that he is present at the meeting.", isCorrect: false }, { id: "c", text: "I suggest that he was present at the meeting.", isCorrect: false }, { id: "d", text: "I suggest that he will be present at the meeting.", isCorrect: false }] },
+                { id: "lang_en_6", prompt: "What is the correct plural of 'criterion'?", choices: [{ id: "a", text: "Criteria", isCorrect: true }, { id: "b", text: "Criterions", isCorrect: false }, { id: "c", text: "Criterias", isCorrect: false }, { id: "d", text: "Criterium", isCorrect: false }] },
+                { id: "lang_en_7", prompt: "Which word is a synonym for 'ephemeral'?", choices: [{ id: "a", text: "Transient", isCorrect: true }, { id: "b", text: "Permanent", isCorrect: false }, { id: "c", text: "Substantial", isCorrect: false }, { id: "d", text: "Ancient", isCorrect: false }] },
+                { id: "lang_en_8", prompt: "Choose the sentence with the correct use of a semicolon:", choices: [{ id: "a", text: "She studied hard; she passed the exam.", isCorrect: true }, { id: "b", text: "She studied; hard and passed.", isCorrect: false }, { id: "c", text: "She studied hard, she; passed.", isCorrect: false }, { id: "d", text: "She; studied hard and passed the exam.", isCorrect: false }] }
             ]
         },
         {
@@ -638,7 +656,13 @@ export function getTopicBundles() {
                         { id: "c", text: "`.shift()`", isCorrect: false },
                         { id: "d", text: "`.unshift()`", isCorrect: false }
                     ]
-                }
+                },
+                { id: "lt_js_5", prompt: "Ką reiškia `===` JavaScript kalboje?", choices: [{ id: "a", text: "Tikrina reikšmę IR tipą", isCorrect: true }, { id: "b", text: "Tikrina tik reikšmę", isCorrect: false }, { id: "c", text: "Priskiria reikšmę", isCorrect: false }, { id: "d", text: "Tikrina tik tipą", isCorrect: false }] },
+                { id: "lt_js_6", prompt: "Koks yra `typeof undefined` rezultatas?", choices: [{ id: "a", text: "`\"undefined\"`", isCorrect: true }, { id: "b", text: "`\"null\"`", isCorrect: false }, { id: "c", text: "`\"object\"`", isCorrect: false }, { id: "d", text: "`\"string\"`", isCorrect: false }] },
+                { id: "lt_js_7", prompt: "Kuris metodas transformuoja kiekvieną masyvo elementą ir grąžina naują masyvą?", choices: [{ id: "a", text: "`.map()`", isCorrect: true }, { id: "b", text: "`.filter()`", isCorrect: false }, { id: "c", text: "`.forEach()`", isCorrect: false }, { id: "d", text: "`.find()`", isCorrect: false }] },
+                { id: "lt_js_8", prompt: "Kas yra uždara sritis (closure) JavaScript?", choices: [{ id: "a", text: "Funkcija, kuri turi prieigą prie išorinės srities kintamųjų net po to, kai išorinė funkcija baigė vykdymą", isCorrect: true }, { id: "b", text: "Funkcija, kuri vykdoma tik vieną kartą", isCorrect: false }, { id: "c", text: "Specialus ciklo tipas", isCorrect: false }, { id: "d", text: "Kintamasis, kurio negalima keisti", isCorrect: false }] },
+                { id: "lt_js_9", prompt: "Kokia yra `Boolean(\"\")` reikšmė?", choices: [{ id: "a", text: "`false`", isCorrect: true }, { id: "b", text: "`true`", isCorrect: false }, { id: "c", text: "`undefined`", isCorrect: false }, { id: "d", text: "`0`", isCorrect: false }] },
+                { id: "lt_js_10", prompt: "Kuris metodas grąžina naują masyvą, sujungiant du masyvus?", choices: [{ id: "a", text: "`.concat()`", isCorrect: true }, { id: "b", text: "`.join()`", isCorrect: false }, { id: "c", text: "`.push()`", isCorrect: false }, { id: "d", text: "`.merge()`", isCorrect: false }] }
             ]
         },
         {
@@ -691,7 +715,13 @@ export function getTopicBundles() {
                         { id: "c", text: "12", isCorrect: false },
                         { id: "d", text: "0", isCorrect: false }
                     ]
-                }
+                },
+                { id: "lt_mat_5", prompt: "Išspręskite lygtį: \\(5x + 10 = 0\\)", choices: [{ id: "a", text: "-2", isCorrect: true }, { id: "b", text: "2", isCorrect: false }, { id: "c", text: "10", isCorrect: false }, { id: "d", text: "-10", isCorrect: false }] },
+                { id: "lt_mat_6", prompt: "Raskite \\(x\\): \\(4x - 7 = 13\\)", choices: [{ id: "a", text: "5", isCorrect: true }, { id: "b", text: "4", isCorrect: false }, { id: "c", text: "6", isCorrect: false }, { id: "d", text: "3", isCorrect: false }] },
+                { id: "lt_mat_7", prompt: "Išspręskite: \\(2(x + 3) = 14\\)", choices: [{ id: "a", text: "4", isCorrect: true }, { id: "b", text: "8", isCorrect: false }, { id: "c", text: "5", isCorrect: false }, { id: "d", text: "7", isCorrect: false }] },
+                { id: "lt_mat_8", prompt: "Raskite \\(x\\): \\(x/3 - 1 = 4\\)", choices: [{ id: "a", text: "15", isCorrect: true }, { id: "b", text: "9", isCorrect: false }, { id: "c", text: "12", isCorrect: false }, { id: "d", text: "3", isCorrect: false }] },
+                { id: "lt_mat_9", prompt: "Kokia yra \\(y\\) reikšmė, jei \\(6y = 42\\)?", choices: [{ id: "a", text: "7", isCorrect: true }, { id: "b", text: "6", isCorrect: false }, { id: "c", text: "8", isCorrect: false }, { id: "d", text: "36", isCorrect: false }] },
+                { id: "lt_mat_10", prompt: "Išspręskite: \\(3x + 2x = 25\\)", choices: [{ id: "a", text: "5", isCorrect: true }, { id: "b", text: "10", isCorrect: false }, { id: "c", text: "15", isCorrect: false }, { id: "d", text: "3", isCorrect: false }] }
             ]
         }
     ];

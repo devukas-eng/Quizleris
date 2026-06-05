@@ -37,9 +37,8 @@ export function renderTopicsPage() {
     topicsContainer = document.createElement("div");
     topicsContainer.className = "topics-page-container";
     topicsContainer.style.width = "100%";
-    topicsContainer.style.maxWidth = "1000px";
     topicsContainer.style.margin = "0 auto";
-    topicsContainer.style.padding = "20px";
+    topicsContainer.style.padding = "16px 0";
 
     startMenu.appendChild(topicsContainer);
 
@@ -173,27 +172,26 @@ function renderBundleCard(bundle) {
     else if (bundle.category === "lang") cardAccent = "#3b82f6"; // Blue/Cyan
     else if (bundle.category === "cs") cardAccent = "#f97316"; // Cyber orange
 
-    return `
-        <div class="bundle-card premium-card" style="border-top: 4px solid ${cardAccent}; display: flex; flex-direction: column;">
-            <h3 style="margin: 0 0 16px 0; font-size: 1.2rem; font-weight: 700; line-height: 1.3;">${bundle.title}</h3>
-            
-            <div style="flex-grow: 1;"></div>
-            
-            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center;">
-                <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30;">
-                    ${bundle.difficulty}
-                </span>
-                <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30; text-transform: none;">
-                    ⏱️ ~${bundle.estimatedMinutes} min
-                </span>
-                <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30; text-transform: none;">
-                    ❓ ${bundle.questions.length} ${getQuestionsWord(bundle.questions.length)}
-                </span>
-            </div>
+    const categoryIcons = { math: '📐', cs: '💻', lang: '🌍' };
+    const icon = categoryIcons[bundle.category] || '🧠';
+    const diffLabel = bundle.difficulty === 'beginner' ? '🟢 Beginner' : bundle.difficulty === 'intermediate' ? '🟡 Intermediate' : '🔴 Advanced';
 
-            <button id="start-bundle-${bundle.id}" class="btn btn-primary" style="margin-top: auto; width: 100%; border-radius: 8px; font-weight: bold; background: ${cardAccent}; border-color: ${cardAccent};">
-                ${t('modal.playBtn') || 'Play'}
-            </button>
+    return `
+        <div class="bundle-card kahoot-card">
+            <div class="kahoot-card-header" style="background: linear-gradient(135deg, ${cardAccent}dd, ${cardAccent}88);">
+                <span class="kahoot-card-icon">${icon}</span>
+                <h3 class="kahoot-card-title">${bundle.title}</h3>
+            </div>
+            <div class="kahoot-card-body">
+                <div class="kahoot-badges">
+                    <span class="kahoot-badge" style="color: ${difficultyColor}; background: ${difficultyColor}18; border-color: ${difficultyColor}40;">${diffLabel}</span>
+                    <span class="kahoot-badge" style="color: var(--text); background: rgba(128,128,128,0.1); border-color: rgba(128,128,128,0.2);">⏱️ ~${bundle.estimatedMinutes} min</span>
+                    <span class="kahoot-badge" style="color: var(--text); background: rgba(128,128,128,0.1); border-color: rgba(128,128,128,0.2);">❓ ${bundle.questions.length} Qs</span>
+                </div>
+                <button id="start-bundle-${bundle.id}" class="kahoot-play-btn" style="background: ${cardAccent};">
+                    ▶ ${t('modal.playBtn') || 'Play'}
+                </button>
+            </div>
         </div>
     `;
 }
