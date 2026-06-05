@@ -8,6 +8,11 @@ const translations = {
         'menu.student': 'Esu Mokinys',
         'menu.admin': 'Esu Administratorius',
         'menu.dashboard': 'Peržiūrėti Rezultatus',
+        'menu.heroHeadline': 'Pradėk žaisti dabar',
+        'menu.pinPlaceholder': 'Įvesk žaidimo PIN / ID...',
+        'menu.pinGo': 'Pradėti →',
+        'menu.divider': 'arba',
+        'menu.discover': 'Atrask testus',
         // Student Form
         'student.nameLabel': 'Jūsų vardas (neprivaloma)',
         'student.namePlaceholder': 'Įveskite vardą rezultatų sekimui',
@@ -241,6 +246,11 @@ const translations = {
         'menu.student': "I'm Student",
         'menu.admin': "I'm Admin",
         'menu.dashboard': 'View Dashboard',
+        'menu.heroHeadline': 'Start playing now',
+        'menu.pinPlaceholder': 'Enter game PIN / ID...',
+        'menu.pinGo': 'Start →',
+        'menu.divider': 'or',
+        'menu.discover': 'Discover quizzes',
         // Student Form
         'student.nameLabel': 'Your Name (optional)',
         'student.namePlaceholder': 'Enter name to track results',

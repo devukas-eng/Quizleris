@@ -101,7 +101,8 @@ function renderTopicsContent(container) {
 
     // Wire up back button
     document.getElementById("topics-back-btn").onclick = () => {
-        window.location.href = "/";
+        window.history.pushState({}, '', '/');
+        renderStartMenu();
     };
 
     // Wire up tabs

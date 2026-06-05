@@ -67,32 +67,26 @@ export function renderStartMenu() {
     // Inject hero layout
     startMenu.innerHTML = `
         <div class="hero-section" style="animation: slideUpFade 0.5s cubic-bezier(0.16,1,0.3,1) both;">
-            <h1 class="hero-headline">Pradėk žaisti dabar</h1>
+            <h1 class="hero-headline">${t('menu.heroHeadline')}</h1>
 
             <!-- PIN / Quiz ID entry -->
             <div class="pin-entry-bar">
-                <input id="hero-pin-input" type="text" placeholder="Įvesk žaidimo PIN / ID..." autocomplete="off" spellcheck="false" />
-                <button class="pin-go-btn" id="hero-pin-go">Pradėti →</button>
+                <input id="hero-pin-input" type="text" placeholder="${t('menu.pinPlaceholder')}" autocomplete="off" spellcheck="false" />
+                <button class="pin-go-btn" id="hero-pin-go">${t('menu.pinGo')}</button>
             </div>
 
-            <div class="hero-divider">arba</div>
+            <div class="hero-divider">${t('menu.divider')}</div>
 
             <!-- Discover button -->
             <button class="discover-btn" id="hero-discover-btn">
                 <span>🔍</span>
-                <span>Atrask testus</span>
+                <span>${t('menu.discover')}</span>
             </button>
 
             <!-- Admin / Dashboard subtle links -->
             <div class="menu-admin-row">
-                <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">Esu Administratorius</button>
+                <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">${t('menu.admin')}</button>
             </div>
-        </div>
-
-        <!-- Topic Blobs -->
-        <div class="topics-section" style="animation: slideUpFade 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both; opacity:0; animation-fill-mode:forwards;">
-            <p class="topics-section-title">Populiarios temos</p>
-            <div class="topic-blobs" id="hero-blobs"></div>
         </div>
     `;
 
@@ -120,7 +114,8 @@ export function renderStartMenu() {
     if (discoverBtn) {
         discoverBtn.addEventListener('click', () => {
             isStudentMenuOpen = true;
-            handleStudentClick();
+            window.history.pushState({}, '', '/topics');
+            renderTopicsPage();
         });
     }
 
@@ -129,27 +124,6 @@ export function renderStartMenu() {
     if (adminBtn2) {
         adminBtn2.addEventListener('click', () => {
             try { _adminCallback(); } catch(e) { alert('Admin error: ' + e); }
-        });
-    }
-
-    // Render topic blobs
-    const blobGrid = document.getElementById('hero-blobs');
-    if (blobGrid) {
-        BLOB_TOPICS.forEach(topic => {
-            const blob = document.createElement('div');
-            blob.className = 'topic-blob';
-            blob.style.background = topic.color;
-            blob.innerHTML = `
-                <span class="topic-blob-icon">${topic.icon}</span>
-                <span class="topic-blob-name">${topic.name}</span>
-                <span class="topic-blob-count">${topic.count} testų</span>
-            `;
-            blob.addEventListener('click', () => {
-                isStudentMenuOpen = true;
-                window.history.pushState({}, '', '/topics');
-                renderTopicsPage();
-            });
-            blobGrid.appendChild(blob);
         });
     }
 
