@@ -76,10 +76,16 @@ function renderTopicsContent(container) {
                 : '';
             
             categoriesHtml += `
-                <div class="category-section" style="${activeCategory !== 'all' ? 'margin-top: 24px;' : ''}">
+                <div class="category-section" style="position: relative; ${activeCategory !== 'all' ? 'margin-top: 24px;' : ''}">
                     ${titleHtml}
-                    <div class="bundle-row ${activeCategory !== 'all' ? 'wrap-row' : ''}">
-                        ${catBundles.map(b => renderBundleCard(b)).join('')}
+                    <div class="bundle-row-wrapper" style="position: relative;">
+                        ${activeCategory === 'all' ? `
+                        <button class="scroll-btn scroll-left" aria-label="Scroll Left">❮</button>
+                        <button class="scroll-btn scroll-right" aria-label="Scroll Right">❯</button>
+                        ` : ''}
+                        <div class="bundle-row ${activeCategory !== 'all' ? 'wrap-row' : ''}" style="scroll-behavior: smooth;">
+                            ${catBundles.map(b => renderBundleCard(b)).join('')}
+                        </div>
                     </div>
                 </div>
             `;
@@ -128,6 +134,22 @@ function renderTopicsContent(container) {
             activeCategory = tab.dataset.category;
             renderTopicsContent(container);
         };
+    });
+
+    // Wire up Netflix scroll logic
+    container.querySelectorAll(".bundle-row-wrapper").forEach(wrapper => {
+        const row = wrapper.querySelector(".bundle-row");
+        const leftBtn = wrapper.querySelector(".scroll-left");
+        const rightBtn = wrapper.querySelector(".scroll-right");
+        
+        if (row && leftBtn && rightBtn) {
+            leftBtn.onclick = () => {
+                row.scrollBy({ left: -320, behavior: 'smooth' });
+            };
+            rightBtn.onclick = () => {
+                row.scrollBy({ left: 320, behavior: 'smooth' });
+            };
+        }
     });
 
     // Wire up start buttons to show Play-Mode Selector Modal

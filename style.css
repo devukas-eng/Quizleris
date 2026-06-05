@@ -187,6 +187,10 @@ body {
     width: min(680px, 90vw);
 }
 
+#app-root:has(.topics-page-container) {
+    width: min(860px, 90vw);
+}
+
 .quiz-header {
     display: flex;
     align-items: center;
@@ -1460,6 +1464,54 @@ body {
 
 .bundle-row::-webkit-scrollbar {
     display: none;
+}
+
+.scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.4);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: background 0.2s, transform 0.2s, opacity 0.2s;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bundle-row-wrapper:hover .scroll-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.scroll-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+    border-color: var(--accent);
+}
+
+.scroll-left {
+    left: -22px;
+}
+
+.scroll-right {
+    right: -22px;
+}
+
+@media (max-width: 768px) {
+    .scroll-btn {
+        display: none !important;
+    }
 }
 
 .category-section-title {
