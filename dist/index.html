@@ -40,7 +40,6 @@
     <section id="start-menu" class="start-menu">
 
       <h1 data-i18n="menu.welcome">Sveiki atvykę į Quizleris</h1>
-      <p data-i18n="menu.selectRole">Pasirinkite savo vaidmenį:</p>
       <div class="menu-actions">
         <button id="menu-btn-student" class="btn btn-primary" data-i18n="menu.student">Esu Mokinys</button>
         <button id="menu-btn-admin" class="btn" data-i18n="menu.admin">Esu Administratorius</button>
@@ -292,15 +291,56 @@
   </div>
   <img id="app-logo" src="spresk_transparent.png" alt="spresk.lt">
   <div id="language-toggle-container" style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px; align-items: center;">
-    <select id="theme-selector" class="btn" style="font-size: 0.9rem; padding: 6px 12px; height: 35px; cursor: pointer;" title="Select Theme">
-      <option value="emerald" data-i18n="theme.emerald">Emerald Glass</option>
-      <option value="cyberpunk" data-i18n="theme.cyberpunk">Cyber Midnight</option>
-      <option value="solar" data-i18n="theme.solar">Solar Flare</option>
-      <option value="slate-dark" data-i18n="theme.slateDark">Slate Dark</option>
-    </select>
-    <button id="lang-toggle" class="btn" style="font-size: 0.9rem; padding: 6px 12px; height: 35px;" title="Switch Language">
-      🌐 <span id="lang-label">LT</span>
+    <!-- Apple-like Theme Picker Button -->
+    <button id="theme-btn" title="Select Theme">
+      <span class="theme-btn-bubble" id="theme-btn-bubble"></span>
+      <span id="theme-btn-label">Šviesus Fonas</span>
     </button>
+    <!-- Dual Language Flag Pills -->
+    <div class="lang-pills">
+      <button id="lang-lt-btn" class="lang-pill" title="Lietuvių kalba">
+        <span class="flag">🇱🇹</span>
+        <span>LT</span>
+      </button>
+      <button id="lang-en-btn" class="lang-pill" title="English">
+        <span class="flag">🇬🇧</span>
+        <span>EN</span>
+      </button>
+    </div>
+  </div>
+  <!-- Theme Picker Popup (positioned by JS) -->
+  <div id="theme-picker-popup" role="listbox" aria-label="Select Theme">
+    <div class="theme-picker-label">TEMA</div>
+    <div class="theme-picker-item" data-theme="emerald" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #1B9B7E 50%, #ffffff 50%);"></span>
+      <div><div class="tp-name" id="tp-name-emerald">Šviesus Fonas</div><div class="tp-subtitle">Light Classic</div></div>
+      <span class="tp-check">✓</span>
+    </div>
+    <div class="theme-picker-item" data-theme="slate-dark" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #38bdf8 50%, #1e293b 50%);"></span>
+      <div><div class="tp-name">Tamsus Fonas</div><div class="tp-subtitle">Slate / Sky</div></div>
+      <span class="tp-check">✓</span>
+    </div>
+    <div class="theme-picker-item" data-theme="dark-2" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #a78bfa 50%, #14122a 50%);"></span>
+      <div><div class="tp-name">Tamsus Fonas²</div><div class="tp-subtitle">Deep Violet</div></div>
+      <span class="tp-check">✓</span>
+    </div>
+    <div class="theme-picker-item" data-theme="dark-3" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #ec4899 50%, #000000 50%);"></span>
+      <div><div class="tp-name">Tamsus Fonas³</div><div class="tp-subtitle">OLED Black</div></div>
+      <span class="tp-check">✓</span>
+    </div>
+    <div class="theme-picker-item" data-theme="cyberpunk" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #ff007f 50%, #00f0ff 50%);"></span>
+      <div><div class="tp-name">Kiberpankas</div><div class="tp-subtitle">Cyber Midnight</div></div>
+      <span class="tp-check">✓</span>
+    </div>
+    <div class="theme-picker-item" data-theme="solar" role="option">
+      <span class="tp-bubble" style="background: linear-gradient(135deg, #ff9100 50%, #ff4d00 50%);"></span>
+      <div><div class="tp-name">Saulės Blyksnis</div><div class="tp-subtitle">Solar Flare</div></div>
+      <span class="tp-check">✓</span>
+    </div>
   </div>
   <!-- Bulk Import Modal Overlay -->
   <div id="bulk-import-modal-overlay" class="modal-overlay" style="display: none;">
@@ -317,6 +357,33 @@
       </div>
     </div>
   </div>
+
+  <!-- Cookie Consent Banner -->
+  <div id="cookie-banner" style="display: none;">
+    <div class="cookie-icon">🍪</div>
+    <div class="cookie-text">
+      <strong>Slapukai ir Privatumas</strong>
+      Naudojame anoniminius analizės slapukus, kad geriau suprastume, kaip vartotojai naudoja Quizleris.
+      Skaitykite mūsų <a id="cookie-privacy-link">Privatumo politiką</a>.
+    </div>
+    <div class="cookie-actions">
+      <button class="cookie-btn-accept" id="cookie-accept-btn">✓ Sutinku</button>
+      <button class="cookie-btn-decline" id="cookie-decline-btn">Atmesti</button>
+    </div>
+  </div>
+
+  <!-- Legal Modal -->
+  <div id="legal-modal">
+    <div class="legal-modal-card">
+      <div class="legal-modal-header">
+        <h2 class="legal-modal-title" id="legal-modal-title">Naudojimo sąlygos</h2>
+        <button class="legal-modal-close" id="legal-modal-close">✕</button>
+      </div>
+      <div class="legal-modal-body" id="legal-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Legal Footer (rendered inside #app-root bottom by JS, but declared here) -->
 </body>
 
 </html>

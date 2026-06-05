@@ -136,6 +136,11 @@ function toggleAdminMode() {
   }
   adminMode = !adminMode;
   adminPanel.style.display = adminMode ? "block" : "none";
+  if (adminMode) {
+    document.body.classList.add("admin-mode-active");
+  } else {
+    document.body.classList.remove("admin-mode-active");
+  }
   if (adminNavigator) {
     adminNavigator.style.display = adminMode ? "flex" : "none";
   }
@@ -1235,7 +1240,7 @@ function setupAdminEventsInternal() {
       const latex = btn.getAttribute("data-latex");
       if (latex && lastActiveInputField) {
         saveStateForUndo();
-        insertTextAtCursor(lastActiveInputField, latex);
+        insertTextAtCursor(lastActiveInputField, latex, true);
       } else if (!lastActiveInputField) {
         alert(t("admin.selectFieldFirst") || "Please click on a question input or choice field first!");
       }
@@ -1641,20 +1646,40 @@ function findSmartCursorOffset(text) {
   return text.length;
 }
 
-function insertTextAtCursor(element, text) {
+function insertTextAtCursor(element, text, autoWrapMath = false) {
   if (!element) return;
-  const start = element.selectionStart;
-  const end = element.selectionEnd;
-  const value = element.value;
-
-  const before = value.substring(0, start);
-  const after = value.substring(end);
-  element.value = before + text + after;
-
-  element.dispatchEvent(new Event("input", { bubbles: true }));
+  
+  let finalText = text;
+  if (autoWrapMath) {
+    const beforeCursor = element.value.substring(0, element.selectionStart);
+    const inlineOpen = (beforeCursor.match(/\\\(/g) || []).length;
+    const inlineClose = (beforeCursor.match(/\\\)/g) || []).length;
+    const displayOpen = (beforeCursor.match(/\\\[/g) || []).length;
+    const displayClose = (beforeCursor.match(/\\\]/g) || []).length;
+    const isInsideMath = (inlineOpen > inlineClose) || (displayOpen > displayClose);
+    
+    if (!isInsideMath) {
+      finalText = `\\(${text}\\)`;
+    }
+  }
 
   element.focus();
-  const smartOffset = findSmartCursorOffset(text);
+  const start = element.selectionStart;
+
+  // Use document.execCommand for proper Undo/Redo stack preservation
+  const success = document.execCommand("insertText", false, finalText);
+  
+  // Fallback if execCommand fails (though it shouldn't in modern browsers for textareas)
+  if (!success) {
+    const value = element.value;
+    const end = element.selectionEnd;
+    const before = value.substring(0, start);
+    const after = value.substring(end);
+    element.value = before + finalText + after;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  const smartOffset = findSmartCursorOffset(finalText);
   element.setSelectionRange(start + smartOffset, start + smartOffset);
 }
 
