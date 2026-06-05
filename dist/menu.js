@@ -5,77 +5,158 @@ import { renderTopicsPage } from "./topics.js";
 let startMenu;
 let quizHeader;
 let quizMain;
-let studentBtn;
-let adminBtn;
 let isStudentMenuOpen = false;
+
 /**
  * Bootstraps the main menu DOM references and top-level navigation buttons.
  */
+// Store callbacks at module level
+let _adminCallback = null;
+
 export function setupMenu(callbacks) {
     startMenu = getRequiredElement("start-menu");
     quizHeader = document.querySelector(".quiz-header");
     quizMain = document.querySelector(".quiz-main");
-    studentBtn = getRequiredElement("menu-btn-student");
-    adminBtn = getRequiredElement("menu-btn-admin");
-    adminBtn.onclick = () => {
-        try {
-            console.log("Admin clicked");
-            callbacks.onAdmin();
-        }
-        catch (e) {
-            alert("Admin Click Error: " + e);
-        }
-    };
-    studentBtn.onclick = () => {
-        try {
-            isStudentMenuOpen = true;
-            handleStudentClick();
-        }
-        catch (e) {
-            alert("Student Click Error: " + e);
-        }
-    };
+    _adminCallback = callbacks.onAdmin;
+    // Note: the static #menu-btn-student / #menu-btn-admin buttons no longer exist;
+    // they are now injected dynamically by renderStartMenu.
 }
 export function isStudentViewActive() {
     return isStudentMenuOpen;
 }
+
+// Colour palette for topic blobs
+const BLOB_TOPICS = [
+    { name: 'Matematika',    icon: '🔢', color: 'linear-gradient(135deg,#6366f1,#818cf8)', count: 12 },
+    { name: 'Fizika',        icon: '⚛️',  color: 'linear-gradient(135deg,#0ea5e9,#38bdf8)', count: 8  },
+    { name: 'Anglų kalba',   icon: '🇬🇧', color: 'linear-gradient(135deg,#10b981,#34d399)', count: 15 },
+    { name: 'Lietuvių k.',   icon: '🇱🇹', color: 'linear-gradient(135deg,#f59e0b,#fbbf24)', count: 7  },
+    { name: 'Informatika',   icon: '💻',  color: 'linear-gradient(135deg,#8b5cf6,#a78bfa)', count: 10 },
+    { name: 'Chemija',       icon: '🧪',  color: 'linear-gradient(135deg,#ef4444,#f87171)', count: 6  },
+    { name: 'Istorija',      icon: '📜',  color: 'linear-gradient(135deg,#92400e,#d97706)', count: 9  },
+    { name: 'Biologija',     icon: '🌿',  color: 'linear-gradient(135deg,#065f46,#10b981)', count: 11 },
+    { name: 'Geografija',    icon: '🌍',  color: 'linear-gradient(135deg,#0f4c75,#1b6ca8)', count: 5  },
+    { name: 'Bendrosios',    icon: '🧠',  color: 'linear-gradient(135deg,#ec4899,#f472b6)', count: 20 },
+];
+
 /**
- * Resets the UI to the initial landing screen.
- * Hides the quiz interface and clears any active student forms.
+ * Resets the UI to the initial landing screen — Kahoot-style hero.
  */
 export function renderStartMenu() {
-    // Ensure elements are ready
     if (!startMenu) {
         console.error("Menu not setup! Call setupMenu() first.");
         return;
     }
+
     // Show menu, hide game
     startMenu.style.display = "flex";
     quizHeader.style.display = "none";
     quizMain.style.display = "none";
+
     const quizBackBtn = document.getElementById("quiz-back-btn");
-    if (quizBackBtn)
-        quizBackBtn.style.display = "none";
-    // Restore visibility of hidden children
-    const welcomeH1 = startMenu.querySelector('h1');
-    const welcomeP = startMenu.querySelector('p');
-    const menuActions = startMenu.querySelector(".menu-actions");
-    if (welcomeH1)
-        welcomeH1.style.display = "block";
-    if (welcomeP)
-        welcomeP.style.display = "block";
-    if (menuActions)
-        menuActions.style.display = "flex";
-    // Clear student form if it exists
+    if (quizBackBtn) quizBackBtn.style.display = "none";
+
+    // Clear any dynamic content
     const container = startMenu.querySelector(".student-form-container");
-    if (container)
-        container.remove();
-    // Clear topics container if it exists
+    if (container) container.remove();
     const topicsContainer = startMenu.querySelector(".topics-page-container");
-    if (topicsContainer)
-        topicsContainer.remove();
+    if (topicsContainer) topicsContainer.remove();
+
     isStudentMenuOpen = false;
+
+    // Inject hero layout
+    startMenu.innerHTML = `
+        <div class="hero-section" style="animation: slideUpFade 0.5s cubic-bezier(0.16,1,0.3,1) both;">
+            <h1 class="hero-headline">Pradėk žaisti dabar</h1>
+
+            <!-- PIN / Quiz ID entry -->
+            <div class="pin-entry-bar">
+                <input id="hero-pin-input" type="text" placeholder="Įvesk žaidimo PIN / ID..." autocomplete="off" spellcheck="false" />
+                <button class="pin-go-btn" id="hero-pin-go">Pradėti →</button>
+            </div>
+
+            <div class="hero-divider">arba</div>
+
+            <!-- Discover button -->
+            <button class="discover-btn" id="hero-discover-btn">
+                <span>🔍</span>
+                <span>Atrask testus</span>
+            </button>
+
+            <!-- Admin / Dashboard subtle links -->
+            <div class="menu-admin-row">
+                <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">Esu Administratorius</button>
+            </div>
+        </div>
+
+        <!-- Topic Blobs -->
+        <div class="topics-section" style="animation: slideUpFade 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both; opacity:0; animation-fill-mode:forwards;">
+            <p class="topics-section-title">Populiarios temos</p>
+            <div class="topic-blobs" id="hero-blobs"></div>
+        </div>
+    `;
+
+    // Wire PIN go button
+    const pinInput = document.getElementById('hero-pin-input');
+    const pinGoBtn = document.getElementById('hero-pin-go');
+    if (pinGoBtn && pinInput) {
+        const doStart = () => {
+            const val = pinInput.value.trim();
+            if (val) {
+                isStudentMenuOpen = true;
+                startStudentQuiz('', val);
+            } else {
+                pinInput.focus();
+                pinInput.style.animation = 'shake 0.4s ease-in-out';
+                setTimeout(() => { pinInput.style.animation = ''; }, 450);
+            }
+        };
+        pinGoBtn.addEventListener('click', doStart);
+        pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
+    }
+
+    // Wire Discover button
+    const discoverBtn = document.getElementById('hero-discover-btn');
+    if (discoverBtn) {
+        discoverBtn.addEventListener('click', () => {
+            isStudentMenuOpen = true;
+            handleStudentClick();
+        });
+    }
+
+    // Wire admin button
+    const adminBtn2 = document.getElementById('menu-btn-admin');
+    if (adminBtn2) {
+        adminBtn2.addEventListener('click', () => {
+            try { _adminCallback(); } catch(e) { alert('Admin error: ' + e); }
+        });
+    }
+
+    // Render topic blobs
+    const blobGrid = document.getElementById('hero-blobs');
+    if (blobGrid) {
+        BLOB_TOPICS.forEach(topic => {
+            const blob = document.createElement('div');
+            blob.className = 'topic-blob';
+            blob.style.background = topic.color;
+            blob.innerHTML = `
+                <span class="topic-blob-icon">${topic.icon}</span>
+                <span class="topic-blob-name">${topic.name}</span>
+                <span class="topic-blob-count">${topic.count} testų</span>
+            `;
+            blob.addEventListener('click', () => {
+                isStudentMenuOpen = true;
+                window.history.pushState({}, '', '/topics');
+                renderTopicsPage();
+            });
+            blobGrid.appendChild(blob);
+        });
+    }
+
+    // Update translations
+    updatePageLanguage();
 }
+
 /**
  * Renders the intermediate "Join Quiz" screen shown when a user follows a quiz link.
  * Displays quiz metadata (title, question count, timer) and name input.
@@ -83,26 +164,13 @@ export function renderStartMenu() {
 export function renderStudentJoin(quizToJoin) {
     if (!startMenu)
         return;
-    // Hide everything else in menu
-    const welcomeH1 = startMenu.querySelector('h1');
-    const welcomeP = startMenu.querySelector('p');
-    const menuActions = startMenu.querySelector(".menu-actions");
-    const existingForm = startMenu.querySelector(".student-form-container");
-    if (welcomeH1)
-        welcomeH1.style.display = "none";
-    if (welcomeP)
-        welcomeP.style.display = "none";
-    if (menuActions)
-        menuActions.style.display = "none";
-    if (existingForm)
-        existingForm.style.display = "none";
-    let joinContainer = startMenu.querySelector(".student-join-container");
-    if (!joinContainer) {
-        joinContainer = document.createElement("div");
-        joinContainer.className = "student-form-container student-join-container";
-        startMenu.appendChild(joinContainer);
-    }
+    // Clear the dynamically rendered hero content
+    startMenu.innerHTML = '';
+    let joinContainer = document.createElement("div");
+    joinContainer.className = "student-form-container student-join-container";
+    startMenu.appendChild(joinContainer);
     joinContainer.style.display = "flex";
+
     // Time information
     let timeInfo = t('admin.timerNone');
     if (quizToJoin.timerConfig && quizToJoin.timerConfig.mode !== "none") {
@@ -167,20 +235,9 @@ export function renderStudentJoin(quizToJoin) {
  * NOTE: Uses 'data-i18n' attributes for dynamic translation support.
  */
 export function handleStudentClick() {
-    // Hide welcome text and buttons, show student form
-    const welcomeH1 = startMenu.querySelector('h1');
-    const welcomeP = startMenu.querySelector('p');
-    const menuActions = startMenu.querySelector(".menu-actions");
-    if (welcomeH1)
-        welcomeH1.style.display = "none";
-    if (welcomeP)
-        welcomeP.style.display = "none";
-    menuActions.style.display = "none";
-    let formContainer = startMenu.querySelector(".student-form-container");
-    if (formContainer) {
-        formContainer.remove();
-    }
-    formContainer = document.createElement("div");
+    // Clear the hero layout and inject student form
+    startMenu.innerHTML = '';
+    let formContainer = document.createElement("div");
     formContainer.className = "student-form-container";
     formContainer.innerHTML = `
             <div style="margin-bottom: 20px;">
@@ -207,21 +264,15 @@ export function handleStudentClick() {
     updatePageLanguage();
     // Wire up buttons
     formContainer.querySelector("#back-menu-btn").addEventListener("click", () => {
-        const welcomeH1 = startMenu.querySelector('h1');
-        const welcomeP = startMenu.querySelector('p');
-        formContainer.style.display = "none";
-        if (welcomeH1)
-            welcomeH1.style.display = "block";
-        if (welcomeP)
-            welcomeP.style.display = "block";
-        menuActions.style.display = "flex";
         isStudentMenuOpen = false;
+        renderStartMenu();
     });
     formContainer.querySelector("#start-quiz-btn").addEventListener("click", () => {
         const nameInput = document.getElementById("student-name");
         const quizInput = document.getElementById("quiz-id-input");
         startStudentQuiz(nameInput.value, quizInput.value);
     });
+
     // Populate premade quizzes based on language
     const premadeList = formContainer.querySelector("#premade-list");
     if (premadeList) {

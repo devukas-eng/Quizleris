@@ -121,65 +121,12 @@
     --theme-picker-border: rgba(56, 189, 248, 0.2);
 }
 
-/* ── Theme: Tamsus Fonas² (Deep Navy/Purple) ── */
-.theme-dark-2 {
-    --bg: #09090f;
-    --panel: rgba(20, 18, 36, 0.7);
-    --text: #e8e6f5;
-    --accent: #a78bfa;
-    --accent-strong: #8b5cf6;
-    --danger: #f87171;
-    --success: #4ade80;
-    --muted: #8b83b0;
-    --shadow: 0 15px 35px rgba(9, 9, 15, 0.7);
-    --bg-grad: radial-gradient(circle at 15% 20%, rgba(167, 139, 250, 0.1), transparent 45%),
-               radial-gradient(circle at 85% 80%, rgba(139, 92, 246, 0.08), transparent 45%),
-               #06060c;
-    --app-bg: rgba(14, 13, 25, 0.85);
-    --border-color: rgba(167, 139, 250, 0.15);
-    --input-bg: rgba(20, 18, 36, 0.8);
-    --btn-bg: rgba(20, 18, 36, 0.8);
-    --btn-hover-bg: rgba(167, 139, 250, 0.08);
-    --summary-bg: rgba(20, 18, 36, 0.5);
-    --card-bg: rgba(20, 18, 36, 0.5);
-    --glow-color: rgba(167, 139, 250, 0.3);
-    --bubble-a: #a78bfa;
-    --bubble-b: #14122a;
-    --theme-picker-bg: #0e0d1c;
-    --theme-picker-text: #e8e6f5;
-    --theme-picker-item-hover: rgba(167,139,250,0.08);
-    --theme-picker-border: rgba(167, 139, 250, 0.2);
-}
+/* ── Theme: Tamsus Fonas² ── uses solar palette, same CSS class kept for compat */
+/* (solar CSS class is now the Tamsus Fonas² — see app.js THEMES array) */
 
-/* ── Theme: Tamsus Fonas³ (OLED Pitch Black / Pink glow) ── */
-.theme-dark-3 {
-    --bg: #000000;
-    --panel: rgba(10, 10, 10, 0.9);
-    --text: #f5f5f5;
-    --accent: #ec4899;
-    --accent-strong: #db2777;
-    --danger: #ef4444;
-    --success: #22c55e;
-    --muted: #737373;
-    --shadow: 0 15px 35px rgba(0, 0, 0, 0.9);
-    --bg-grad: radial-gradient(circle at 25% 30%, rgba(236, 72, 153, 0.07), transparent 50%),
-               radial-gradient(circle at 80% 70%, rgba(219, 39, 119, 0.05), transparent 50%),
-               #000000;
-    --app-bg: rgba(8, 8, 8, 0.92);
-    --border-color: rgba(255, 255, 255, 0.07);
-    --input-bg: rgba(15, 15, 15, 0.9);
-    --btn-bg: rgba(15, 15, 15, 0.9);
-    --btn-hover-bg: rgba(255, 255, 255, 0.05);
-    --summary-bg: rgba(10, 10, 10, 0.6);
-    --card-bg: rgba(10, 10, 10, 0.6);
-    --glow-color: rgba(236, 72, 153, 0.3);
-    --bubble-a: #ec4899;
-    --bubble-b: #0a0a0a;
-    --theme-picker-bg: #080808;
-    --theme-picker-text: #f5f5f5;
-    --theme-picker-item-hover: rgba(236,72,153,0.07);
-    --theme-picker-border: rgba(236, 72, 153, 0.18);
-}
+/* ── Theme: Tamsus Fonas³ ── uses cyberpunk palette, same CSS class kept for compat */
+/* (cyberpunk CSS class is now Tamsus Fonas³ — see app.js THEMES array) */
+
 
 
 ::placeholder {
@@ -831,17 +778,252 @@ body {
     }
 }
 
+
 /* Start Menu Styles */
 .start-menu {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 24px;
+    justify-content: flex-start;
+    gap: 0;
     text-align: center;
-    min-height: 40vh;
-    padding: 20px 20px;
+    padding: 10px 0 0;
 }
+
+/* ── Hero Section ──────────────────────────────────────────────────────── */
+.hero-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    padding: 24px 0 32px;
+}
+
+.hero-headline {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--text) 30%, var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+}
+
+/* ── PIN Entry Bar ──────────────────────────────────────────────────────── */
+.pin-entry-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel, #f3f4f6);
+    border: 2px solid var(--border-color, rgba(0,0,0,0.08));
+    border-radius: 999px;
+    padding: 4px 4px 4px 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pin-entry-bar:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow-color, rgba(27,155,126,0.2));
+}
+
+.pin-entry-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    font-family: var(--font);
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    min-width: 0;
+}
+
+.pin-entry-bar input::placeholder {
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.pin-go-btn {
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font);
+    font-size: 0.9rem;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    flex-shrink: 0;
+}
+
+.pin-go-btn:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 20px var(--glow-color, rgba(27,155,126,0.4));
+}
+
+.pin-go-btn:active {
+    transform: scale(0.97);
+}
+
+/* ── Divider ────────────────────────────────────────────────────────────── */
+.hero-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+}
+
+.hero-divider::before,
+.hero-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color, rgba(0,0,0,0.1));
+}
+
+/* ── Big Discover CTA ───────────────────────────────────────────────────── */
+.discover-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 32px;
+    border-radius: 999px;
+    border: 2px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--font);
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.discover-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+}
+
+.discover-btn:hover::before {
+    transform: translateX(0);
+}
+
+.discover-btn:hover {
+    color: #fff;
+    box-shadow: 0 8px 24px var(--glow-color, rgba(27,155,126,0.35));
+    transform: translateY(-2px);
+}
+
+.discover-btn span {
+    position: relative;
+    z-index: 1;
+}
+
+.discover-btn:active {
+    transform: scale(0.97) translateY(0);
+}
+
+/* ── Topic Blobs Grid ────────────────────────────────────────────────────── */
+.topics-section {
+    width: 100%;
+    border-top: 1px solid var(--border-color, rgba(0,0,0,0.07));
+    padding-top: 24px;
+    margin-top: 0;
+}
+
+.topics-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 16px;
+    opacity: 0.7;
+}
+
+.topic-blobs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.topic-blob {
+    position: relative;
+    border-radius: 16px;
+    padding: 16px 12px;
+    cursor: pointer;
+    overflow: hidden;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.2s ease;
+    text-align: left;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.topic-blob:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+}
+
+.topic-blob-icon {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.topic-blob-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    line-height: 1.2;
+}
+
+.topic-blob-count {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.75);
+    margin-top: 2px;
+}
+
+/* Admin / back row below hero */
+.menu-admin-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
+
 
 /* Join Quiz Card */
 .join-card {
@@ -1607,12 +1789,11 @@ body {
     
     .admin-grid-layout {
         display: grid;
-        grid-template-columns: 240px 1fr 320px;
+        grid-template-columns: 240px 1fr;
         align-items: start;
     }
     
-    .admin-navigator-column,
-    .admin-sidebar-column {
+    .admin-navigator-column {
         position: sticky;
         top: 24px;
         max-height: calc(100vh - 48px);
@@ -2456,4 +2637,28 @@ kbd {
 .legal-modal-body li {
     margin-bottom: 4px;
 }
-
+
+/* Animations for Landing Page */
+@keyframes slideUpFade {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-4px); }
+    40%, 80% { transform: translateX(4px); }
+}
+
+/* Hide logo and language toggle in admin mode */
+body.admin-mode-active #app-logo,
+body.admin-mode-active #language-toggle-container {
+    display: none !important;
+}
+

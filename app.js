@@ -331,7 +331,7 @@ function getLegalContent(type, lang) {
                 <h3>1. Paslauga</h3>
                 <p>Quizleris yra mokymo ir vertinimo platforma, skirta kurti ir dalyvauti testuose. Ji teikiama be joki\u0173 garantij\u0173.</p>
                 <h3>2. Atsakomyb\u0117</h3>
-                <p>J\u016bs atsakote u\u017e testo turin\u012f, kur\u012f \u012fkeliate. Draud\u017eiama \u012fkelti neteising\u0105, \u017eid\u017iani\u0105 ar neteist\u0105 turin\u012f.</p>
+                <p>Jūs atsakote už testo turinį, kurį įkeliate. Draudžiama įkelti neteisingą, įžeidžiantį ar neteisėtą turinį.</p>
                 <h3>3. Privatumas</h3>
                 <p>Mes renkame minimalius anoniminius duomenis, b\u016btinus paslaugai gerinti. Daugiau informacijos rasite Privatumo politikoje.</p>
                 <h3>4. Pakeitimai</h3>

@@ -24,10 +24,8 @@ function initApp() {
         const THEMES = [
             { value: 'emerald',    labelLt: '\u0160viesus Fonas',    labelEn: 'Light Classic' },
             { value: 'slate-dark', labelLt: 'Tamsus Fonas',         labelEn: 'Dark Mode' },
-            { value: 'dark-2',     labelLt: 'Tamsus Fonas\u00b2',   labelEn: 'Deep Violet' },
-            { value: 'dark-3',     labelLt: 'Tamsus Fonas\u00b3',   labelEn: 'OLED Black' },
-            { value: 'cyberpunk',  labelLt: 'Kiberpankas',          labelEn: 'Cyber Midnight' },
-            { value: 'solar',      labelLt: 'Saul\u0117s Blyksnis', labelEn: 'Solar Flare' },
+            { value: 'solar',      labelLt: 'Tamsus Fonas\u00b2',   labelEn: 'Dark Mode II' },
+            { value: 'cyberpunk',  labelLt: 'Tamsus Fonas\u00b3',   labelEn: 'Dark Mode III' },
         ];
 
         const applyTheme = (theme) => {
@@ -308,7 +306,7 @@ function initApp() {
                 <span class="legal-link-sep">|</span>
                 <button class="legal-link" id="lf-cookies">Slapukai</button>
                 <span class="legal-link-sep">|</span>
-                <span class="legal-link" style="cursor:default;opacity:0.4;">&copy; ${new Date().getFullYear()} Quizleris</span>
+                <span class="legal-link" style="cursor:default;opacity:0.4;">&copy; 2025 Quizleris</span>
             `;
             appRoot.appendChild(footer);
             footer.querySelector('#lf-terms')?.addEventListener('click', () => openLegalModal('terms'));
@@ -333,7 +331,7 @@ function getLegalContent(type, lang) {
                 <h3>1. Paslauga</h3>
                 <p>Quizleris yra mokymo ir vertinimo platforma, skirta kurti ir dalyvauti testuose. Ji teikiama be joki\u0173 garantij\u0173.</p>
                 <h3>2. Atsakomyb\u0117</h3>
-                <p>J\u016bs atsakote u\u017e testo turin\u012f, kur\u012f \u012fkeliate. Draud\u017eiama \u012fkelti neteising\u0105, \u017eid\u017iani\u0105 ar neteist\u0105 turin\u012f.</p>
+                <p>Jūs atsakote už testo turinį, kurį įkeliate. Draudžiama įkelti neteisingą, įžeidžiantį ar neteisėtą turinį.</p>
                 <h3>3. Privatumas</h3>
                 <p>Mes renkame minimalius anoniminius duomenis, b\u016btinus paslaugai gerinti. Daugiau informacijos rasite Privatumo politikoje.</p>
                 <h3>4. Pakeitimai</h3>
