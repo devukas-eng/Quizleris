@@ -723,6 +723,248 @@ export function getTopicBundles() {
                 { id: "lt_mat_9", prompt: "Kokia yra \\(y\\) reikšmė, jei \\(6y = 42\\)?", choices: [{ id: "a", text: "7", isCorrect: true }, { id: "b", text: "6", isCorrect: false }, { id: "c", text: "8", isCorrect: false }, { id: "d", text: "36", isCorrect: false }] },
                 { id: "lt_mat_10", prompt: "Išspręskite: \\(3x + 2x = 25\\)", choices: [{ id: "a", text: "5", isCorrect: true }, { id: "b", text: "10", isCorrect: false }, { id: "c", text: "15", isCorrect: false }, { id: "d", text: "3", isCorrect: false }] }
             ]
+        },
+
+        // ── MATH: GEOMETRY ───────────────────────────────────────────────────
+        {
+            id: "math-geometry-beginner",
+            title: "Geometry: Shapes & Angles",
+            language: "en", category: "math", difficulty: "beginner",
+            estimatedMinutes: 14, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 40 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "geo_1", prompt: "How many degrees are in the interior angles of a triangle?", choices: [{ id: "a", text: "180°", isCorrect: true }, { id: "b", text: "360°", isCorrect: false }, { id: "c", text: "90°", isCorrect: false }, { id: "d", text: "270°", isCorrect: false }] },
+                { id: "geo_2", prompt: "What is the area of a circle with radius \\(r\\)?", choices: [{ id: "a", text: "\\(\\pi r^2\\)", isCorrect: true }, { id: "b", text: "\\(2\\pi r\\)", isCorrect: false }, { id: "c", text: "\\(\\pi r\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{\\pi r^2}{2}\\)", isCorrect: false }] },
+                { id: "geo_3", prompt: "State the Pythagorean theorem:", choices: [{ id: "a", text: "\\(a^2 + b^2 = c^2\\)", isCorrect: true }, { id: "b", text: "\\(a + b = c\\)", isCorrect: false }, { id: "c", text: "\\(a^2 - b^2 = c\\)", isCorrect: false }, { id: "d", text: "\\(a \\cdot b = c^2\\)", isCorrect: false }] },
+                { id: "geo_4", prompt: "How many sides does a hexagon have?", choices: [{ id: "a", text: "6", isCorrect: true }, { id: "b", text: "5", isCorrect: false }, { id: "c", text: "7", isCorrect: false }, { id: "d", text: "8", isCorrect: false }] },
+                { id: "geo_5", prompt: "What is the perimeter of a rectangle with length 8 and width 5?", choices: [{ id: "a", text: "26", isCorrect: true }, { id: "b", text: "40", isCorrect: false }, { id: "c", text: "13", isCorrect: false }, { id: "d", text: "20", isCorrect: false }] },
+                { id: "geo_6", prompt: "Two parallel lines cut by a transversal form which type of equal angles?", choices: [{ id: "a", text: "Alternate interior angles", isCorrect: true }, { id: "b", text: "Supplementary angles", isCorrect: false }, { id: "c", text: "Complementary angles", isCorrect: false }, { id: "d", text: "Obtuse angles", isCorrect: false }] },
+                { id: "geo_7", prompt: "What is the area of a triangle with base 10 and height 6?", choices: [{ id: "a", text: "30", isCorrect: true }, { id: "b", text: "60", isCorrect: false }, { id: "c", text: "16", isCorrect: false }, { id: "d", text: "20", isCorrect: false }] },
+                { id: "geo_8", prompt: "How many degrees are in a right angle?", choices: [{ id: "a", text: "90°", isCorrect: true }, { id: "b", text: "180°", isCorrect: false }, { id: "c", text: "45°", isCorrect: false }, { id: "d", text: "60°", isCorrect: false }] },
+                { id: "geo_9", prompt: "What is the volume of a cube with side length 3?", choices: [{ id: "a", text: "27", isCorrect: true }, { id: "b", text: "9", isCorrect: false }, { id: "c", text: "18", isCorrect: false }, { id: "d", text: "54", isCorrect: false }] },
+                { id: "geo_10", prompt: "An isosceles triangle has how many equal sides?", choices: [{ id: "a", text: "2", isCorrect: true }, { id: "b", text: "3", isCorrect: false }, { id: "c", text: "0", isCorrect: false }, { id: "d", text: "1", isCorrect: false }] }
+            ]
+        },
+
+        // ── MATH: TRIGONOMETRY ────────────────────────────────────────────────
+        {
+            id: "math-trigonometry-intermediate",
+            title: "Trigonometry Essentials",
+            language: "en", category: "math", difficulty: "intermediate",
+            estimatedMinutes: 22, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 60 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "trig_1", prompt: "What is \\(\\sin(30°)\\)?", choices: [{ id: "a", text: "\\(\\frac{1}{2}\\)", isCorrect: true }, { id: "b", text: "\\(\\frac{\\sqrt{3}}{2}\\)", isCorrect: false }, { id: "c", text: "\\(1\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{\\sqrt{2}}{2}\\)", isCorrect: false }] },
+                { id: "trig_2", prompt: "What is \\(\\cos(0°)\\)?", choices: [{ id: "a", text: "1", isCorrect: true }, { id: "b", text: "0", isCorrect: false }, { id: "c", text: "-1", isCorrect: false }, { id: "d", text: "\\(\\frac{1}{2}\\)", isCorrect: false }] },
+                { id: "trig_3", prompt: "Which identity is correct?", choices: [{ id: "a", text: "\\(\\sin^2\\theta + \\cos^2\\theta = 1\\)", isCorrect: true }, { id: "b", text: "\\(\\sin^2\\theta - \\cos^2\\theta = 1\\)", isCorrect: false }, { id: "c", text: "\\(\\tan^2\\theta + 1 = \\sin^2\\theta\\)", isCorrect: false }, { id: "d", text: "\\(\\sin\\theta = \\cos\\theta\\) always", isCorrect: false }] },
+                { id: "trig_4", prompt: "What is \\(\\tan(45°)\\)?", choices: [{ id: "a", text: "1", isCorrect: true }, { id: "b", text: "0", isCorrect: false }, { id: "c", text: "\\(\\sqrt{2}\\)", isCorrect: false }, { id: "d", text: "Undefined", isCorrect: false }] },
+                { id: "trig_5", prompt: "What is \\(\\sin(90°)\\)?", choices: [{ id: "a", text: "1", isCorrect: true }, { id: "b", text: "0", isCorrect: false }, { id: "c", text: "\\(\\frac{1}{2}\\)", isCorrect: false }, { id: "d", text: "-1", isCorrect: false }] },
+                { id: "trig_6", prompt: "How many radians is 180°?", choices: [{ id: "a", text: "\\(\\pi\\)", isCorrect: true }, { id: "b", text: "\\(2\\pi\\)", isCorrect: false }, { id: "c", text: "\\(\\frac{\\pi}{2}\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{\\pi}{4}\\)", isCorrect: false }] },
+                { id: "trig_7", prompt: "What is \\(\\cos(60°)\\)?", choices: [{ id: "a", text: "\\(\\frac{1}{2}\\)", isCorrect: true }, { id: "b", text: "\\(\\frac{\\sqrt{3}}{2}\\)", isCorrect: false }, { id: "c", text: "1", isCorrect: false }, { id: "d", text: "0", isCorrect: false }] },
+                { id: "trig_8", prompt: "What is the period of \\(y = \\sin(x)\\)?", choices: [{ id: "a", text: "\\(2\\pi\\)", isCorrect: true }, { id: "b", text: "\\(\\pi\\)", isCorrect: false }, { id: "c", text: "\\(\\frac{\\pi}{2}\\)", isCorrect: false }, { id: "d", text: "1", isCorrect: false }] },
+                { id: "trig_9", prompt: "Which ratio defines \\(\\tan(\\theta)\\)?", choices: [{ id: "a", text: "\\(\\frac{\\sin\\theta}{\\cos\\theta}\\)", isCorrect: true }, { id: "b", text: "\\(\\frac{\\cos\\theta}{\\sin\\theta}\\)", isCorrect: false }, { id: "c", text: "\\(\\sin\\theta \\cdot \\cos\\theta\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{1}{\\sin\\theta}\\)", isCorrect: false }] },
+                { id: "trig_10", prompt: "What is \\(\\sin(-\\theta)\\)?", choices: [{ id: "a", text: "\\(-\\sin\\theta\\)", isCorrect: true }, { id: "b", text: "\\(\\sin\\theta\\)", isCorrect: false }, { id: "c", text: "\\(\\cos\\theta\\)", isCorrect: false }, { id: "d", text: "\\(-\\cos\\theta\\)", isCorrect: false }] }
+            ]
+        },
+
+        // ── MATH: CALCULUS ────────────────────────────────────────────────────
+        {
+            id: "math-calculus-derivatives-advanced",
+            title: "Calculus: Derivatives",
+            language: "en", category: "math", difficulty: "advanced",
+            estimatedMinutes: 25, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 90 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "calc_d1", prompt: "What is the derivative of \\(f(x) = x^3\\)?", choices: [{ id: "a", text: "\\(3x^2\\)", isCorrect: true }, { id: "b", text: "\\(x^2\\)", isCorrect: false }, { id: "c", text: "\\(3x^3\\)", isCorrect: false }, { id: "d", text: "\\(x^4\\)", isCorrect: false }] },
+                { id: "calc_d2", prompt: "What is \\(\\frac{d}{dx}[e^x]\\)?", choices: [{ id: "a", text: "\\(e^x\\)", isCorrect: true }, { id: "b", text: "\\(xe^{x-1}\\)", isCorrect: false }, { id: "c", text: "\\(e\\)", isCorrect: false }, { id: "d", text: "\\(e^{x+1}\\)", isCorrect: false }] },
+                { id: "calc_d3", prompt: "What is \\(\\frac{d}{dx}[\\ln x]\\)?", choices: [{ id: "a", text: "\\(\\frac{1}{x}\\)", isCorrect: true }, { id: "b", text: "\\(\\ln x\\)", isCorrect: false }, { id: "c", text: "\\(x\\)", isCorrect: false }, { id: "d", text: "\\(e^x\\)", isCorrect: false }] },
+                { id: "calc_d4", prompt: "What is \\(\\frac{d}{dx}[\\sin x]\\)?", choices: [{ id: "a", text: "\\(\\cos x\\)", isCorrect: true }, { id: "b", text: "\\(-\\sin x\\)", isCorrect: false }, { id: "c", text: "\\(-\\cos x\\)", isCorrect: false }, { id: "d", text: "\\(\\tan x\\)", isCorrect: false }] },
+                { id: "calc_d5", prompt: "Apply the chain rule: What is \\(\\frac{d}{dx}[\\sin(x^2)]\\)?", choices: [{ id: "a", text: "\\(2x\\cos(x^2)\\)", isCorrect: true }, { id: "b", text: "\\(\\cos(x^2)\\)", isCorrect: false }, { id: "c", text: "\\(2x\\sin(x^2)\\)", isCorrect: false }, { id: "d", text: "\\(-2x\\cos(x^2)\\)", isCorrect: false }] },
+                { id: "calc_d6", prompt: "What is the derivative of \\(f(x) = x^5 - 3x^2 + 7\\)?", choices: [{ id: "a", text: "\\(5x^4 - 6x\\)", isCorrect: true }, { id: "b", text: "\\(5x^4 - 3x\\)", isCorrect: false }, { id: "c", text: "\\(x^4 - 6x\\)", isCorrect: false }, { id: "d", text: "\\(5x^4 + 7\\)", isCorrect: false }] },
+                { id: "calc_d7", prompt: "What does \\(f'(x) = 0\\) at a point indicate?", choices: [{ id: "a", text: "A critical point (possible max or min)", isCorrect: true }, { id: "b", text: "The function equals zero there", isCorrect: false }, { id: "c", text: "The function is undefined", isCorrect: false }, { id: "d", text: "The function is always increasing", isCorrect: false }] },
+                { id: "calc_d8", prompt: "What is \\(\\frac{d}{dx}[\\cos x]\\)?", choices: [{ id: "a", text: "\\(-\\sin x\\)", isCorrect: true }, { id: "b", text: "\\(\\sin x\\)", isCorrect: false }, { id: "c", text: "\\(\\cos x\\)", isCorrect: false }, { id: "d", text: "\\(-\\cos x\\)", isCorrect: false }] },
+                { id: "calc_d9", prompt: "Product rule: What is \\(\\frac{d}{dx}[x \\cdot e^x]\\)?", choices: [{ id: "a", text: "\\(e^x + xe^x\\)", isCorrect: true }, { id: "b", text: "\\(xe^x\\)", isCorrect: false }, { id: "c", text: "\\(e^x\\)", isCorrect: false }, { id: "d", text: "\\(x^2 e^x\\)", isCorrect: false }] },
+                { id: "calc_d10", prompt: "Power rule: What is \\(\\frac{d}{dx}[x^n]\\)?", choices: [{ id: "a", text: "\\(nx^{n-1}\\)", isCorrect: true }, { id: "b", text: "\\(x^{n-1}\\)", isCorrect: false }, { id: "c", text: "\\(nx^n\\)", isCorrect: false }, { id: "d", text: "\\((n-1)x^n\\)", isCorrect: false }] }
+            ]
+        },
+
+        // ── MATH: STATISTICS ──────────────────────────────────────────────────
+        {
+            id: "math-statistics-intermediate",
+            title: "Statistics & Probability",
+            language: "en", category: "math", difficulty: "intermediate",
+            estimatedMinutes: 18, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 50 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "stat_1", prompt: "What is the mean of {2, 4, 6, 8, 10}?", choices: [{ id: "a", text: "6", isCorrect: true }, { id: "b", text: "5", isCorrect: false }, { id: "c", text: "8", isCorrect: false }, { id: "d", text: "4", isCorrect: false }] },
+                { id: "stat_2", prompt: "What is the median of {3, 7, 1, 9, 5}?", choices: [{ id: "a", text: "5", isCorrect: true }, { id: "b", text: "3", isCorrect: false }, { id: "c", text: "7", isCorrect: false }, { id: "d", text: "6", isCorrect: false }] },
+                { id: "stat_3", prompt: "What is the mode of {4, 4, 6, 7, 4, 9}?", choices: [{ id: "a", text: "4", isCorrect: true }, { id: "b", text: "6", isCorrect: false }, { id: "c", text: "7", isCorrect: false }, { id: "d", text: "9", isCorrect: false }] },
+                { id: "stat_4", prompt: "A fair coin is flipped 3 times. Probability of all heads?", choices: [{ id: "a", text: "\\(\\frac{1}{8}\\)", isCorrect: true }, { id: "b", text: "\\(\\frac{1}{4}\\)", isCorrect: false }, { id: "c", text: "\\(\\frac{1}{2}\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{1}{3}\\)", isCorrect: false }] },
+                { id: "stat_5", prompt: "What does standard deviation measure?", choices: [{ id: "a", text: "Spread of data around the mean", isCorrect: true }, { id: "b", text: "The average value of the data", isCorrect: false }, { id: "c", text: "The most common value", isCorrect: false }, { id: "d", text: "The total sum of data", isCorrect: false }] },
+                { id: "stat_6", prompt: "P(A) = 0.4, P(B) = 0.3, A and B independent. What is P(A and B)?", choices: [{ id: "a", text: "0.12", isCorrect: true }, { id: "b", text: "0.7", isCorrect: false }, { id: "c", text: "0.1", isCorrect: false }, { id: "d", text: "0.04", isCorrect: false }] },
+                { id: "stat_7", prompt: "Which value is the 50th percentile of a dataset?", choices: [{ id: "a", text: "The median", isCorrect: true }, { id: "b", text: "The mean", isCorrect: false }, { id: "c", text: "The mode", isCorrect: false }, { id: "d", text: "The range", isCorrect: false }] },
+                { id: "stat_8", prompt: "Rolling a standard 6-sided die — probability of rolling a 4?", choices: [{ id: "a", text: "\\(\\frac{1}{6}\\)", isCorrect: true }, { id: "b", text: "\\(\\frac{1}{4}\\)", isCorrect: false }, { id: "c", text: "\\(\\frac{4}{6}\\)", isCorrect: false }, { id: "d", text: "\\(\\frac{1}{3}\\)", isCorrect: false }] },
+                { id: "stat_9", prompt: "What is the variance when all values in a dataset are identical?", choices: [{ id: "a", text: "0", isCorrect: true }, { id: "b", text: "1", isCorrect: false }, { id: "c", text: "The mean", isCorrect: false }, { id: "d", text: "Undefined", isCorrect: false }] },
+                { id: "stat_10", prompt: "In a normal distribution, ~what % of data falls within 1 standard deviation?", choices: [{ id: "a", text: "68%", isCorrect: true }, { id: "b", text: "95%", isCorrect: false }, { id: "c", text: "50%", isCorrect: false }, { id: "d", text: "99.7%", isCorrect: false }] }
+            ]
+        },
+
+        // ── CS: PYTHON ─────────────────────────────────────────────────────────
+        {
+            id: "cs-python-beginner",
+            title: "Python Fundamentals",
+            language: "en", category: "cs", difficulty: "beginner",
+            estimatedMinutes: 16, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 45 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "py_1", prompt: "Which keyword is used to define a function in Python?", choices: [{ id: "a", text: "`def`", isCorrect: true }, { id: "b", text: "`function`", isCorrect: false }, { id: "c", text: "`fn`", isCorrect: false }, { id: "d", text: "`define`", isCorrect: false }] },
+                { id: "py_2", prompt: "What does `len([1, 2, 3, 4])` return?", choices: [{ id: "a", text: "4", isCorrect: true }, { id: "b", text: "3", isCorrect: false }, { id: "c", text: "10", isCorrect: false }, { id: "d", text: "0", isCorrect: false }] },
+                { id: "py_3", prompt: "Which of the following is a mutable data type in Python?", choices: [{ id: "a", text: "List", isCorrect: true }, { id: "b", text: "Tuple", isCorrect: false }, { id: "c", text: "String", isCorrect: false }, { id: "d", text: "Integer", isCorrect: false }] },
+                { id: "py_4", prompt: "What is the output of `print(type(3.14))`?", choices: [{ id: "a", text: "`<class 'float'>`", isCorrect: true }, { id: "b", text: "`<class 'int'>`", isCorrect: false }, { id: "c", text: "`<class 'str'>`", isCorrect: false }, { id: "d", text: "`3.14`", isCorrect: false }] },
+                { id: "py_5", prompt: "Which symbol is used for single-line comments in Python?", choices: [{ id: "a", text: "`#`", isCorrect: true }, { id: "b", text: "`//`", isCorrect: false }, { id: "c", text: "`--`", isCorrect: false }, { id: "d", text: "`/*`", isCorrect: false }] },
+                { id: "py_6", prompt: "What is the result of `'hello'[1]` in Python?", choices: [{ id: "a", text: "`'e'`", isCorrect: true }, { id: "b", text: "`'h'`", isCorrect: false }, { id: "c", text: "`'l'`", isCorrect: false }, { id: "d", text: "`1`", isCorrect: false }] },
+                { id: "py_7", prompt: "Which loop iterates over a sequence in Python?", choices: [{ id: "a", text: "`for` loop", isCorrect: true }, { id: "b", text: "`loop` statement", isCorrect: false }, { id: "c", text: "`each` loop", isCorrect: false }, { id: "d", text: "`repeat` loop", isCorrect: false }] },
+                { id: "py_8", prompt: "What does `range(5)` produce?", choices: [{ id: "a", text: "Numbers 0 through 4", isCorrect: true }, { id: "b", text: "Numbers 1 through 5", isCorrect: false }, { id: "c", text: "Numbers 0 through 5", isCorrect: false }, { id: "d", text: "5 random numbers", isCorrect: false }] },
+                { id: "py_9", prompt: "What keyword handles exceptions in Python?", choices: [{ id: "a", text: "`except`", isCorrect: true }, { id: "b", text: "`catch`", isCorrect: false }, { id: "c", text: "`handle`", isCorrect: false }, { id: "d", text: "`error`", isCorrect: false }] },
+                { id: "py_10", prompt: "What does `dict.get('key', 'default')` return if 'key' doesn't exist?", choices: [{ id: "a", text: "`'default'`", isCorrect: true }, { id: "b", text: "`None`", isCorrect: false }, { id: "c", text: "`KeyError`", isCorrect: false }, { id: "d", text: "`False`", isCorrect: false }] }
+            ]
+        },
+
+        // ── CS: HTML & CSS ─────────────────────────────────────────────────────
+        {
+            id: "cs-html-css-beginner",
+            title: "HTML & CSS Basics",
+            language: "en", category: "cs", difficulty: "beginner",
+            estimatedMinutes: 14, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 40 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "html_1", prompt: "Which HTML tag is used for the largest heading?", choices: [{ id: "a", text: "`<h1>`", isCorrect: true }, { id: "b", text: "`<h6>`", isCorrect: false }, { id: "c", text: "`<head>`", isCorrect: false }, { id: "d", text: "`<title>`", isCorrect: false }] },
+                { id: "html_2", prompt: "Which CSS property changes the text color?", choices: [{ id: "a", text: "`color`", isCorrect: true }, { id: "b", text: "`font-color`", isCorrect: false }, { id: "c", text: "`text-color`", isCorrect: false }, { id: "d", text: "`background-color`", isCorrect: false }] },
+                { id: "html_3", prompt: "What does CSS stand for?", choices: [{ id: "a", text: "Cascading Style Sheets", isCorrect: true }, { id: "b", text: "Creative Style Syntax", isCorrect: false }, { id: "c", text: "Computer Style System", isCorrect: false }, { id: "d", text: "Coded Style Structure", isCorrect: false }] },
+                { id: "html_4", prompt: "Which HTML element links an external CSS file?", choices: [{ id: "a", text: "`<link>`", isCorrect: true }, { id: "b", text: "`<style>`", isCorrect: false }, { id: "c", text: "`<css>`", isCorrect: false }, { id: "d", text: "`<script>`", isCorrect: false }] },
+                { id: "html_5", prompt: "Which CSS property sets the space outside an element's border?", choices: [{ id: "a", text: "`margin`", isCorrect: true }, { id: "b", text: "`padding`", isCorrect: false }, { id: "c", text: "`border`", isCorrect: false }, { id: "d", text: "`spacing`", isCorrect: false }] },
+                { id: "html_6", prompt: "What does the `<a href>` tag create?", choices: [{ id: "a", text: "A hyperlink", isCorrect: true }, { id: "b", text: "An image", isCorrect: false }, { id: "c", text: "A button", isCorrect: false }, { id: "d", text: "A table", isCorrect: false }] },
+                { id: "html_7", prompt: "Which CSS property makes a container use flexbox layout?", choices: [{ id: "a", text: "`display: flex`", isCorrect: true }, { id: "b", text: "`display: block`", isCorrect: false }, { id: "c", text: "`layout: flex`", isCorrect: false }, { id: "d", text: "`position: flex`", isCorrect: false }] },
+                { id: "html_8", prompt: "What HTML attribute specifies an image URL?", choices: [{ id: "a", text: "`src`", isCorrect: true }, { id: "b", text: "`href`", isCorrect: false }, { id: "c", text: "`url`", isCorrect: false }, { id: "d", text: "`link`", isCorrect: false }] },
+                { id: "html_9", prompt: "Which CSS selector targets elements with a specific class?", choices: [{ id: "a", text: "`.classname`", isCorrect: true }, { id: "b", text: "`#classname`", isCorrect: false }, { id: "c", text: "`@classname`", isCorrect: false }, { id: "d", text: "`*classname`", isCorrect: false }] },
+                { id: "html_10", prompt: "Which tag creates an unordered (bulleted) list?", choices: [{ id: "a", text: "`<ul>`", isCorrect: true }, { id: "b", text: "`<ol>`", isCorrect: false }, { id: "c", text: "`<li>`", isCorrect: false }, { id: "d", text: "`<list>`", isCorrect: false }] }
+            ]
+        },
+
+        // ── CS: SQL ───────────────────────────────────────────────────────────
+        {
+            id: "cs-sql-beginner",
+            title: "SQL Fundamentals",
+            language: "en", category: "cs", difficulty: "beginner",
+            estimatedMinutes: 15, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 45 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "sql_1", prompt: "Which SQL statement retrieves data from a database?", choices: [{ id: "a", text: "`SELECT`", isCorrect: true }, { id: "b", text: "`GET`", isCorrect: false }, { id: "c", text: "`FETCH`", isCorrect: false }, { id: "d", text: "`READ`", isCorrect: false }] },
+                { id: "sql_2", prompt: "Which clause filters results in a SELECT query?", choices: [{ id: "a", text: "`WHERE`", isCorrect: true }, { id: "b", text: "`FILTER`", isCorrect: false }, { id: "c", text: "`HAVING`", isCorrect: false }, { id: "d", text: "`LIMIT`", isCorrect: false }] },
+                { id: "sql_3", prompt: "Which SQL command adds a new row to a table?", choices: [{ id: "a", text: "`INSERT INTO`", isCorrect: true }, { id: "b", text: "`ADD ROW`", isCorrect: false }, { id: "c", text: "`CREATE ROW`", isCorrect: false }, { id: "d", text: "`PUSH`", isCorrect: false }] },
+                { id: "sql_4", prompt: "What does `SELECT * FROM users` return?", choices: [{ id: "a", text: "All columns and rows from the users table", isCorrect: true }, { id: "b", text: "Only the first row", isCorrect: false }, { id: "c", text: "The column names only", isCorrect: false }, { id: "d", text: "The count of rows", isCorrect: false }] },
+                { id: "sql_5", prompt: "Which SQL statement removes rows from a table?", choices: [{ id: "a", text: "`DELETE`", isCorrect: true }, { id: "b", text: "`REMOVE`", isCorrect: false }, { id: "c", text: "`DROP`", isCorrect: false }, { id: "d", text: "`ERASE`", isCorrect: false }] },
+                { id: "sql_6", prompt: "Which aggregate function counts the number of rows?", choices: [{ id: "a", text: "`COUNT()`", isCorrect: true }, { id: "b", text: "`SUM()`", isCorrect: false }, { id: "c", text: "`TOTAL()`", isCorrect: false }, { id: "d", text: "`NUM()`", isCorrect: false }] },
+                { id: "sql_7", prompt: "What does `ORDER BY name DESC` do?", choices: [{ id: "a", text: "Sorts by name Z to A (descending)", isCorrect: true }, { id: "b", text: "Sorts by name A to Z (ascending)", isCorrect: false }, { id: "c", text: "Deletes sorted rows", isCorrect: false }, { id: "d", text: "Groups results by name", isCorrect: false }] },
+                { id: "sql_8", prompt: "Which JOIN returns only rows matching in BOTH tables?", choices: [{ id: "a", text: "`INNER JOIN`", isCorrect: true }, { id: "b", text: "`LEFT JOIN`", isCorrect: false }, { id: "c", text: "`FULL OUTER JOIN`", isCorrect: false }, { id: "d", text: "`CROSS JOIN`", isCorrect: false }] },
+                { id: "sql_9", prompt: "Which SQL command modifies existing data in a table?", choices: [{ id: "a", text: "`UPDATE`", isCorrect: true }, { id: "b", text: "`MODIFY`", isCorrect: false }, { id: "c", text: "`CHANGE`", isCorrect: false }, { id: "d", text: "`ALTER`", isCorrect: false }] },
+                { id: "sql_10", prompt: "What does `GROUP BY` do in SQL?", choices: [{ id: "a", text: "Groups rows with the same value into summary rows", isCorrect: true }, { id: "b", text: "Sorts the data alphabetically", isCorrect: false }, { id: "c", text: "Joins two tables", isCorrect: false }, { id: "d", text: "Filters duplicate rows", isCorrect: false }] }
+            ]
+        },
+
+        // ── CS: OOP CONCEPTS ──────────────────────────────────────────────────
+        {
+            id: "cs-oop-intermediate",
+            title: "OOP Concepts",
+            language: "en", category: "cs", difficulty: "intermediate",
+            estimatedMinutes: 18, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 55 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "oop_1", prompt: "Which OOP principle hides internal data and only exposes necessary methods?", choices: [{ id: "a", text: "Encapsulation", isCorrect: true }, { id: "b", text: "Polymorphism", isCorrect: false }, { id: "c", text: "Inheritance", isCorrect: false }, { id: "d", text: "Abstraction", isCorrect: false }] },
+                { id: "oop_2", prompt: "What allows one class to derive properties from another?", choices: [{ id: "a", text: "Inheritance", isCorrect: true }, { id: "b", text: "Encapsulation", isCorrect: false }, { id: "c", text: "Abstraction", isCorrect: false }, { id: "d", text: "Composition", isCorrect: false }] },
+                { id: "oop_3", prompt: "What is polymorphism?", choices: [{ id: "a", text: "Different classes treated as instances of the same class through a shared interface", isCorrect: true }, { id: "b", text: "Hiding data from other classes", isCorrect: false }, { id: "c", text: "Creating multiple instances of the same class", isCorrect: false }, { id: "d", text: "Grouping related classes together", isCorrect: false }] },
+                { id: "oop_4", prompt: "What is an abstract class?", choices: [{ id: "a", text: "A class that cannot be instantiated and may contain abstract methods", isCorrect: true }, { id: "b", text: "A class with no methods", isCorrect: false }, { id: "c", text: "A class that inherits from all other classes", isCorrect: false }, { id: "d", text: "A class with only private fields", isCorrect: false }] },
+                { id: "oop_5", prompt: "What is a constructor?", choices: [{ id: "a", text: "A special method that initializes a new object", isCorrect: true }, { id: "b", text: "A method that deletes an object", isCorrect: false }, { id: "c", text: "A type of loop inside a class", isCorrect: false }, { id: "d", text: "A method that returns a string", isCorrect: false }] },
+                { id: "oop_6", prompt: "What does 'overriding' mean in OOP?", choices: [{ id: "a", text: "A subclass provides a new implementation of a parent's method", isCorrect: true }, { id: "b", text: "Same method name, different params in same class", isCorrect: false }, { id: "c", text: "Calling a superclass method", isCorrect: false }, { id: "d", text: "Creating a class inside another class", isCorrect: false }] },
+                { id: "oop_7", prompt: "Key difference between interface and abstract class?", choices: [{ id: "a", text: "Interface only defines signatures; abstract class can have implementations", isCorrect: true }, { id: "b", text: "Interface can have fields; abstract class cannot", isCorrect: false }, { id: "c", text: "They are functionally identical", isCorrect: false }, { id: "d", text: "Abstract class can only be used once", isCorrect: false }] },
+                { id: "oop_8", prompt: "What is method overloading?", choices: [{ id: "a", text: "Multiple methods with the same name but different parameters", isCorrect: true }, { id: "b", text: "Replacing a method from a parent class", isCorrect: false }, { id: "c", text: "Running two methods simultaneously", isCorrect: false }, { id: "d", text: "Calling a private method externally", isCorrect: false }] },
+                { id: "oop_9", prompt: "Which keyword refers to the current class instance in most OOP languages?", choices: [{ id: "a", text: "`this` (or `self` in Python)", isCorrect: true }, { id: "b", text: "`current`", isCorrect: false }, { id: "c", text: "`instance`", isCorrect: false }, { id: "d", text: "`base`", isCorrect: false }] },
+                { id: "oop_10", prompt: "Which SOLID principle says a class should have only one reason to change?", choices: [{ id: "a", text: "Single Responsibility Principle", isCorrect: true }, { id: "b", text: "Open/Closed Principle", isCorrect: false }, { id: "c", text: "Liskov Substitution Principle", isCorrect: false }, { id: "d", text: "Dependency Inversion Principle", isCorrect: false }] }
+            ]
+        },
+
+        // ── LANG: WORLD GEOGRAPHY ─────────────────────────────────────────────
+        {
+            id: "lang-geography-beginner",
+            title: "World Geography",
+            language: "en", category: "lang", difficulty: "beginner",
+            estimatedMinutes: 12, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 35 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "geo_w1", prompt: "What is the capital of France?", choices: [{ id: "a", text: "Paris", isCorrect: true }, { id: "b", text: "Lyon", isCorrect: false }, { id: "c", text: "Berlin", isCorrect: false }, { id: "d", text: "Madrid", isCorrect: false }] },
+                { id: "geo_w2", prompt: "Which is the largest ocean on Earth?", choices: [{ id: "a", text: "Pacific Ocean", isCorrect: true }, { id: "b", text: "Atlantic Ocean", isCorrect: false }, { id: "c", text: "Indian Ocean", isCorrect: false }, { id: "d", text: "Arctic Ocean", isCorrect: false }] },
+                { id: "geo_w3", prompt: "On which continent is Brazil located?", choices: [{ id: "a", text: "South America", isCorrect: true }, { id: "b", text: "Africa", isCorrect: false }, { id: "c", text: "Asia", isCorrect: false }, { id: "d", text: "North America", isCorrect: false }] },
+                { id: "geo_w4", prompt: "What is the longest river in the world?", choices: [{ id: "a", text: "The Nile", isCorrect: true }, { id: "b", text: "The Amazon", isCorrect: false }, { id: "c", text: "The Yangtze", isCorrect: false }, { id: "d", text: "The Mississippi", isCorrect: false }] },
+                { id: "geo_w5", prompt: "How many countries are in the European Union (2024)?", choices: [{ id: "a", text: "27", isCorrect: true }, { id: "b", text: "28", isCorrect: false }, { id: "c", text: "25", isCorrect: false }, { id: "d", text: "30", isCorrect: false }] },
+                { id: "geo_w6", prompt: "What is the capital of Japan?", choices: [{ id: "a", text: "Tokyo", isCorrect: true }, { id: "b", text: "Osaka", isCorrect: false }, { id: "c", text: "Kyoto", isCorrect: false }, { id: "d", text: "Hiroshima", isCorrect: false }] },
+                { id: "geo_w7", prompt: "Which country has the most land area?", choices: [{ id: "a", text: "Russia", isCorrect: true }, { id: "b", text: "Canada", isCorrect: false }, { id: "c", text: "United States", isCorrect: false }, { id: "d", text: "China", isCorrect: false }] },
+                { id: "geo_w8", prompt: "Which mountain is the tallest in the world?", choices: [{ id: "a", text: "Mount Everest", isCorrect: true }, { id: "b", text: "K2", isCorrect: false }, { id: "c", text: "Mont Blanc", isCorrect: false }, { id: "d", text: "Kilimanjaro", isCorrect: false }] },
+                { id: "geo_w9", prompt: "What is the smallest country in the world by area?", choices: [{ id: "a", text: "Vatican City", isCorrect: true }, { id: "b", text: "Monaco", isCorrect: false }, { id: "c", text: "San Marino", isCorrect: false }, { id: "d", text: "Liechtenstein", isCorrect: false }] },
+                { id: "geo_w10", prompt: "Which city is known as 'The Eternal City'?", choices: [{ id: "a", text: "Rome", isCorrect: true }, { id: "b", text: "Athens", isCorrect: false }, { id: "c", text: "Istanbul", isCorrect: false }, { id: "d", text: "Cairo", isCorrect: false }] }
+            ]
+        },
+
+        // ── LANG: SCIENCE TRIVIA ──────────────────────────────────────────────
+        {
+            id: "lang-science-trivia-intermediate",
+            title: "Science Trivia",
+            language: "en", category: "lang", difficulty: "intermediate",
+            estimatedMinutes: 15, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 40 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "sci_1", prompt: "What is the chemical symbol for Gold?", choices: [{ id: "a", text: "Au", isCorrect: true }, { id: "b", text: "Go", isCorrect: false }, { id: "c", text: "Gd", isCorrect: false }, { id: "d", text: "Ag", isCorrect: false }] },
+                { id: "sci_2", prompt: "Approximate speed of light in a vacuum?", choices: [{ id: "a", text: "300,000 km/s", isCorrect: true }, { id: "b", text: "150,000 km/s", isCorrect: false }, { id: "c", text: "450,000 km/s", isCorrect: false }, { id: "d", text: "3,000 km/s", isCorrect: false }] },
+                { id: "sci_3", prompt: "How many bones are in the adult human body?", choices: [{ id: "a", text: "206", isCorrect: true }, { id: "b", text: "208", isCorrect: false }, { id: "c", text: "196", isCorrect: false }, { id: "d", text: "214", isCorrect: false }] },
+                { id: "sci_4", prompt: "What is the powerhouse of the cell?", choices: [{ id: "a", text: "Mitochondria", isCorrect: true }, { id: "b", text: "Nucleus", isCorrect: false }, { id: "c", text: "Ribosome", isCorrect: false }, { id: "d", text: "Golgi apparatus", isCorrect: false }] },
+                { id: "sci_5", prompt: "Which planet is known as the Red Planet?", choices: [{ id: "a", text: "Mars", isCorrect: true }, { id: "b", text: "Jupiter", isCorrect: false }, { id: "c", text: "Venus", isCorrect: false }, { id: "d", text: "Saturn", isCorrect: false }] },
+                { id: "sci_6", prompt: "What is the atomic number of Carbon?", choices: [{ id: "a", text: "6", isCorrect: true }, { id: "b", text: "12", isCorrect: false }, { id: "c", text: "8", isCorrect: false }, { id: "d", text: "14", isCorrect: false }] },
+                { id: "sci_7", prompt: "DNA stands for:", choices: [{ id: "a", text: "Deoxyribonucleic Acid", isCorrect: true }, { id: "b", text: "Dinitrogen Acid", isCorrect: false }, { id: "c", text: "Dynamic Nucleic Acid", isCorrect: false }, { id: "d", text: "Deoxyribose Nucleotide Acid", isCorrect: false }] },
+                { id: "sci_8", prompt: "What force keeps planets in orbit around the sun?", choices: [{ id: "a", text: "Gravity", isCorrect: true }, { id: "b", text: "Magnetism", isCorrect: false }, { id: "c", text: "Centrifugal force", isCorrect: false }, { id: "d", text: "Nuclear force", isCorrect: false }] },
+                { id: "sci_9", prompt: "Boiling point of water at sea level?", choices: [{ id: "a", text: "100°C", isCorrect: true }, { id: "b", text: "90°C", isCorrect: false }, { id: "c", text: "120°C", isCorrect: false }, { id: "d", text: "212°C", isCorrect: false }] },
+                { id: "sci_10", prompt: "Which gas makes up the majority (~78%) of Earth's atmosphere?", choices: [{ id: "a", text: "Nitrogen", isCorrect: true }, { id: "b", text: "Oxygen", isCorrect: false }, { id: "c", text: "Carbon Dioxide", isCorrect: false }, { id: "d", text: "Argon", isCorrect: false }] }
+            ]
+        },
+
+        // ── LANG: LITHUANIAN GENERAL KNOWLEDGE ────────────────────────────────
+        {
+            id: "lt-general-knowledge",
+            title: "Bendroji Žinija",
+            language: "lt", category: "lang", difficulty: "beginner",
+            estimatedMinutes: 12, mode: "practice",
+            timerConfig: { mode: 'question', limitSeconds: 35 },
+            shuffleConfig: { questions: true, answers: true },
+            questions: [
+                { id: "lt_gk1", prompt: "Kokia yra Lietuvos sostinė?", choices: [{ id: "a", text: "Vilnius", isCorrect: true }, { id: "b", text: "Kaunas", isCorrect: false }, { id: "c", text: "Klaipėda", isCorrect: false }, { id: "d", text: "Šiauliai", isCorrect: false }] },
+                { id: "lt_gk2", prompt: "Kiek šalių yra Europos Sąjungoje (2024 m.)?", choices: [{ id: "a", text: "27", isCorrect: true }, { id: "b", text: "28", isCorrect: false }, { id: "c", text: "25", isCorrect: false }, { id: "d", text: "30", isCorrect: false }] },
+                { id: "lt_gk3", prompt: "Kuris vandenynas yra didžiausias pasaulyje?", choices: [{ id: "a", text: "Ramusis vandenynas", isCorrect: true }, { id: "b", text: "Atlanto vandenynas", isCorrect: false }, { id: "c", text: "Indijos vandenynas", isCorrect: false }, { id: "d", text: "Arkties vandenynas", isCorrect: false }] },
+                { id: "lt_gk4", prompt: "Kokios dujos sudaro didžiausią dalį Žemės atmosferos?", choices: [{ id: "a", text: "Azotas (~78%)", isCorrect: true }, { id: "b", text: "Deguonis", isCorrect: false }, { id: "c", text: "Anglies dioksidas", isCorrect: false }, { id: "d", text: "Vandenilis", isCorrect: false }] },
+                { id: "lt_gk5", prompt: "Koks yra aukščiausias kalnas pasaulyje?", choices: [{ id: "a", text: "Everestas", isCorrect: true }, { id: "b", text: "K2", isCorrect: false }, { id: "c", text: "Monblanas", isCorrect: false }, { id: "d", text: "Kilimandžaras", isCorrect: false }] },
+                { id: "lt_gk6", prompt: "Koks yra cheminis aukso simbolis?", choices: [{ id: "a", text: "Au", isCorrect: true }, { id: "b", text: "Ag", isCorrect: false }, { id: "c", text: "Fe", isCorrect: false }, { id: "d", text: "Cu", isCorrect: false }] },
+                { id: "lt_gk7", prompt: "Kiek kaulų yra suaugusio žmogaus kūne?", choices: [{ id: "a", text: "206", isCorrect: true }, { id: "b", text: "212", isCorrect: false }, { id: "c", text: "196", isCorrect: false }, { id: "d", text: "220", isCorrect: false }] },
+                { id: "lt_gk8", prompt: "Kokia yra Japonijos sostinė?", choices: [{ id: "a", text: "Tokijas", isCorrect: true }, { id: "b", text: "Osaka", isCorrect: false }, { id: "c", text: "Kiotas", isCorrect: false }, { id: "d", text: "Jokohama", isCorrect: false }] },
+                { id: "lt_gk9", prompt: "Kuri šalis turi didžiausią sausumos plotą pasaulyje?", choices: [{ id: "a", text: "Rusija", isCorrect: true }, { id: "b", text: "Kanada", isCorrect: false }, { id: "c", text: "JAV", isCorrect: false }, { id: "d", text: "Kinija", isCorrect: false }] },
+                { id: "lt_gk10", prompt: "Kas yra ląstelės jėgainė?", choices: [{ id: "a", text: "Mitochondrija", isCorrect: true }, { id: "b", text: "Branduolys", isCorrect: false }, { id: "c", text: "Ribosoma", isCorrect: false }, { id: "d", text: "Golgi aparatas", isCorrect: false }] }
+            ]
         }
     ];
 }
