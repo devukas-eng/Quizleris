@@ -174,20 +174,23 @@ function renderBundleCard(bundle) {
     else if (bundle.category === "cs") cardAccent = "#f97316"; // Cyber orange
 
     return `
-        <div class="bundle-card premium-card" style="border-top: 4px solid ${cardAccent};">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px;">
-                <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; line-height: 1.3;">${bundle.title}</h3>
+        <div class="bundle-card premium-card" style="border-top: 4px solid ${cardAccent}; display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 16px 0; font-size: 1.2rem; font-weight: 700; line-height: 1.3;">${bundle.title}</h3>
+            
+            <div style="flex-grow: 1;"></div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center;">
                 <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30;">
                     ${bundle.difficulty}
                 </span>
+                <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30; text-transform: none;">
+                    ⏱️ ~${bundle.estimatedMinutes} min
+                </span>
+                <span class="difficulty-badge" style="color: ${difficultyColor}; background: ${difficultyColor}15; border: 1px solid ${difficultyColor}30; text-transform: none;">
+                    ❓ ${bundle.questions.length} ${getQuestionsWord(bundle.questions.length)}
+                </span>
             </div>
-            <p style="color: var(--muted); font-size: 0.9rem; margin: 0 0 20px 0; flex-grow: 1; display: flex; align-items: center; gap: 6px;">
-                <span>📂 ${getCategoryLabel(bundle.category)}</span>
-                <span>•</span>
-                <span>⏱️ ~${bundle.estimatedMinutes} min</span>
-                <span>•</span>
-                <span>❓ ${bundle.questions.length} ${getQuestionsWord(bundle.questions.length)}</span>
-            </p>
+
             <button id="start-bundle-${bundle.id}" class="btn btn-primary" style="margin-top: auto; width: 100%; border-radius: 8px; font-weight: bold; background: ${cardAccent}; border-color: ${cardAccent};">
                 ${t('modal.playBtn') || 'Play'}
             </button>
