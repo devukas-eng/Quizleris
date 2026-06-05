@@ -166,7 +166,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 32px;
+    padding: 80px 32px 32px;
     transition: background 0.4s ease, color 0.4s ease;
 }
 
@@ -764,7 +764,7 @@ body {
 
 @media (max-width: 640px) {
     body {
-        padding: 16px;
+        padding: 60px 16px 16px;
     }
 
     #app-root {
@@ -1467,7 +1467,7 @@ body {
 
 /* Page Logo */
 #app-logo {
-    position: fixed;
+    position: absolute;
     top: 15px;
     left: 20px;
     height: 40px;
@@ -1483,7 +1483,7 @@ body {
 
 @media (max-width: 768px) {
     #app-logo {
-        position: fixed !important;
+        position: absolute !important;
         height: 32px;
         top: 10px;
         left: 15px;
