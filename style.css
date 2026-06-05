@@ -1443,13 +1443,37 @@ body {
 }
 
 /* Topics Page Styles */
-.bundle-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+.bundle-row {
+    display: flex;
+    overflow-x: auto;
     gap: 20px;
+    padding: 10px 0 20px 0;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.bundle-row::-webkit-scrollbar {
+    display: none;
+}
+
+.category-section-title {
+    font-size: 1.4rem;
+    margin: 32px 0 16px 0;
+    font-weight: 700;
+    color: var(--text);
+    opacity: 0.9;
+    padding-left: 4px;
+}
+
+.bundle-row.wrap-row {
+    flex-wrap: wrap;
+    overflow-x: visible;
 }
 
 .bundle-card {
+    flex: 0 0 300px;
+    scroll-snap-align: start;
     background: rgba(0, 0, 0, 0.03) !important;
     border: 1px solid rgba(0, 0, 0, 0.08) !important;
     border-radius: 16px !important;
@@ -1497,11 +1521,8 @@ body {
         display: none !important;
     }
 
-    .bundle-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    .bundle-card {
+    .bundle-row .bundle-card {
+        flex: 0 0 85vw;
         padding: 20px;
     }
 

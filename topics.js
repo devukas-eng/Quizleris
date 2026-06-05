@@ -63,10 +63,36 @@ function renderTopicsContent(container) {
         { id: "cs", label: t('topics.categories.cs') || "Computer Science" }
     ];
 
-    // Filter bundles by active tab
-    const filteredBundles = activeCategory === "all" 
-        ? bundles 
-        : bundles.filter(b => b.category === activeCategory);
+    let categoriesHtml = '';
+    const catsToRender = activeCategory === 'all' 
+        ? categories.filter(c => c.id !== 'all') 
+        : categories.filter(c => c.id === activeCategory);
+
+    catsToRender.forEach(cat => {
+        const catBundles = bundles.filter(b => b.category === cat.id);
+        if (catBundles.length > 0) {
+            const titleHtml = activeCategory === 'all' 
+                ? `<h2 class="category-section-title">${cat.label}</h2>` 
+                : '';
+            
+            categoriesHtml += `
+                <div class="category-section" style="${activeCategory !== 'all' ? 'margin-top: 24px;' : ''}">
+                    ${titleHtml}
+                    <div class="bundle-row ${activeCategory !== 'all' ? 'wrap-row' : ''}">
+                        ${catBundles.map(b => renderBundleCard(b)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    });
+
+    if (categoriesHtml === '') {
+        categoriesHtml = `
+            <div style="text-align: center; padding: 60px 20px; color: var(--muted); font-size: 1.1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius); border: 1px dashed rgba(255,255,255,0.1); margin-top: 24px;">
+                No quizzes available in this category.
+            </div>
+        `;
+    }
 
     container.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
@@ -85,13 +111,8 @@ function renderTopicsContent(container) {
             </div>
         </div>
         
-        <div class="bundle-grid" style="margin-top: 24px;">
-            ${filteredBundles.map(b => renderBundleCard(b)).join('')}
-            ${filteredBundles.length === 0 ? `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--muted); font-size: 1.1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius); border: 1px dashed rgba(255,255,255,0.1);">
-                    No quizzes available in this category.
-                </div>
-            ` : ''}
+        <div id="topics-content-wrapper">
+            ${categoriesHtml}
         </div>
     `;
 
