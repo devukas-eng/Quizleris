@@ -1,71 +1,82 @@
-# Quizleris – Premium Modular Quiz Platform
+<div align="center">
+  <img src="https://raw.githubusercontent.com/p0mkin/Quizleris/main/favicon.ico" width="80" height="80" alt="Quizleris Logo">
+  <h1>Quizleris</h1>
+  <p><b>An ultra-premium, zero-backend, modular math and trivia quiz platform built for the modern web.</b></p>
 
-[![Vanilla JS](https://img.shields.io/badge/Vanilla%20JS-ES2020-yellow)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![Version](https://img.shields.io/badge/version-v0.6.0-blue)](package.json)
-[![Vercel](https://img.shields.io/badge/deploy-Vercel-black)](vercel.json)
-
-**Quizleris** is an ultra-premium, browser-based quiz and mathematical examination platform designed for educators, students, and quiz lovers. Built with pure Vanilla JS, CSS, and HTML, the app delivers a top-tier visual experience combining **glassmorphism**, **custom themes**, **Netflix-style discovery horizontal carousels**, and **advanced math rendering**—all powered locally without a backend.
-
----
-
-## ✨ Key Features
-
-### 🎬 Netflix-Style Quiz Discovery
-*   **Immersive Categories**: Browse and discover quizzes grouped by topics in smooth, horizontal-scrolling carousels reminiscent of Netflix.
-*   **Quick Actions**: Instantly start a quiz, copy sharing URLs, or preview content directly from the discovery interface.
-
-### 🌐 Apple-Like Language Switcher & Localization
-*   **Dual-Language Support**: Fully localized in English (EN) and Lithuanian (LT).
-*   **Splendid UI Controls**: Top-right animated sliding toggle featuring custom flag icons.
-*   **Split Flag Design**: The English toggle features a custom split-flag (divided into an X shape containing parts of the USA, UK, Canada, and Australia flags) representing global English speakers without exclusion.
-
-### 🛠️ Professional Admin Suite (Quiz Creator)
-*   **6 Question Formats**: Create Multiple-choice, Numeric, Fill-in-the-blank, Text, True/False, and Image upload questions.
-*   **KaTeX Mathematical Integration**: Render complex formulas and mathematical equations on-the-fly.
-*   **OCR Support**: Scan equations or text from printed quiz papers directly into the editor using **Tesseract.js**.
-*   **Quiz Export/Import**: Download your quizzes as JSON files or import existing files instantly.
-
-### 🎓 Interactive Student Interface
-*   **Two Game Modes**:
-    *   *Practice Mode*: Rapid-fire learning with immediate correctness checks and step-by-step reasoning.
-    *   *Exam Mode*: Formally timed assessment with navigation index, warning states for unanswered questions, and secure submission.
-*   **Layout Adaptability**: Headers, logos, and configuration panels fade/disappear elegantly as you scroll down, letting the main content overlap smoothly.
-
-### 🛡️ Privacy, Safety & Legal Modals
-*   Includes detailed and compliant interactive modal pages for:
-    *   **Terms of Service**
-    *   **Privacy Policy**
-    *   **Cookie Policy**
-*   Includes clear deletion support via the support email `eblogsmod@gmail.com`.
+  [![Vanilla JS](https://img.shields.io/badge/Vanilla%20JS-ES2020-yellow?style=for-the-badge&logo=javascript)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+  [![KaTeX](https://img.shields.io/badge/KaTeX-Math%20Typesetting-333333?style=for-the-badge&logo=latex)](https://katex.org/)
+  [![Version](https://img.shields.io/badge/version-v0.6.0-blue?style=for-the-badge)](package.json)
+  [![Vercel](https://img.shields.io/badge/deploy-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
+</div>
 
 ---
 
-## 🛠️ Technical Architecture
+## 🌟 What is Quizleris?
 
-*   **Core**: HTML5, CSS3 Variables, ES2020 modules (Vanilla JS).
-*   **Math Rendering**: [KaTeX](https://katex.org/)
-*   **OCR Engine**: [Tesseract.js](https://tesseract.projectnaptha.com/)
-*   **State Management**: Pure JS state tracker (`state.js`) persisting state to `localStorage`.
-*   **Localization**: Dynamic client-side dictionaries (`lang.js`, `i18n.js`).
+**Quizleris** is a meticulously crafted, browser-based examination platform designed to bring a premium, app-like experience to quizzes. Unlike clunky traditional exam software, Quizleris focuses heavily on **aesthetics, user experience, and performance**. It combines a gorgeous glassmorphism UI with powerful math rendering capabilities—all running entirely on the client side without needing a backend server.
+
+Whether you're a teacher building a complex physics exam with LaTeX equations, or a student swiping through a Kahoot-style discovery feed for weekend trivia, Quizleris provides a seamless, zero-lag experience.
+
+---
+
+## 🚀 Deep Dive: Features & Mechanics
+
+### 🎬 Netflix-Style Discovery Hub
+Forget boring lists of exams. Quizleris greets users with an immersive, horizontal-scrolling **Discovery Hub**.
+*   **Categorized Carousels**: Quizzes are grouped by topics (Mathematics, Physics, Languages, Computer Science) in sleek, scrollable rows.
+*   **Instant Access**: Preview a quiz's difficulty, copy a direct sharing link, or jump straight into the action directly from the carousel card.
+*   **Fluid Animations**: Cards scale and glow on hover, utilizing CSS hardware acceleration for butter-smooth interactions.
+
+### 🍎 Premium Apple-Inspired UI
+*   **Glassmorphism Engine**: Modals, panels, and cards use dynamic `backdrop-filter: blur()` effects to create a modern frosted-glass aesthetic.
+*   **Custom iOS-Style Language Switcher**: A deeply customized sliding toggle allows users to switch between **English (EN)** and **Lithuanian (LT)** natively. The English flag is uniquely designed as an X-shape combining elements of the USA, UK, Canada, and Australia flags for global inclusivity.
+*   **Smart Layout Adaptability**: Elements like the top navigation bar and settings seamlessly fade out and retract as you scroll down, ensuring the main quiz content is never obstructed.
+
+### 🎨 Dynamic Theming System
+Built-in CSS-variable theming that remembers your choice:
+*   ⚪ **Light Classic**: Clean, high-contrast, perfect for bright environments.
+*   🌑 **Dark Mode**: Sleek, eye-friendly layout for late-night studying.
+*   🟢 **Emerald**: Vibrant, Kahoot-inspired playful greens.
+*   🌆 **Cyberpunk**: High-contrast neon accents for an edgy, futuristic feel.
+
+### 🛠️ The Ultimate Admin Creator Suite
+Educators and power users can build complex assessments effortlessly:
+*   **6 Interactive Question Types**: Multiple-choice, Numeric exact, Fill-in-the-blank, Text-based essay, True/False, and Image upload based questions.
+*   **LaTeX Math Palette**: A built-in virtual keyboard for instantly injecting complex mathematical symbols (`\int`, `\sum`, fractions) without memorizing KaTeX syntax. It auto-wraps expressions in math brackets `\( ... \)` for instant rendering.
+*   **Tesseract.js OCR Integration**: Have a printed math worksheet? Use the built-in OCR feature to scan an image and automatically extract the text/equations directly into the question editor!
+*   **Undo/Redo History**: Full `Ctrl+Z` / `Ctrl+Y` tracking for the quiz builder preventing accidental data loss.
+
+### 🎓 The Student Experience
+*   **Practice Mode**: Provides immediate feedback after every question. Great for formative learning.
+*   **Exam Mode**: A stricter mode with a navigation sidebar, allowing students to skip questions, review unanswered warnings, and submit everything at the end.
+*   **Real-time Timers**: Administrators can configure global quiz timers or per-question countdowns that enforce focus.
+
+### 🔒 Privacy-First "Zero Backend" Architecture
+*   **100% Local Storage**: All quiz data, user states, and settings are saved securely in the browser's `localStorage`.
+*   **No Databases Needed**: Quizleris runs entirely from static files. There are no databases to configure, no authentication servers to secure, and zero latency.
+*   **Portable JSON**: Quizzes can be instantly exported to `.json` files and shared with students via email or messaging apps, then imported with a single click.
+*   **Compliant Legal Modals**: Includes elegantly rendered, natively integrated overlays for Terms of Service, Privacy Policy, and Cookie Policy, with built-in data deletion workflows (contact `eblogsmod@gmail.com`).
 
 ---
 
 ## 📥 Installation & Local Development
 
-### Prerequisites
-*   [Node.js](https://nodejs.org/) (v16+ recommended)
+Quizleris is built using **Pure Vanilla JS (ES2020+)** and avoids heavy frameworks like React or Vue, keeping the bundle incredibly lightweight and fast.
 
-### Setup
+### Prerequisites
+*   [Node.js](https://nodejs.org/) (for the local development server)
+
+### Quick Start
 1.  **Clone the Repository**
     ```bash
     git clone https://github.com/p0mkin/Quizleris.git
     cd Quizleris
     ```
-2.  **Install Local Dev Dependencies**
+2.  **Install the Dev Server**
     ```bash
     npm install
     ```
-3.  **Run Development Server**
+3.  **Run Locally**
     ```bash
     npm start
     ```
@@ -73,17 +84,26 @@
 
 ---
 
-## 📜 Changelog
-
-### v0.6.0
-*   **Feat**: Implemented "Netflix/Kahoot-style" quiz discovery landing page with horizontal scroll topics.
-*   **Feat**: Added custom split-flag animated toggle switcher for LT/EN.
-*   **Feat**: Added comprehensive and compliant Privacy, Terms, and Cookie policy modals with direct contact support.
-*   **UX**: Optimized scroll interactions for dynamic header transitions.
-
-### v0.5.x
-*   **Cleanup**: Removed legacy TypeScript files and compiler setup.
-*   **Refactor**: Pure Vanilla JS transition.
+## 🏗️ Project Structure
+*   `app.js` - Core bootstrapping and global event delegation.
+*   `topics.js` - Handles the Netflix-style discovery landing page.
+*   `admin.js` & `quiz-editor.js` - The quiz creation suite and LaTeX/OCR integrations.
+*   `render.js` - The student exam/practice mode DOM rendering engine.
+*   `i18n.js` & `lang.js` - Localization dictionaries and toggle logic.
+*   `storage.js` - LocalStorage interaction and file export/import.
+*   `style.css` - Global design tokens, glassmorphism, and responsive breakpoints.
 
 ---
-Created with ❤️ by [e1tvis](https://github.com/p0mkin).
+
+## 📜 Recent Changelog
+
+### v0.6.0
+*   **Major Feature**: Netflix-style horizontal carousel for quiz discovery.
+*   **Design**: Introduced the custom split-flag sliding toggle for language selection.
+*   **UX**: Smart layout ratio optimization (`#app-root` dynamically adjusts width to aspect-ratio bounds).
+*   **Compliance**: Fully fledged legal modals for Privacy & Cookies.
+
+---
+<div align="center">
+  <i>Created with ❤️ and a passion for education by <a href="https://github.com/p0mkin">e1tvis</a>.</i>
+</div>
