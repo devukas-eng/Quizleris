@@ -222,9 +222,10 @@ function initApp() {
                 renderDashboard(currentDash);
             } else if (currentQuiz) {
                 renderStudentJoin(loadQuiz());
+            } else if (window.location.pathname.includes('/topics')) {
+                renderTopicsPage();
             } else {
-                if (isStudentViewActive()) handleStudentClick();
-                else renderStartMenu();
+                renderStartMenu();
             }
             try { refreshAdminUI(); } catch (e) { console.error('Admin Refresh Error', e); }
         }

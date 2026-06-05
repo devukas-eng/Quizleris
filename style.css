@@ -21,13 +21,11 @@
     --btn-hover-bg: #f8fafc;
     --summary-bg: #ffffff;
     --card-bg: #ffffff;
-    --glow-color: rgba(27, 155, 126, 0.25);
-    /* Theme picker bubble colours */
+    --glow-color: rgba(27, 155, 126, 0.4);
     --bubble-a: #1B9B7E;
     --bubble-b: #ffffff;
-    --theme-picker-bg: #ffffff;
+    --theme-picker-bg: rgba(255, 255, 255, 0.85);
     --theme-picker-text: #1F2937;
-    --theme-picker-item-hover: #f0fdf9;
     --theme-picker-border: rgba(0, 0, 0, 0.10);
 }
 

@@ -23,14 +23,10 @@ export function renderTopicsPage() {
         if (logo) logo.style.display = "block";
     }
 
-    // Hide welcome/student form
-    const welcomeH1 = startMenu.querySelector('h1');
-    const welcomeP = startMenu.querySelector('p');
-    const menuActions = startMenu.querySelector(".menu-actions");
+    // Hide welcome/hero section
+    const heroSection = startMenu.querySelector('.hero-section');
     const existingForm = startMenu.querySelector(".student-form-container");
-    if (welcomeH1) welcomeH1.style.display = "none";
-    if (welcomeP) welcomeP.style.display = "none";
-    if (menuActions) menuActions.style.display = "none";
+    if (heroSection) heroSection.style.display = "none";
     if (existingForm) existingForm.style.display = "none";
 
     let topicsContainer = startMenu.querySelector(".topics-page-container");
