@@ -171,7 +171,7 @@ body {
 }
 
 #app-root {
-    width: min(900px, 100%);
+    width: min(900px, 90vw);
     background: var(--app-bg, #ffffff);
     border: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
     border-radius: var(--radius);
@@ -179,7 +179,12 @@ body {
     padding: 24px 28px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
+}
+
+#app-root:has(.hero-section:not([style*="display: none"])),
+#app-root:has(.student-join-container) {
+    width: min(680px, 90vw);
 }
 
 .quiz-header {
