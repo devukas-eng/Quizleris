@@ -21,13 +21,11 @@
     --btn-hover-bg: #f8fafc;
     --summary-bg: #ffffff;
     --card-bg: #ffffff;
-    --glow-color: rgba(27, 155, 126, 0.25);
-    /* Theme picker bubble colours */
+    --glow-color: rgba(27, 155, 126, 0.4);
     --bubble-a: #1B9B7E;
     --bubble-b: #ffffff;
-    --theme-picker-bg: #ffffff;
+    --theme-picker-bg: rgba(255, 255, 255, 0.85);
     --theme-picker-text: #1F2937;
-    --theme-picker-item-hover: #f0fdf9;
     --theme-picker-border: rgba(0, 0, 0, 0.10);
 }
 
@@ -168,7 +166,7 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 32px;
+    padding: 80px 32px 32px;
     transition: background 0.4s ease, color 0.4s ease;
 }
 
@@ -766,7 +764,7 @@ body {
 
 @media (max-width: 640px) {
     body {
-        padding: 16px;
+        padding: 60px 16px 16px;
     }
 
     #app-root {
@@ -1445,13 +1443,37 @@ body {
 }
 
 /* Topics Page Styles */
-.bundle-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+.bundle-row {
+    display: flex;
+    overflow-x: auto;
     gap: 20px;
+    padding: 10px 0 20px 0;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.bundle-row::-webkit-scrollbar {
+    display: none;
+}
+
+.category-section-title {
+    font-size: 1.4rem;
+    margin: 32px 0 16px 0;
+    font-weight: 700;
+    color: var(--text);
+    opacity: 0.9;
+    padding-left: 4px;
+}
+
+.bundle-row.wrap-row {
+    flex-wrap: wrap;
+    overflow-x: visible;
 }
 
 .bundle-card {
+    flex: 0 0 300px;
+    scroll-snap-align: start;
     background: rgba(0, 0, 0, 0.03) !important;
     border: 1px solid rgba(0, 0, 0, 0.08) !important;
     border-radius: 16px !important;
@@ -1469,7 +1491,7 @@ body {
 
 /* Page Logo */
 #app-logo {
-    position: fixed;
+    position: absolute;
     top: 15px;
     left: 20px;
     height: 40px;
@@ -1485,7 +1507,7 @@ body {
 
 @media (max-width: 768px) {
     #app-logo {
-        position: fixed !important;
+        position: absolute !important;
         height: 32px;
         top: 10px;
         left: 15px;
@@ -1499,11 +1521,8 @@ body {
         display: none !important;
     }
 
-    .bundle-grid {
-        grid-template-columns: 1fr !important;
-    }
-
-    .bundle-card {
+    .bundle-row .bundle-card {
+        flex: 0 0 85vw;
         padding: 20px;
     }
 
@@ -2193,7 +2212,7 @@ kbd {
 .theme-btn-bubble {
     width: 20px;
     height: 20px;
-    border-radius: 50%;
+    border-radius: 40%;
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
@@ -2204,7 +2223,7 @@ kbd {
 .theme-btn-bubble::before {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -1px;
     background: linear-gradient(135deg, var(--bubble-a) 50%, var(--bubble-b) 50%);
 }
 
@@ -2271,13 +2290,16 @@ kbd {
 .tp-bubble {
     width: 26px;
     height: 26px;
-    border-radius: 50%;
+    border-radius: 40%;
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
     box-shadow: 0 2px 6px rgba(0,0,0,0.22);
     border: 2px solid rgba(255,255,255,0.2);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    margin-left: auto;
+    background-size: 120% 120% !important;
+    background-position: center !important;
 }
 
 .theme-picker-item:hover .tp-bubble,
@@ -2325,60 +2347,69 @@ kbd {
     background: var(--btn-bg, rgba(255,255,255,0.6));
     border: 1px solid var(--border-color, rgba(0,0,0,0.08));
     border-radius: 999px;
-    padding: 3px;
-    gap: 2px;
+    padding: 4px;
+    gap: 0;
+    position: relative;
     box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     backdrop-filter: blur(8px);
 }
 
+.lang-pills::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: 28px;
+    background: var(--accent);
+    border-radius: 50%;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.4s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 0;
+}
+
+.lang-pills:has(#lang-en-btn.active)::before {
+    transform: translateX(28px);
+}
+
 .lang-pill {
+    position: relative;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 5px 10px;
-    border-radius: 999px;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
     border: none;
-    background: transparent;
+    background: transparent !important;
     cursor: pointer;
-    font-family: var(--font);
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--muted);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    letter-spacing: 0.03em;
-    position: relative;
+    padding: 0;
+    margin: 0;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .lang-pill .flag {
-    font-size: 1rem;
-    line-height: 1;
-    display: inline-block;
-    border-radius: 50%;
     width: 20px;
     height: 20px;
+    border-radius: 50%;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s ease;
     flex-shrink: 0;
 }
 
-.lang-pill.active {
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-
 .lang-pill.active .flag {
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    transform: scale(1.15);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
-.lang-pill:not(.active):hover {
-    background: var(--btn-hover-bg, rgba(0,0,0,0.05));
-    color: var(--text);
+.lang-pill:not(.active):hover .flag {
+    transform: scale(1.05);
 }
-
 
 /* ═══════════════════════════════════════════════════════════
    COOKIE CONSENT BANNER
@@ -2661,4 +2692,5 @@ body.admin-mode-active #app-logo,
 body.admin-mode-active #language-toggle-container {
     display: none !important;
 }
+
 
