@@ -449,6 +449,7 @@ function getLegalContent(type, lang) {
     };
     
     return content[type] || content.terms;
+}
 
 // Initialize admin UI & Menu after DOM is ready
 if (document.readyState === "loading") {
