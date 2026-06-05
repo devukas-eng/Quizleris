@@ -131,7 +131,7 @@ function renderTopicsContent(container) {
     });
 
     // Wire up start buttons to show Play-Mode Selector Modal
-    filteredBundles.forEach(b => {
+    bundles.forEach(b => {
         const btn = document.getElementById(`start-bundle-${b.id}`);
         if (btn) {
             btn.onclick = () => {
