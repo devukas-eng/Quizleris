@@ -1,8 +1,8 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
-import { renderFrenzyMode } from "./frenzy.js";
-import { showLegalModal } from "./legal.js";
+import { } from "./frenzy.js";
+import { } from "./legal.js";
 // DOM Elements
 let startMenu;
 let quizHeader;

@@ -1,5 +1,5 @@
-import { getTopicBundles } from "./storage.js";
-import { renderTopicsPage } from "./topics.js";
+
+
 import { playSound } from "./audio.js";
 import { addPlayerXP } from "./storage.js";
 
@@ -117,7 +117,7 @@ function renderLobby() {
     
     // Simulate bots joining
     let delay = 1000;
-    players.forEach((p, i) => {
+    players.forEach((p) => {
         if (p.isBot) {
             setTimeout(() => {
                 p.joined = true;

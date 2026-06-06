@@ -544,7 +544,7 @@ export function saveAdminQuiz() {
         let community = [];
         try {
             community = JSON.parse(localStorage.getItem("quizleris_community_quizzes") || "[]");
-        } catch(e) {}
+        } catch(e) { console.error("Error parsing community quizzes:", e); }
         community = community.filter(q => q.id !== adminQuiz.id);
         community.unshift({
             id: adminQuiz.id,

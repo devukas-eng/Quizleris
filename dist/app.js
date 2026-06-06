@@ -6,7 +6,7 @@ import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
-import { showProfileModal } from "./profile.js";
+import { } from "./profile.js";
 import { toggleMute, getIsMuted } from "./audio.js";
 
 /**

@@ -100,7 +100,7 @@ function renderTopicsContent(container) {
         let community = [];
         try {
             community = JSON.parse(localStorage.getItem("quizleris_community_quizzes") || "[]");
-        } catch(e) {}
+        } catch(e) { console.error("Error parsing community quizzes:", e); }
         
         if (community.length > 0) {
             categoriesHtml += `
