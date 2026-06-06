@@ -13,6 +13,7 @@ let adminQuiz = null;
 let adminToggle;
 let adminPanel;
 let adminQuizTitle;
+let adminQuizVisibility;
 let adminQuestionsList;
 let adminAddQuestionBtn;
 let adminScanQuestionBtn;
@@ -83,6 +84,7 @@ function setupAdmin(callbacks) {
   adminToggle = getRequiredElement("admin-toggle");
   adminPanel = getRequiredElement("admin-panel");
   adminQuizTitle = getRequiredElement("admin-quiz-title");
+  adminQuizVisibility = getRequiredElement("admin-quiz-visibility");
   adminQuestionsList = getRequiredElement("admin-questions-list");
   adminAddQuestionBtn = getRequiredElement("admin-add-question");
   adminScanQuestionBtn = getRequiredElement("admin-scan-question");
@@ -168,6 +170,7 @@ function renderAdminForm() {
   if (!adminQuiz) return;
   const focusState = captureFocusAndScroll();
   adminQuizTitle.value = adminQuiz.title;
+  if (adminQuizVisibility) adminQuizVisibility.value = adminQuiz.visibility || "private";
   if (!adminQuiz.timerConfig) {
     adminTimerMode.value = "question";
     adminTimerLimit.value = "30";
@@ -755,6 +758,7 @@ function renderQuestionConfig(q, qIdx) {
 function updateQuizFromDOM() {
   if (!adminQuiz) return;
   adminQuiz.title = adminQuizTitle.value;
+  if (adminQuizVisibility) adminQuiz.visibility = adminQuizVisibility.value;
   adminQuiz.mode = adminQuizMode.value;
   adminQuiz.shuffleConfig = { questions: adminShuffleQuestions.checked, answers: adminShuffleAnswers.checked };
   adminQuestionsList.querySelectorAll(".admin-question-item").forEach((qDiv) => {
@@ -818,6 +822,22 @@ function saveAdminQuiz() {
   populateLocalSelector();
   const { shareCode, registry } = exportQuizForSharing(adminQuiz);
   saveImageRegistry(adminQuiz.id, registry);
+  
+  if (adminQuiz.visibility === "public") {
+      let community = [];
+      try {
+          community = JSON.parse(localStorage.getItem("quizleris_community_quizzes") || "[]");
+      } catch(e) { console.error("Error parsing community quizzes:", e); }
+      community = community.filter(q => q.id !== adminQuiz.id);
+      community.unshift({
+          id: adminQuiz.id,
+          title: adminQuiz.title,
+          qCount: adminQuiz.questions.length,
+          shareCode: shareCode
+      });
+      localStorage.setItem("quizleris_community_quizzes", JSON.stringify(community));
+  }
+
   if (shareCode.length > 8e3) alert("WARNING: Quiz data very large. URL might fail.");
   const base = window.location.origin + "/";
   const shareUrl = `${base}?quiz=${shareCode}`;
