@@ -153,6 +153,16 @@ function loadNextQuestion() {
         ${answersHtml}
     `;
 
+    if (window.renderMathInElement) {
+        window.renderMathInElement(playArea, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\[", right: "\\]", display: true },
+                { left: "\\(", right: "\\)", display: false }
+            ]
+        });
+    }
+
     // Attach listeners
     if (isShortAnswer) {
         const submitBtn = document.getElementById('frenzy-sa-submit');
@@ -352,8 +362,8 @@ function gameOver() {
             <div class="frenzy-go-subtitle">${isNewBest ? '🎉 NEW HIGH SCORE! 🎉' : `Best Score: ${bestScore}`}</div>
             
             <div class="frenzy-go-actions">
-                <button class="frenzy-btn-primary" id="frenzy-restart">🔄 Play Again</button>
-                <button class="frenzy-btn-secondary" id="frenzy-quit">🏠 Main Menu</button>
+                <button class="frenzy-btn-primary" id="frenzy-restart">Play Again</button>
+                <button class="frenzy-btn-secondary" id="frenzy-quit">Main Menu</button>
             </div>
         </div>
     `;
