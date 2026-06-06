@@ -92,26 +92,7 @@ function renderTopicsContent(container) {
                             </div>
                         </div>
 
-                        <!-- Race Mode Card -->
-                        <div class="bundle-card kahoot-card" id="card-race-mode" style="cursor: pointer; border: 2px solid #6366f1; min-width: 280px; flex: 0 0 auto; margin-left: 16px;">
-                            <div class="kahoot-card-header" style="background: linear-gradient(135deg, #4f46e5, #6366f1);">
-                                <span class="kahoot-card-icon">🏎️</span>
-                                <h3 class="kahoot-card-title">Real-Time Race</h3>
-                            </div>
-                            <div class="kahoot-card-body">
-                                <div class="kahoot-badges" style="display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;">
-                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">🤖 VS Bots</span>
-                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">🏁 Race to 10</span>
-                                </div>
-                                <div class="kahoot-card-desc" style="color: var(--muted); font-size: 0.9rem; margin-top: 10px; margin-bottom: 10px;">
-                                    Race in real-time against 3 other opponents! First one to answer 10 questions wins.
-                                </div>
-                                <button id="btn-start-race-topics" class="kahoot-play-btn" style="background: #6366f1; width: 100%;">
-                                    ▶ Join Race
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                                            </div>
                 </div>
             </div>
         `;
@@ -254,13 +235,7 @@ function renderTopicsContent(container) {
         };
     }
 
-    const raceBtn = document.getElementById('btn-start-race-topics');
-    if (raceBtn) {
-        raceBtn.onclick = () => {
-            import("./race.js").then(m => m.renderRaceMode());
-        };
     }
-}
 
 function renderBundleCard(bundle) {
     const difficultyColor = bundle.difficulty === 'beginner' ? '#10b981' :

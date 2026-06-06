@@ -1,7 +1,7 @@
 import { getTopicBundles } from "./storage.js";
 import { renderTopicsPage } from "./topics.js";
 import { playSound } from "./audio.js";
-import { addPlayerXP } from "./state.js";
+import { addPlayerXP } from "./storage.js";
 
 let isAnimating = false;
 let currentQuestionIndex = 0;
@@ -21,17 +21,11 @@ let leaderboardArea;
 
 const BOT_NAMES = ["Alex", "Sam", "Jordan", "Taylor", "Casey", "Riley", "Avery", "Quinn"];
 
-export function renderRaceMode() {
+export function renderRaceMode(quizData) {
     const appRoot = document.getElementById('app-root');
     
-    // Compile pool of questions
-    const bundles = getTopicBundles();
-    questionPool = [];
-    bundles.forEach(b => {
-        b.questions.forEach(q => {
-            questionPool.push({ ...q, _topicName: b.title });
-        });
-    });
+    // Use the quiz's questions
+    questionPool = quizData.questions.map(q => ({ ...q, _topicName: quizData.title }));
     
     // Shuffle pool
     questionPool.sort(() => Math.random() - 0.5);
@@ -43,16 +37,17 @@ export function renderRaceMode() {
 
     // Initialize Players (1 User + 3 Bots)
     const shuffledNames = BOT_NAMES.sort(() => Math.random() - 0.5);
+    const userName = localStorage.getItem("current_student_name") || "You";
     players = [
-        { id: 'player', name: 'You', score: 0, hearts: 3, isBot: false, color: 'var(--primary)' },
-        { id: 'bot1', name: shuffledNames[0], score: 0, hearts: 3, isBot: true, color: '#ef4444' },
-        { id: 'bot2', name: shuffledNames[1], score: 0, hearts: 3, isBot: true, color: '#f59e0b' },
-        { id: 'bot3', name: shuffledNames[2], score: 0, hearts: 3, isBot: true, color: '#10b981' }
+        { id: 'player', name: userName, score: 0, hearts: 3, isBot: false, color: 'var(--primary)', joined: true },
+        { id: 'bot1', name: shuffledNames[0], score: 0, hearts: 3, isBot: true, color: '#ef4444', joined: false },
+        { id: 'bot2', name: shuffledNames[1], score: 0, hearts: 3, isBot: true, color: '#f59e0b', joined: false },
+        { id: 'bot3', name: shuffledNames[2], score: 0, hearts: 3, isBot: true, color: '#10b981', joined: false }
     ];
 
     // Reset State
     currentQuestionIndex = 0;
-    gameActive = true;
+    gameActive = false; // Lobby is not active game
     isAnimating = false;
     raceIntervals.forEach(clearInterval);
     raceIntervals = [];
@@ -64,7 +59,16 @@ export function renderRaceMode() {
             <!-- Left: Play Area -->
             <div id="race-play-column" style="flex: 2; padding: 40px; display: flex; flex-direction: column; justify-content: center; position: relative;">
                 <button id="race-quit-btn" style="position: absolute; top: 20px; left: 20px; background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; opacity: 0.6; transition: 0.2s;">✖</button>
-                <div id="race-play-area"></div>
+                <div id="race-play-area">
+                    <div style="text-align: center;">
+                        <h1 style="font-size: 3rem; color: var(--accent); margin-bottom: 20px;">Race Lobby</h1>
+                        <p style="font-size: 1.2rem; color: var(--muted); margin-bottom: 40px;">Waiting for players to join...</p>
+                        <div id="lobby-players" style="display: flex; gap: 20px; justify-content: center; margin-bottom: 40px;">
+                            <!-- Players injected here -->
+                        </div>
+                        <button id="lobby-start-btn" class="frenzy-btn-primary" style="opacity: 0.5; pointer-events: none;">Start Race</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Right: Leaderboard -->
@@ -77,13 +81,52 @@ export function renderRaceMode() {
     `;
 
     document.getElementById('race-quit-btn').onclick = quitRaceMode;
-    
     playArea = document.getElementById('race-play-area');
     leaderboardArea = document.getElementById('race-leaderboard');
 
     updateLeaderboardUI();
-    startBots();
-    loadNextQuestion();
+    renderLobby();
+}
+
+function renderLobby() {
+    const lobbyPlayers = document.getElementById('lobby-players');
+    const startBtn = document.getElementById('lobby-start-btn');
+    
+    const updateLobbyUI = () => {
+        lobbyPlayers.innerHTML = players.map(p => `
+            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; width: 120px; border: 2px solid ${p.joined ? p.color : 'transparent'}; opacity: ${p.joined ? 1 : 0.3}; transition: 0.3s;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">${p.joined ? '👤' : '⏳'}</div>
+                <div style="font-weight: bold;">${p.joined ? p.name : 'Waiting...'}</div>
+            </div>
+        `).join('');
+        
+        const allJoined = players.every(p => p.joined);
+        if (allJoined) {
+            startBtn.style.opacity = '1';
+            startBtn.style.pointerEvents = 'auto';
+            startBtn.innerText = "Start Race!";
+            startBtn.onclick = () => {
+                gameActive = true;
+                startBots();
+                loadNextQuestion();
+            };
+        }
+    };
+    
+    updateLobbyUI();
+    
+    // Simulate bots joining
+    let delay = 1000;
+    players.forEach((p, i) => {
+        if (p.isBot) {
+            setTimeout(() => {
+                p.joined = true;
+                playSound('correct');
+                updateLobbyUI();
+            }, delay);
+            delay += Math.random() * 1500 + 500;
+        }
+    });
 }
 
 function updateLeaderboardUI() {
@@ -356,5 +399,5 @@ function endGame(winner) {
 function quitRaceMode() {
     gameActive = false;
     raceIntervals.forEach(clearInterval);
-    renderTopicsPage();
+    window.location.href = window.location.origin + window.location.pathname; // Reload to main menu
 }
