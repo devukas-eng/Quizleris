@@ -1,0 +1,3 @@
+## 2026-06-05 - Add aria-label to icon-only modal close buttons
+**Learning:** Icon-only buttons with characters like `&times;` or `✕` without an accessible name are read confusingly (e.g., "times" or "multiplication X") by screen readers, making it unclear they function as close buttons.
+**Action:** Always add an `aria-label="Close"` to icon-only close buttons to ensure proper accessibility for screen reader users.
