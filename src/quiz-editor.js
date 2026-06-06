@@ -1,9 +1,13 @@
 import { quiz } from "./state.js";
-import { getRequiredElement } from "./dom.js";
+import { getRequiredElement, escapeHtml } from "./dom.js";
 import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, loadQuizFromStorage } from "./storage.js";
 import { isAdminAccessAllowed, promptAdminPassword } from "./auth.js";
 import { processOCRImage } from "./ocr.js";
 import { t, updatePageLanguage } from "./lang.js";
+import { exportQuizForSharing } from "./admin-export.js";
+import { parseBulkImportText } from "./admin-import.js";
+import { setupDragAndDrop } from "./admin-dragdrop.js";
+import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 let adminMode = false;
 let adminQuiz = null;
 let adminToggle;
@@ -44,9 +48,6 @@ let redoStack = [];
 let autoSaveTimer = null;
 let lastActiveInputField = null;
 let collapsedQuestions = {}; // Tracks collapsed state of questions by ID
-let dragInitiatedOnHandle = false;
-let draggedCardIndex = null;
-let draggedCardElement = null;
 
 
 // DOM references for QoL features
@@ -328,62 +329,12 @@ function renderAdminForm() {
       renderAdminForm();
     });
 
-    // Native Drag-and-Drop
-    qDiv.addEventListener("dragstart", (e) => {
-      if (!dragInitiatedOnHandle) {
-        e.preventDefault();
-        return;
-      }
-      draggedCardIndex = qIdx;
-      draggedCardElement = qDiv;
-      qDiv.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", qIdx);
-    });
-
-    qDiv.addEventListener("dragend", () => {
-      qDiv.classList.remove("dragging");
-      dragInitiatedOnHandle = false;
-      draggedCardIndex = null;
-      draggedCardElement = null;
-      adminQuestionsList.querySelectorAll(".admin-question-item").forEach(item => {
-        item.classList.remove("drag-over");
-      });
-    });
-
-    qDiv.addEventListener("dragover", (e) => {
-      if (draggedCardIndex === null || draggedCardIndex === qIdx) return;
-      e.preventDefault();
-      qDiv.classList.add("drag-over");
-    });
-
-    qDiv.addEventListener("dragleave", () => {
-      qDiv.classList.remove("drag-over");
-    });
-
-    qDiv.addEventListener("drop", (e) => {
-      e.preventDefault();
-      qDiv.classList.remove("drag-over");
-      if (draggedCardIndex === null || draggedCardIndex === qIdx) return;
-      
+    setupDragAndDrop(qDiv, qIdx, adminQuiz, adminQuestionsList, () => {
       saveStateForUndo();
       updateQuizFromDOM();
-      const questions = adminQuiz.questions;
-      const draggedQuestion = questions[draggedCardIndex];
-      questions.splice(draggedCardIndex, 1);
-      questions.splice(qIdx, 0, draggedQuestion);
+    }, () => {
       renderAdminForm();
     });
-
-    const handle = qDiv.querySelector(".drag-handle");
-    if (handle) {
-      handle.addEventListener("mousedown", () => {
-        dragInitiatedOnHandle = true;
-      });
-      handle.addEventListener("mouseup", () => {
-        dragInitiatedOnHandle = false;
-      });
-    }
 
     // --- CONDITIONAL STATE LISTENERS ---
     if (isCollapsed) {
@@ -819,7 +770,7 @@ function updateQuizFromDOM() {
     const typeSelector = qDiv.querySelector(".admin-q-type-selector");
     if (typeSelector) q.type = typeSelector.value;
     switch (q.type) {
-      case "multiple-choice":
+      case "multiple-choice": {
         const multToggle = qDiv.querySelector(".admin-mc-multiple");
         if (multToggle) q.allowMultipleAnswers = multToggle.checked;
         qDiv.querySelectorAll(".admin-choice-text").forEach((input) => {
@@ -827,6 +778,7 @@ function updateQuizFromDOM() {
           if (q.choices?.[idx]) q.choices[idx].text = input.value;
         });
         break;
+      }
       case "numeric":
         q.correctAnswerNumber = parseFloat(qDiv.querySelector(".admin-num-answer")?.value);
         q.toleranceValue = parseFloat(qDiv.querySelector(".admin-num-tolerance")?.value);
@@ -835,10 +787,11 @@ function updateQuizFromDOM() {
       case "fill-blank":
         q.blankAnswers = Array.from(qDiv.querySelectorAll(".admin-blank-answer")).map((i) => i.value);
         break;
-      case "true-false":
+      case "true-false": {
         const checked = qDiv.querySelector(`input[name="tf_${qIdx}"]:checked`);
         if (checked) q.isTrue = checked.value === "true";
         break;
+      }
       case "text":
         q.isLongAnswer = qDiv.querySelector(".admin-text-long")?.checked;
         q.expectedKeywords = qDiv.querySelector(".admin-text-keywords")?.value.split(",").map((s) => s.trim()).filter((s) => s);
@@ -866,14 +819,9 @@ function saveAdminQuiz() {
   const { shareCode, registry } = exportQuizForSharing(adminQuiz);
   saveImageRegistry(adminQuiz.id, registry);
   if (shareCode.length > 8e3) alert("WARNING: Quiz data very large. URL might fail.");
-  let path = window.location.pathname;
-  if (path.endsWith("/topics") || path.endsWith("/topics/")) {
-    path = path.replace(/\/topics\/?$/, "/");
-  }
-  if (!path.endsWith("/")) path += "/";
-  const base = window.location.origin + path;
+  const base = window.location.origin + "/";
   const shareUrl = `${base}?quiz=${shareCode}`;
-  const dashUrl = `${base}?dashboard=${adminQuiz.id}`;
+  const dashUrl = `${base}?dashboard=${escapeHtml(adminQuiz.id)}`;
   adminShareCode.style.display = "block";
   adminShareCode.innerHTML = `
         <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); padding: 15px; border-radius: 8px;">
@@ -881,18 +829,18 @@ function saveAdminQuiz() {
             <div style="margin-bottom: 10px;">
                 <label style="display: block; font-weight: bold;">Student URL:</label>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" readonly value="${shareUrl}" id="share-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
+                    <input type="text" readonly value="${escapeHtml(shareUrl)}" id="share-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
                     <button id="copy-share-btn" class="btn btn-secondary">Copy</button>
                 </div>
             </div>
             <div style="margin-bottom: 10px;">
                 <label style="display: block; font-weight: bold;">Dashboard URL:</label>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" readonly value="${dashUrl}" id="dash-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
+                    <input type="text" readonly value="${escapeHtml(dashUrl)}" id="dash-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
                     <button id="copy-dash-btn" class="btn btn-secondary">Copy</button>
                 </div>
             </div>
-            <div><label style="display: block; font-weight: bold;">Quiz ID:</label><code>${adminQuiz.id}</code></div>
+            <div><label style="display: block; font-weight: bold;">Quiz ID:</label><code>${escapeHtml(adminQuiz.id)}</code></div>
         </div>`;
   document.getElementById("copy-share-btn")?.addEventListener("click", () => {
     const input = document.getElementById("share-url-input");
@@ -907,36 +855,13 @@ function saveAdminQuiz() {
     alert("Copied!");
   });
 }
-function exportQuizForSharing(sourceQuiz) {
-  const quizToShare = JSON.parse(JSON.stringify(sourceQuiz));
-  const registry = {};
-  let imgCounter = 1;
-  quizToShare.questions.forEach((q) => {
-    if (q.image && q.image.startsWith("data:")) {
-      const imgId = `img${imgCounter++}`;
-      registry[imgId] = q.image;
-      q.image = `local:${imgId}`;
-    }
-    q.choices?.forEach((c) => {
-      if (c.image && c.image.startsWith("data:")) {
-        const imgId = `img${imgCounter++}`;
-        registry[imgId] = c.image;
-        c.image = `local:${imgId}`;
-      }
-    });
-  });
-  const bytes = new TextEncoder().encode(JSON.stringify(quizToShare));
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  const shareCode = btoa(binary);
-  return { shareCode, registry };
-}
+
 function previewQuiz() {
   if (!adminQuiz) return;
   updateQuizFromDOM();
   const { shareCode, registry } = exportQuizForSharing(adminQuiz);
   saveImageRegistry(adminQuiz.id, registry);
-  const base = window.location.origin + window.location.pathname;
+  const base = window.location.origin + "/";
   const previewUrl = `${base}?quiz=${shareCode}&preview=true`;
   window.open(previewUrl, "_blank");
 }
@@ -951,107 +876,13 @@ async function handleOCRUpload(event) {
       adminQuiz.questions.push({ id: `q${adminQuiz.questions.length + 1}`, prompt: result.prompt, choices: result.choices.map((t2, i) => ({ id: String.fromCharCode(97 + i), text: t2, isCorrect: i === 0 })) });
       renderAdminForm();
     }
-  } catch (e) {
+  } catch {
     alert("OCR failed");
   } finally {
     adminScanQuestionBtn.textContent = t("admin.scanOCR");
   }
 }
-function parseBulkImportText(text) {
-  const blocks = text.split(/\n\s*\n+/);
-  const questions = [];
-  for (let block of blocks) {
-    block = block.trim();
-    if (!block) continue;
-    const lines = block.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-    if (lines.length === 0) continue;
-    let prompt = "";
-    const choices = [];
-    let isTF = false;
-    let isTrue = false;
-    let firstLine = lines[0];
-    if (firstLine.toUpperCase().startsWith("Q:") || firstLine.toUpperCase().startsWith("KLAUSIMAS:")) {
-      prompt = firstLine.replace(/^(Q:|KLAUSIMAS:)\s*/i, "").trim();
-    } else {
-      prompt = firstLine;
-    }
-    const choiceLines = lines.slice(1);
-    const tfKeywords = ["TAIP", "NE", "TRUE", "FALSE", "TEISINGA", "NETEISINGA"];
-    const singleWordTF = choiceLines.length === 1 && tfKeywords.includes(choiceLines[0].toUpperCase());
-    if (singleWordTF) {
-      isTF = true;
-      const val = choiceLines[0].toUpperCase();
-      isTrue = (val === "TAIP" || val === "TRUE" || val === "TEISINGA");
-    } else {
-      for (let line of choiceLines) {
-        const choiceMatch = line.match(/^(\*)?\s*([A-Za-z0-9]+[\.\)])\s*(.*)$/);
-        if (choiceMatch) {
-          const isCorrect = !!choiceMatch[1];
-          const textVal = choiceMatch[3].trim();
-          choices.push({
-            id: String.fromCharCode(97 + choices.length),
-            text: textVal,
-            isCorrect: isCorrect
-          });
-        } else {
-          let isCorrect = line.startsWith("*") || line.endsWith("*");
-          let cleanLine = line.replace(/^\*\s*/, "").replace(/\s*\*$/, "").trim();
-          const choiceMatchClean = cleanLine.match(/^([A-Za-z0-9]+[\.\)])\s*(.*)$/);
-          if (choiceMatchClean) {
-            choices.push({
-              id: String.fromCharCode(97 + choices.length),
-              text: choiceMatchClean[2].trim(),
-              isCorrect: isCorrect
-            });
-          } else {
-            if (cleanLine.toUpperCase() === "TAIP" || cleanLine.toUpperCase() === "TRUE" || cleanLine.toUpperCase() === "TEISINGA" ||
-                cleanLine.toUpperCase() === "NE" || cleanLine.toUpperCase() === "FALSE" || cleanLine.toUpperCase() === "NETEISINGA") {
-              isTF = true;
-              if (isCorrect) {
-                isTrue = (cleanLine.toUpperCase() === "TAIP" || cleanLine.toUpperCase() === "TRUE" || cleanLine.toUpperCase() === "TEISINGA");
-              }
-            } else {
-              choices.push({
-                id: String.fromCharCode(97 + choices.length),
-                text: cleanLine,
-                isCorrect: isCorrect
-              });
-            }
-          }
-        }
-      }
-    }
-    if (isTF) {
-      questions.push({
-        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        prompt: prompt,
-        type: "true-false",
-        isTrue: isTrue
-      });
-    } else if (choices.length > 0) {
-      if (!choices.some(c => c.isCorrect)) {
-        choices[0].isCorrect = true;
-      }
-      const correctCount = choices.filter(c => c.isCorrect).length;
-      questions.push({
-        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        prompt: prompt,
-        type: "multiple-choice",
-        allowMultipleAnswers: correctCount > 1,
-        choices: choices
-      });
-    } else {
-      questions.push({
-        id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        prompt: prompt,
-        type: "text",
-        isLongAnswer: false,
-        expectedKeywords: []
-      });
-    }
-  }
-  return questions;
-}
+
 function setupAdminEventsInternal() {
   adminToggle.addEventListener("click", toggleAdminMode);
   adminAddQuestionBtn.addEventListener("click", () => {
@@ -1097,7 +928,7 @@ function setupAdminEventsInternal() {
           renderAdminForm();
           triggerAutoSave();
         }
-      } catch (e2) {
+      } catch {
         alert("Import failed");
       }
     };
@@ -1161,7 +992,7 @@ function setupAdminEventsInternal() {
       }
     }, { capture: true });
 
-    adminPanel.addEventListener("change", (e) => {
+    adminPanel.addEventListener("change", () => {
       saveStateForUndo();
     }, { capture: true });
 
@@ -1518,7 +1349,7 @@ function renderQuestionNavigator() {
   });
 
   adminNavigator.querySelectorAll(".nav-badge-item").forEach(badge => {
-    badge.addEventListener("click", (e) => {
+    badge.addEventListener("click", () => {
       const idx = parseInt(badge.dataset.qidx);
       const items = adminQuestionsList.querySelectorAll(".admin-question-item");
       const card = items[idx];
@@ -1570,143 +1401,7 @@ function flashCard(card) {
   }
 }
 
-function captureFocusAndScroll() {
-  const active = document.activeElement;
-  const state = {
-    scrollX: window.scrollX,
-    scrollY: window.scrollY,
-    focusedSelector: null,
-    selectionStart: null,
-    selectionEnd: null,
-  };
 
-  if (active && active.closest("#admin-panel")) {
-    let selector = "";
-    if (active.id) {
-      selector = `#${active.id}`;
-    } else {
-      const tagName = active.tagName.toLowerCase();
-      let classPart = "";
-      if (active.className) {
-        const classes = Array.from(active.classList).filter(c => c !== "active");
-        if (classes.length > 0) {
-          classPart = `.${classes.join(".")}`;
-        }
-      }
-      
-      let attrPart = "";
-      if (active.dataset.qidx !== undefined) {
-        attrPart += `[data-qidx="${active.dataset.qidx}"]`;
-      }
-      if (active.dataset.cidx !== undefined) {
-        attrPart += `[data-cidx="${active.dataset.cidx}"]`;
-      }
-      if (active.dataset.bidx !== undefined) {
-        attrPart += `[data-bidx="${active.dataset.bidx}"]`;
-      }
-      selector = `${tagName}${classPart}${attrPart}`;
-    }
-
-    state.focusedSelector = selector;
-    if (typeof active.selectionStart === "number") {
-      state.selectionStart = active.selectionStart;
-      state.selectionEnd = active.selectionEnd;
-    }
-  }
-  return state;
-}
-
-function restoreFocusAndScroll(state) {
-  if (!state) return;
-  
-  window.scrollTo(state.scrollX, state.scrollY);
-
-  if (state.focusedSelector) {
-    try {
-      const el = document.querySelector(state.focusedSelector);
-      if (el) {
-        el.focus();
-        if (typeof state.selectionStart === "number" && typeof el.selectionStart === "number") {
-          el.setSelectionRange(state.selectionStart, state.selectionEnd);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to restore focus:", e);
-    }
-  }
-}
-
-function findSmartCursorOffset(text) {
-  const idx = text.indexOf('{');
-  if (idx !== -1) return idx + 1;
-  const idx2 = text.indexOf('[');
-  if (idx2 !== -1) return idx2 + 1;
-  const idx3 = text.indexOf('(');
-  if (idx3 !== -1) return idx3 + 1;
-  return text.length;
-}
-
-function insertTextAtCursor(element, text, autoWrapMath = false) {
-  if (!element) return;
-  
-  let finalText = text;
-  if (autoWrapMath) {
-    const beforeCursor = element.value.substring(0, element.selectionStart);
-    const inlineOpen = (beforeCursor.match(/\\\(/g) || []).length;
-    const inlineClose = (beforeCursor.match(/\\\)/g) || []).length;
-    const displayOpen = (beforeCursor.match(/\\\[/g) || []).length;
-    const displayClose = (beforeCursor.match(/\\\]/g) || []).length;
-    const isInsideMath = (inlineOpen > inlineClose) || (displayOpen > displayClose);
-    
-    if (!isInsideMath) {
-      finalText = `\\(${text}\\)`;
-    }
-  }
-
-  element.focus();
-  const start = element.selectionStart;
-
-  // Use document.execCommand for proper Undo/Redo stack preservation
-  const success = document.execCommand("insertText", false, finalText);
-  
-  // Fallback if execCommand fails (though it shouldn't in modern browsers for textareas)
-  if (!success) {
-    const value = element.value;
-    const end = element.selectionEnd;
-    const before = value.substring(0, start);
-    const after = value.substring(end);
-    element.value = before + finalText + after;
-    element.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-
-  const smartOffset = findSmartCursorOffset(finalText);
-  element.setSelectionRange(start + smartOffset, start + smartOffset);
-}
-
-function wrapSelectedInMathMode(element, isDisplay = false) {
-  if (!element) return;
-  const start = element.selectionStart;
-  const end = element.selectionEnd;
-  const value = element.value;
-  const selected = value.substring(start, end);
-
-  const left = isDisplay ? "\\[ " : "\\(";
-  const right = isDisplay ? " \\]" : "\\)";
-
-  const wrapped = left + selected + right;
-  const before = value.substring(0, start);
-  const after = value.substring(end);
-  element.value = before + wrapped + after;
-
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-
-  element.focus();
-  if (selected) {
-    element.setSelectionRange(start + left.length, start + left.length + selected.length);
-  } else {
-    element.setSelectionRange(start + left.length, start + left.length);
-  }
-}
 
 function saveStateForUndo() {
   if (!adminQuiz) return;
@@ -1907,7 +1602,7 @@ function restoreDraft() {
     }
     
     updateDraftStatusBadge("saved");
-  } catch (e) {
+  } catch {
     alert("Failed to restore draft.");
   }
 }

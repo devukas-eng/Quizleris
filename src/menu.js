@@ -1,4 +1,4 @@
-import { getRequiredElement } from "./dom.js";
+import { getRequiredElement, escapeHtml } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { renderFrenzyMode } from "./frenzy.js";
@@ -27,19 +27,6 @@ export function isStudentViewActive() {
     return isStudentMenuOpen;
 }
 
-// Colour palette for topic blobs
-const BLOB_TOPICS = [
-    { name: 'Matematika',    icon: '🔢', color: 'linear-gradient(135deg,#6366f1,#818cf8)', count: 12 },
-    { name: 'Fizika',        icon: '⚛️',  color: 'linear-gradient(135deg,#0ea5e9,#38bdf8)', count: 8  },
-    { name: 'Anglų kalba',   icon: '🇬🇧', color: 'linear-gradient(135deg,#10b981,#34d399)', count: 15 },
-    { name: 'Lietuvių k.',   icon: '🇱🇹', color: 'linear-gradient(135deg,#f59e0b,#fbbf24)', count: 7  },
-    { name: 'Informatika',   icon: '💻',  color: 'linear-gradient(135deg,#8b5cf6,#a78bfa)', count: 10 },
-    { name: 'Chemija',       icon: '🧪',  color: 'linear-gradient(135deg,#ef4444,#f87171)', count: 6  },
-    { name: 'Istorija',      icon: '📜',  color: 'linear-gradient(135deg,#92400e,#d97706)', count: 9  },
-    { name: 'Biologija',     icon: '🌿',  color: 'linear-gradient(135deg,#065f46,#10b981)', count: 11 },
-    { name: 'Geografija',    icon: '🌍',  color: 'linear-gradient(135deg,#0f4c75,#1b6ca8)', count: 5  },
-    { name: 'Bendrosios',    icon: '🧠',  color: 'linear-gradient(135deg,#ec4899,#f472b6)', count: 20 },
-];
 
 /**
  * Resets the UI to the initial landing screen — Kahoot-style hero.
@@ -192,8 +179,8 @@ export function renderStudentJoin(quizToJoin) {
                 </span>
              </div>
              <div class="join-quiz-info">
-                <h2 style="font-size: 2.2rem; margin-bottom: 12px;">${quizToJoin.title}</h2>
-                <p style="font-size: 1.1rem; color: var(--muted);">${quizToJoin.questions.length} ${t('join.questions')} | ${timeInfo}</p>
+                <h2 style="font-size: 2.2rem; margin-bottom: 12px;">${escapeHtml(quizToJoin.title)}</h2>
+                <p style="font-size: 1.1rem; color: var(--muted);">${quizToJoin.questions.length} ${t('join.questions')} | ${escapeHtml(timeInfo)}</p>
              </div>
              
              <div class="join-input-group">
@@ -222,12 +209,7 @@ export function renderStudentJoin(quizToJoin) {
     }
     document.getElementById("join-back-btn").onclick = () => {
         joinContainer.style.display = "none";
-        if (welcomeH1)
-            welcomeH1.style.display = "block";
-        if (welcomeP)
-            welcomeP.style.display = "block";
-        if (menuActions)
-            menuActions.style.display = "flex";
+        renderStartMenu();
     };
 }
 // Student form handling

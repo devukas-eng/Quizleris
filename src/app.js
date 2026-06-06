@@ -1,6 +1,6 @@
 // Main entry point - imports and initializes all modules
 import { setupAdmin, toggleAdminMode, refreshAdminUI } from "./quiz-editor.js";
-import { renderStartMenu, setupMenu, renderStudentJoin, isStudentViewActive, handleStudentClick } from "./menu.js";
+import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
 import { setupDashboard, renderDashboard } from "./dashboard.js";
 import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";

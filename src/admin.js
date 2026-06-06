@@ -1,6 +1,6 @@
 import { quiz } from "./state.js";
 import { getRequiredElement } from "./dom.js";
-import { generateQuizId, saveQuizToStorage, saveImageRegistry, clearAllLocalQuizzes } from "./storage.js";
+import { generateQuizId, saveQuizToStorage, saveImageRegistry } from "./storage.js";
 import { isAdminAccessAllowed, promptAdminPassword } from "./auth.js";
 import { processOCRImage } from "./ocr.js";
 import { t, updatePageLanguage } from "./i18n.js";
@@ -472,7 +472,7 @@ function updateQuizFromDOM() {
         if (typeSelector)
             q.type = typeSelector.value;
         switch (q.type) {
-            case 'multiple-choice':
+            case 'multiple-choice': {
                 const multToggle = qDiv.querySelector(".admin-mc-multiple");
                 if (multToggle)
                     q.allowMultipleAnswers = multToggle.checked;
@@ -482,6 +482,7 @@ function updateQuizFromDOM() {
                         q.choices[idx].text = input.value;
                 });
                 break;
+            }
             case 'numeric':
                 q.correctAnswerNumber = parseFloat(qDiv.querySelector(".admin-num-answer")?.value);
                 q.toleranceValue = parseFloat(qDiv.querySelector(".admin-num-tolerance")?.value);
@@ -490,11 +491,12 @@ function updateQuizFromDOM() {
             case 'fill-blank':
                 q.blankAnswers = Array.from(qDiv.querySelectorAll(".admin-blank-answer")).map(i => i.value);
                 break;
-            case 'true-false':
+            case 'true-false': {
                 const checked = qDiv.querySelector(`input[name="tf_${qIdx}"]:checked`);
                 if (checked)
                     q.isTrue = checked.value === 'true';
                 break;
+            }
             case 'text':
                 q.isLongAnswer = qDiv.querySelector(".admin-text-long")?.checked;
                 q.expectedKeywords = qDiv.querySelector(".admin-text-keywords")?.value.split(',').map(s => s.trim()).filter(s => s);
@@ -629,7 +631,7 @@ async function handleOCRUpload(event) {
             renderAdminForm();
         }
     }
-    catch (e) {
+    catch {
         alert("OCR failed");
     }
     finally {
@@ -673,7 +675,7 @@ function setupAdminEventsInternal() {
                     renderAdminForm();
                 }
             }
-            catch (e) {
+            catch {
                 alert("Import failed");
             }
         };

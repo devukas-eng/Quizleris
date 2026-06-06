@@ -1,11 +1,13 @@
 // Main entry point - imports and initializes all modules
 import { setupAdmin, toggleAdminMode, refreshAdminUI } from "./quiz-editor.js";
-import { renderStartMenu, setupMenu, renderStudentJoin, isStudentViewActive, handleStudentClick } from "./menu.js";
+import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
 import { setupDashboard, renderDashboard } from "./dashboard.js";
 import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
+import { showProfileModal } from "./profile.js";
+import { toggleMute, getIsMuted } from "./audio.js";
 
 /**
  * The main application bootstrap function.
@@ -98,11 +100,30 @@ function initApp() {
             item.addEventListener('mouseleave', () => { applyTheme(currentTheme); });
         });
 
-        document.addEventListener('click', (e) => {
-            if (popupOpen && themePopup && !themePopup.contains(e.target)) closeThemePopup();
+        window.addEventListener('click', () => {
+            if (popupOpen) closeThemePopup();
         });
-
         updateThemePickerUI(currentTheme);
+
+        // --- Global Actions (Profile / Mute) ---
+        const btnProfile = document.getElementById('btn-global-profile');
+        if (btnProfile) {
+            btnProfile.addEventListener('click', () => {
+                showProfileModal();
+            });
+        }
+        
+        const btnMute = document.getElementById('btn-global-mute');
+        if (btnMute) {
+            btnMute.textContent = getIsMuted() ? '🔇' : '🔊';
+            btnMute.addEventListener('click', () => {
+                const muted = toggleMute();
+                btnMute.textContent = muted ? '🔇' : '🔊';
+            });
+        }
+
+        // --- Core App Callbacks ---
+        // Register callbacks from menu.js to setupDashboard / setupAdmin
 
         const onHome = () => renderStartMenu();
         const onAdmin = () => toggleAdminMode();
@@ -324,96 +345,130 @@ function initApp() {
 // ── Legal content helper ──────────────────────────────────────────────────────
 function getLegalContent(type, lang) {
     const isLt = lang === 'lt';
+    const email = 'eblogsmod@gmail.com';
     const content = {
         terms: {
-            title: isLt ? 'Naudojimo s\u0105lygos' : 'Terms of Service',
+            title: isLt ? 'Naudojimo sąlygos' : 'Terms of Service',
             body: isLt ? `
-                <p>Naudodamiesi <strong>Quizleris</strong> platforma, sutinkate su šiomis naudojimo s\u0105lygomis.</p>
-                <h3>1. Paslauga</h3>
-                <p>Quizleris yra mokymo ir vertinimo platforma, skirta kurti ir dalyvauti testuose. Ji teikiama be joki\u0173 garantij\u0173.</p>
-                <h3>2. Atsakomyb\u0117</h3>
-                <p>Jūs atsakote už testo turinį, kurį įkeliate. Draudžiama įkelti neteisingą, įžeidžiantį ar neteisėtą turinį.</p>
-                <h3>3. Privatumas</h3>
-                <p>Mes renkame minimalius anoniminius duomenis, b\u016btinus paslaugai gerinti. Daugiau informacijos rasite Privatumo politikoje.</p>
-                <h3>4. Pakeitimai</h3>
-                <p>Mes pasiliekame teis\u0119 keisti \u0161ias s\u0105lygas. Apie esminius pakeitimus pranerime vartotojams.</p>
+                <p><strong>1. Bendrosios nuostatos</strong></p>
+                <p>Naudodamiesi <strong>Quizleris</strong> platforma, Jūs patvirtinate, kad sutinkate su šiomis išsamiomis naudojimo sąlygomis. Šios sąlygos taikomos visiems vartotojams, neatsižvelgiant į tai, ar esate registruotas vartotojas, ar svečias.</p>
+                
+                <p><strong>2. Paslaugos teikimas ir prieinamumas</strong></p>
+                <p>Quizleris yra mokymo, testavimo ir interaktyvaus mokymosi platforma. Mes dedame visas pastangas, kad užtikrintume nenutrūkstamą paslaugos veikimą, tačiau platforma teikiama "tokia, kokia yra" (angl. "as is"). Mes negarantuojame, kad paslauga veiks be klaidų ar pertraukimų.</p>
+                
+                <p><strong>3. Vartotojų atsakomybė ir turinys</strong></p>
+                <p>Jūs esate visiškai atsakingas už visą turinį (klausimus, atsakymus, testus), kurį sukuriate ar įkeliate į Quizleris. Griežtai draudžiama įkelti neteisėtą, autorių teises pažeidžiantį, įžeidžiantį, diskriminuojantį ar kitaip žalingą turinį. Mes pasiliekame teisę be išankstinio įspėjimo pašalinti bet kokį turinį, pažeidžiantį šias taisykles.</p>
+                
+                <p><strong>4. Intelektinė nuosavybė</strong></p>
+                <p>Visi platformos dizaino elementai, kodas, grafika ir prekės ženklai yra išskirtinė Quizleris nuosavybė. Jūs negalite kopijuoti, platinti ar modifikuoti mūsų platformos kodo ar dizaino elementų be išankstinio rašytinio sutikimo.</p>
+                
+                <p><strong>5. Susisiekite su mumis</strong></p>
+                <p>Jei turite klausimų dėl šių sąlygų, pažeidimų ar norite pranešti apie netinkamą turinį, prašome susisiekti su mumis el. paštu: <strong>${email}</strong>.</p>
             ` : `
-                <p>By using <strong>Quizleris</strong>, you agree to these Terms of Service.</p>
-                <h3>1. Service</h3>
-                <p>Quizleris is an educational testing platform for creating and taking quizzes. It is provided without warranties of any kind.</p>
-                <h3>2. Responsibility</h3>
-                <p>You are responsible for the quiz content you upload. Uploading false, offensive, or illegal content is prohibited.</p>
-                <h3>3. Privacy</h3>
-                <p>We collect minimal anonymous data necessary to improve the service. See our Privacy Policy for more details.</p>
-                <h3>4. Changes</h3>
-                <p>We reserve the right to update these terms. We will notify users of significant changes.</p>
+                <p><strong>1. General Provisions</strong></p>
+                <p>By accessing and using the <strong>Quizleris</strong> platform, you acknowledge and agree to be bound by these comprehensive Terms of Service. These terms apply to all users, whether registered or visiting as guests.</p>
+                
+                <p><strong>2. Service Provision and Availability</strong></p>
+                <p>Quizleris is an educational, testing, and interactive learning platform. While we strive for maximum uptime and reliability, the service is provided on an "as is" and "as available" basis without any warranties. We do not guarantee uninterrupted or error-free operation.</p>
+                
+                <p><strong>3. User Responsibility and Content</strong></p>
+                <p>You are solely responsible for any content (quizzes, questions, answers) you create, upload, or share on Quizleris. It is strictly prohibited to upload content that is illegal, infringes on intellectual property rights, or is offensive, discriminatory, or malicious. We reserve the right to remove any violating content without prior notice.</p>
+                
+                <p><strong>4. Intellectual Property</strong></p>
+                <p>All platform design elements, source code, graphics, and trademarks are the exclusive property of Quizleris. You may not copy, distribute, or modify any part of our platform without explicit prior written consent.</p>
+                
+                <p><strong>5. Contact Information</strong></p>
+                <p>For questions regarding these Terms, reporting violations, or general inquiries, please contact us at: <strong>${email}</strong>.</p>
             `
         },
         privacy: {
             title: isLt ? 'Privatumo politika' : 'Privacy Policy',
             body: isLt ? `
-                <p><strong>Quizleris</strong> gerbia j\u016bs\u0173 privatum\u0105.</p>
-                <h3>Kokie duomenys renkami?</h3>
+                <p><strong>1. Įvadas</strong></p>
+                <p>Jūsų privatumas mums yra nepaprastai svarbus. Šioje Privatumo politikoje išsamiai paaiškinama, kokią informaciją <strong>Quizleris</strong> renka, kaip ją naudoja, saugo ir atskleidžia.</p>
+                
+                <p><strong>2. Kokie duomenys renkami?</strong></p>
                 <ul>
-                    <li>Anoniminiai naudojimo \u012fvy\u010diai (tema, kalba, testo u\u017ebaigimas)</li>
-                    <li>Technin\u0117 informacija (nar\u0161ykl\u0117s tipas, ekrano skyriai)</li>
-                    <li>Rezultatai, s\u0105moningai \u012fvesti \u012f platform\u0105</li>
+                    <li><strong>Techninė ir naudojimo informacija:</strong> Renkame anoniminius analitikos duomenis, tokius kaip jūsų naršyklės tipas, įrenginio operacinė sistema, pasirinkta kalba, temos nustatymai, ir sąveika su testais.</li>
+                    <li><strong>Vartotojo pateikti duomenys:</strong> Duomenys, kuriuos savanoriškai įvedate, pavyzdžiui, slapyvardžiai, testų atsakymai bei sukurto turinio informacija.</li>
                 </ul>
-                <h3>Kaip naudojami?</h3>
-                <p>Duomenys naudojami tik paslaugai gerinti. Jie n\u0117ra parduodami ar perduodami tre\u010diosioms \u0161alims.</p>
-                <h3>Slapukai</h3>
-                <p>Naudojame tik b\u016btinus funkcinius slapukus ir, j\u016bs\u0173 sutikimu, analitikos slapukus.</p>
-                <h3>J\u016bs\u0173 teis\u0117s</h3>
-                <p>Galite bet kada paklausti, kokie j\u016bs\u0173 duomenys s\u0105ugomi, ir pra\u0161yti juos i\u0161trinti.</p>
+                
+                <p><strong>3. Kaip naudojame jūsų duomenis?</strong></p>
+                <p>Surinkta informacija yra naudojama tik teikti, tobulinti ir apsaugoti mūsų paslaugas. Analizuojame naudojimo tendencijas, kad galėtume optimizuoti vartotojo sąsają ir užtikrinti sklandų veikimą. Jūsų duomenys nėra parduodami ar be pagrindo perduodami trečiosioms šalims.</p>
+                
+                <p><strong>4. Duomenų saugumas ir saugojimas</strong></p>
+                <p>Mes taikome pažangias technines ir organizacines saugumo priemones, siekdami apsaugoti jūsų duomenis nuo neteisėtos prieigos, praradimo ar sunaikinimo. Dauguma jūsų asmeninių nustatymų saugoma tiesiogiai jūsų įrenginyje (Local Storage).</p>
+                
+                <p><strong>5. Jūsų teisės ir duomenų ištrynimas</strong></p>
+                <p>Jūs turite teisę žinoti, kokius duomenis mes tvarkome, reikalauti juos ištaisyti arba ištrinti. Dėl paskyros, duomenų ištrynimo ar bet kokių kitų privatumo klausimų kreipkitės: <strong>${email}</strong>.</p>
             ` : `
-                <p><strong>Quizleris</strong> respects your privacy.</p>
-                <h3>What data is collected?</h3>
+                <p><strong>1. Introduction</strong></p>
+                <p>Your privacy is of utmost importance to us. This Privacy Policy outlines in detail how <strong>Quizleris</strong> collects, uses, stores, and protects your information.</p>
+                
+                <p><strong>2. What Data We Collect</strong></p>
                 <ul>
-                    <li>Anonymous usage events (theme, language, quiz completion)</li>
-                    <li>Technical information (browser type, screen resolution)</li>
-                    <li>Results you intentionally enter into the platform</li>
+                    <li><strong>Technical and Usage Information:</strong> We collect anonymous analytics data such as your browser type, device OS, language preferences, theme settings, and interactions with our quizzes.</li>
+                    <li><strong>User-Provided Data:</strong> Any information you voluntarily enter into the platform, including nicknames, quiz answers, and custom quiz content.</li>
                 </ul>
-                <h3>How is it used?</h3>
-                <p>Data is used solely to improve the service. It is not sold or shared with third parties.</p>
-                <h3>Cookies</h3>
-                <p>We use only essential functional cookies and, with your consent, analytics cookies.</p>
-                <h3>Your rights</h3>
-                <p>You may request at any time what data is stored about you, and ask for it to be deleted.</p>
+                
+                <p><strong>3. How We Use Your Data</strong></p>
+                <p>The information we collect is used exclusively to provide, maintain, and improve our services. We analyze usage trends to optimize the user experience and ensure platform stability. We do not sell your personal data or share it with unauthorized third parties.</p>
+                
+                <p><strong>4. Data Security and Retention</strong></p>
+                <p>We implement robust technical and organizational security measures to protect your data against unauthorized access, alteration, or destruction. Much of your personalized data is stored directly on your device (Local Storage).</p>
+                
+                <p><strong>5. Your Rights and Data Deletion</strong></p>
+                <p>You have the right to access, rectify, or request the deletion of your data. For data deletion requests, account inquiries, or any privacy-related matters, please contact our support at: <strong>${email}</strong>.</p>
             `
         },
         cookies: {
-            title: isLt ? 'Slapuk\u0173 politika' : 'Cookie Policy',
+            title: isLt ? 'Slapukų politika' : 'Cookie Policy',
             body: isLt ? `
-                <p>\u0160iame puslapyje ai\u0161kiname, kaip naudojame slapukus.</p>
-                <h3>B\u016btini slapukai</h3>
+                <p><strong>1. Kas yra slapukai?</strong></p>
+                <p>Slapukai (angl. cookies) yra nedideli tekstiniai failai ar informacijos fragmentai (pvz., Local Storage), kurie išsaugomi jūsų naršyklėje ar įrenginyje, kai lankotės <strong>Quizleris</strong> svetainėje.</p>
+                
+                <p><strong>2. Būtini (Funkciniai) slapukai</strong></p>
+                <p>Šie failai yra absoliučiai būtini tam, kad svetainė veiktų tinkamai. Jų išjungti mūsų sistemose negalima:</p>
                 <ul>
-                    <li><strong>selected_theme</strong> &mdash; j\u016bs\u0173 pasirinkta tema</li>
-                    <li><strong>quiz_language</strong> &mdash; j\u016bs\u0173 kalba</li>
-                    <li><strong>quiz_*</strong> &mdash; i\u0161saugoti testai ir rezultatai</li>
+                    <li><strong>selected_theme</strong> &mdash; Išsaugo jūsų pasirinktą vizualinę temą (pvz., tamsų ar šviesų foną).</li>
+                    <li><strong>quiz_language</strong> &mdash; Išsaugo jūsų kalbos nustatymus.</li>
+                    <li><strong>quiz_*</strong> &mdash; Vietinėje atmintyje išsaugoti testai, juodraščiai ir jūsų progresas.</li>
                 </ul>
-                <h3>Analitikos slapukai (sutikimu)</h3>
+                
+                <p><strong>3. Analitikos slapukai (tik su jūsų sutikimu)</strong></p>
+                <p>Mes naudojame analitikos įrankius, kad suprastume, kaip vartotojai naudojasi platforma. Šie slapukai renkami tik jei duodate sutikimą Cookie sutikimo juostoje:</p>
                 <ul>
-                    <li><strong>quizleris_event_queue</strong> &mdash; anoniminiai naudojimo \u012fvy\u010diai</li>
-                    <li><strong>quizleris_analytics_consent</strong> &mdash; j\u016bs\u0173 sutikimo b\u016bsena</li>
+                    <li><strong>quizleris_event_queue</strong> &mdash; Kaupia anoniminius navigacijos ir naudojimo įvykius statistikai.</li>
+                    <li><strong>quizleris_analytics_consent</strong> &mdash; Išsaugo jūsų sutikimo arba atsisakymo būseną, kad nereikėtų klausti kiekvieną kartą.</li>
                 </ul>
-                <p>Galite bet kada pa\u010derinti savo sprendim\u0105 naudodamiesi slapuk\u0173 juosteliu (i\u0161kraunama puslapyje pirmam apsilankymui).</p>
+                
+                <p><strong>4. Slapukų valdymas</strong></p>
+                <p>Jūs galite bet kada pakeisti savo sutikimo nustatymus arba išvalyti naršyklės Local Storage. Jei turite klausimų dėl mūsų slapukų naudojimo, susisiekite su mumis el. paštu: <strong>${email}</strong>.</p>
             ` : `
-                <p>This page explains how we use cookies.</p>
-                <h3>Essential Cookies</h3>
+                <p><strong>1. What are Cookies?</strong></p>
+                <p>Cookies and similar storage technologies (like Local Storage) are small pieces of data saved on your browser or device when you visit the <strong>Quizleris</strong> website.</p>
+                
+                <p><strong>2. Essential (Functional) Cookies</strong></p>
+                <p>These are strictly necessary for the website to function correctly and cannot be disabled in our systems:</p>
                 <ul>
-                    <li><strong>selected_theme</strong> &mdash; your chosen colour theme</li>
-                    <li><strong>quiz_language</strong> &mdash; your language preference</li>
-                    <li><strong>quiz_*</strong> &mdash; saved quizzes and results</li>
+                    <li><strong>selected_theme</strong> &mdash; Remembers your chosen visual theme (e.g., dark or light mode).</li>
+                    <li><strong>quiz_language</strong> &mdash; Stores your preferred language setting.</li>
+                    <li><strong>quiz_*</strong> &mdash; Locally stores your custom quizzes, drafts, and progress.</li>
                 </ul>
-                <h3>Analytics Cookies (with consent)</h3>
+                
+                <p><strong>3. Analytics Cookies (Consent Required)</strong></p>
+                <p>We use analytics tools to understand how our platform is used. These are only activated if you provide consent via the Cookie banner:</p>
                 <ul>
-                    <li><strong>quizleris_event_queue</strong> &mdash; anonymous usage events</li>
-                    <li><strong>quizleris_analytics_consent</strong> &mdash; your consent status</li>
+                    <li><strong>quizleris_event_queue</strong> &mdash; Collects anonymous navigation and usage events for statistical analysis.</li>
+                    <li><strong>quizleris_analytics_consent</strong> &mdash; Remembers your consent choice so you are not prompted repeatedly.</li>
                 </ul>
-                <p>You can change your mind at any time via the cookie banner (shown on first visit).</p>
+                
+                <p><strong>4. Managing Cookies</strong></p>
+                <p>You can manage your consent preferences or clear your browser's Local Storage at any time. If you have any questions regarding our cookie practices, please contact us at: <strong>${email}</strong>.</p>
             `
         }
     };
+    
     return content[type] || content.terms;
 }
 

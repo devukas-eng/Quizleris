@@ -36,9 +36,10 @@ export function renderTopicsPage() {
 
     topicsContainer = document.createElement("div");
     topicsContainer.className = "topics-page-container page-transition";
-    topicsContainer.style.width = "100%";
+    topicsContainer.style.width = "90%";
+    topicsContainer.style.maxWidth = "1100px";
     topicsContainer.style.margin = "0 auto";
-    topicsContainer.style.padding = "16px 0";
+    topicsContainer.style.padding = "24px 0";
 
     startMenu.appendChild(topicsContainer);
 
@@ -183,10 +184,10 @@ function renderBundleCard(bundle) {
                 <h3 class="kahoot-card-title">${bundle.title}</h3>
             </div>
             <div class="kahoot-card-body">
-                <div class="kahoot-badges">
+                <div class="kahoot-badges" style="display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;">
                     <span class="kahoot-badge" style="color: ${difficultyColor}; background: ${difficultyColor}18; border-color: ${difficultyColor}40;">${diffLabel}</span>
-                    <span class="kahoot-badge" style="color: var(--text); background: rgba(128,128,128,0.1); border-color: rgba(128,128,128,0.2);">⏱️ ~${bundle.estimatedMinutes} min</span>
-                    <span class="kahoot-badge" style="color: var(--text); background: rgba(128,128,128,0.1); border-color: rgba(128,128,128,0.2);">❓ ${bundle.questions.length} Qs</span>
+                    <span class="kahoot-badge" style="color: ${difficultyColor}; background: ${difficultyColor}18; border-color: ${difficultyColor}40;">⏱️ ${bundle.estimatedMinutes}m</span>
+                    <span class="kahoot-badge" style="color: ${difficultyColor}; background: ${difficultyColor}18; border-color: ${difficultyColor}40;">❓ ${bundle.questions.length} Qs</span>
                 </div>
                 <button id="start-bundle-${bundle.id}" class="kahoot-play-btn" style="background: ${cardAccent};">
                     ▶ ${t('modal.playBtn') || 'Play'}
@@ -196,23 +197,7 @@ function renderBundleCard(bundle) {
     `;
 }
 
-function getCategoryLabel(category) {
-    const lang = getLanguage();
-    if (category === "math") return lang === 'lt' ? 'Matematika' : 'Math & Physics';
-    if (category === "lang") return lang === 'lt' ? 'Kalbos' : 'Languages & Trivia';
-    if (category === "cs") return lang === 'lt' ? 'Informatika' : 'Computer Science';
-    return category;
-}
 
-function getQuestionsWord(count) {
-    const lang = getLanguage();
-    if (lang === 'lt') {
-        if (count % 10 === 1 && count % 100 !== 11) return 'klausimas';
-        if (count % 10 >= 2 && count % 10 <= 9 && (count % 100 < 11 || count % 100 > 19)) return 'klausimai';
-        return 'klausimų';
-    }
-    return count === 1 ? 'question' : 'questions';
-}
 
 function openPlayModeModal(bundle) {
     // Remove existing modal if any
@@ -244,11 +229,9 @@ function openPlayModeModal(bundle) {
     overlay.innerHTML = `
         <div class="modal-window play-mode-modal fade-in" style="max-width: 600px; padding: 24px; border-radius: 16px; background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
-                <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent);">${t('modal.playTitle') || 'Select Play Mode'}</h2>
+                <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent);">${bundle.title}</h2>
                 <button id="modal-close-btn" style="background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; line-height: 1;">&times;</button>
             </div>
-            
-            <h4 style="margin: 0 0 12px 0; color: white; font-size: 1.1rem; text-align: center;">${bundle.title}</h4>
             
             ${highScoreHtml}
 
@@ -333,12 +316,32 @@ function openPlayModeModal(bundle) {
             quizConfig.mode = "exam"; // Exam mode with results only at the end
         }
 
+        // "Dilute" the topic with 3-5 random questions from other bundles
+        const allBundles = getTopicBundles();
+        let otherQuestions = [];
+        allBundles.forEach(b => {
+            if (b.id !== quizConfig.id) {
+                otherQuestions = otherQuestions.concat(JSON.parse(JSON.stringify(b.questions)));
+            }
+        });
+        otherQuestions.sort(() => 0.5 - Math.random());
+        // Pick random questions to inject
+        const numToDilute = Math.min(5, Math.max(3, Math.floor(quizConfig.questions.length / 3)));
+        if (otherQuestions.length > 0) {
+            const toAdd = otherQuestions.slice(0, numToDilute);
+            quizConfig.questions = quizConfig.questions.concat(toAdd);
+        }
+        
+        // Force shuffle ON
+        if (!quizConfig.shuffleConfig) quizConfig.shuffleConfig = {};
+        quizConfig.shuffleConfig.questions = true;
+        quizConfig.shuffleConfig.answers = true;
+
         startTopicQuiz(quizConfig);
     };
 }
 
 function startTopicQuiz(quiz) {
-    const name = localStorage.getItem("current_student_name") || "Anonymous";
     startMenu.style.display = "none";
     if (quizHeader) quizHeader.style.display = "flex";
     if (quizMain) quizMain.style.display = "flex";

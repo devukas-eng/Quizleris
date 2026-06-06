@@ -6,6 +6,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quizleris</title>
+  <meta name="description" content="Quizleris - A fast, modern, and engaging quiz application." />
+  <meta name="theme-color" content="#6366f1" />
   <link rel="icon" type="image/x-icon" href="./favicon.ico">
   <!-- Link to your stylesheet (we'll create style.css next) -->
   <link rel="stylesheet" href="style.css" />
@@ -15,6 +17,8 @@
   <!-- KaTeX JS (we'll call this later from TypeScript-compiled JS) -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <!-- Canvas Confetti for Frenzy Mode -->
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- Tesseract.js for OCR -->
   <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
   <!-- Our app entrypoint (this will be built from app.ts to app.js) -->
@@ -29,6 +33,12 @@
     })();
   </script>
   <div id="app-root">
+    <!-- Global Actions (Profile, Mute) -->
+    <div id="global-actions" style="position: absolute; top: 16px; right: 16px; z-index: 1000; display: flex; gap: 8px;">
+        <button id="btn-global-mute" class="btn" style="padding: 8px 12px; font-size: 1.2rem; background: var(--panel); border: 1px solid var(--border-color); color: var(--text);" title="Toggle Mute" aria-label="Toggle Mute">🔊</button>
+        <button id="btn-global-profile" class="btn" style="padding: 8px 16px; font-weight: 700; background: linear-gradient(135deg, #6366f1, #818cf8); border: none; color: #fff;" title="Player Profile">👤 Profile</button>
+    </div>
+
     <!-- Minimal static structure; TypeScript will fill this dynamically -->
     <header class="quiz-header" style="display: none;">
       <button id="quiz-back-btn" class="btn" style="display: none; font-size: 0.9rem; padding: 6px 12px;" title="Back">
@@ -77,8 +87,8 @@
           </span>
           <!-- Undo / Redo buttons -->
           <div style="display: flex; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)">⏪</button>
-            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)">⏩</button>
+            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)" aria-label="Undo">⏪</button>
+            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)" aria-label="Redo">⏩</button>
           </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
@@ -87,7 +97,7 @@
             <select id="admin-local-selector" class="btn" style="font-size: 0.85rem; padding: 4px 10px; height: 35px; max-width: 180px; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: inherit;" title="Load Saved Quiz">
               <option value="">-- Load Saved Quiz --</option>
             </select>
-            <button id="admin-local-delete-btn" class="btn btn-danger btn-icon" style="height: 35px; padding: 0 10px; display: none;" title="Delete Selected Quiz">🗑️</button>
+            <button id="admin-local-delete-btn" class="btn btn-danger btn-icon" style="height: 35px; padding: 0 10px; display: none;" title="Delete Selected Quiz" aria-label="Delete Quiz">🗑️</button>
           </div>
           <button id="admin-btn-back" class="btn" style="font-size: 0.9rem; padding: 6px 12px;"
             data-i18n="admin.backToMenu">Back to Menu</button>

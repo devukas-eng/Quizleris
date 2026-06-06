@@ -728,71 +728,90 @@ export function showResults() {
     // In Practice mode, we show it unless explicitly disabled in the config.
     const showDetails = quiz.quiz.showDetailedResults !== false && quiz.quiz.mode !== 'exam';
     if (showDetails) {
-        const reviewList = document.createElement("div");
-        reviewList.className = "results-review-list";
-        reviewList.style.marginTop = "30px";
-        reviewList.style.textAlign = "left";
-        const h3 = document.createElement("h3");
-        h3.style.borderBottom = "2px solid var(--accent)";
-        h3.style.paddingBottom = "8px";
-        h3.textContent = t('dashboard.review');
-        reviewList.appendChild(h3);
-        results.questionResults.forEach((r, idx) => {
-            const item = document.createElement("div");
-            item.className = `result-item ${r.isCorrect ? 'correct' : (r.pendingReview ? 'pending' : 'incorrect')}`;
-            item.style.padding = "15px";
-            item.style.borderRadius = "8px";
-            item.style.marginBottom = "15px";
-            item.style.background = "rgba(255,255,255,0.03)";
-            item.style.borderLeft = `4px solid ${r.isCorrect ? 'var(--success)' : (r.pendingReview ? 'var(--accent)' : 'var(--danger)')}`;
-            const qNum = document.createElement("div");
-            qNum.style.fontWeight = "bold";
-            qNum.style.marginBottom = "5px";
-            qNum.textContent = `${t('quiz.question')} ${idx + 1}`;
-            item.appendChild(qNum);
-            const qPrompt = document.createElement("div");
-            qPrompt.style.marginBottom = "10px";
-            qPrompt.style.fontStyle = "italic";
-            qPrompt.textContent = r.questionPrompt;
-            item.appendChild(qPrompt);
-            const ansInfo = document.createElement("div");
-            ansInfo.style.fontSize = "0.9rem";
-            const strong = document.createElement("strong");
-            strong.textContent = "Atsakymas: ";
-            ansInfo.appendChild(strong);
-            appendResultAnswer(r, ansInfo);
-            item.appendChild(ansInfo);
-            if (r.pendingReview) {
-                const pend = document.createElement("div");
-                pend.style.color = "var(--accent)";
-                pend.style.fontSize = "0.8rem";
-                pend.style.marginTop = "5px";
-                pend.textContent = `⏳ ${t('quiz.pending')}`;
-                item.appendChild(pend);
-            }
-            reviewList.appendChild(item);
-        });
-        card.appendChild(reviewList);
+        buildResultsReviewList(results, card);
     }
+    
     if (isPreview) {
-        const previewInfo = document.createElement("div");
-        previewInfo.className = "preview-finished-info";
-        previewInfo.style.marginTop = "25px";
-        previewInfo.style.padding = "15px";
-        previewInfo.style.background = "rgba(251, 191, 36, 0.1)";
-        previewInfo.style.border = "1px solid var(--accent)";
-        previewInfo.style.borderRadius = "8px";
-        previewInfo.style.color = "var(--accent)";
-        previewInfo.style.fontWeight = "bold";
-        previewInfo.style.textAlign = "center";
-        previewInfo.textContent = t('quiz.previewFinished');
-        card.appendChild(previewInfo);
+        buildPreviewFinishedInfo(card);
     }
-    // Gamified XP & Rank Progression
+    
+    buildResultsRankCard(quiz, results, isPreview, card);
+    buildResultsActions(quiz, container, isPreview, card);
+    
+    clearElement(container);
+    container.appendChild(card);
+    window.renderMathInElement(container, {
+        delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }]
+    });
+}
+
+function buildResultsReviewList(results, card) {
+    const reviewList = document.createElement("div");
+    reviewList.className = "results-review-list";
+    reviewList.style.marginTop = "30px";
+    reviewList.style.textAlign = "left";
+    const h3 = document.createElement("h3");
+    h3.style.borderBottom = "2px solid var(--accent)";
+    h3.style.paddingBottom = "8px";
+    h3.textContent = t('dashboard.review');
+    reviewList.appendChild(h3);
+    results.questionResults.forEach((r, idx) => {
+        const item = document.createElement("div");
+        item.className = `result-item ${r.isCorrect ? 'correct' : (r.pendingReview ? 'pending' : 'incorrect')}`;
+        item.style.padding = "15px";
+        item.style.borderRadius = "8px";
+        item.style.marginBottom = "15px";
+        item.style.background = "rgba(255,255,255,0.03)";
+        item.style.borderLeft = `4px solid ${r.isCorrect ? 'var(--success)' : (r.pendingReview ? 'var(--accent)' : 'var(--danger)')}`;
+        const qNum = document.createElement("div");
+        qNum.style.fontWeight = "bold";
+        qNum.style.marginBottom = "5px";
+        qNum.textContent = `${t('quiz.question')} ${idx + 1}`;
+        item.appendChild(qNum);
+        const qPrompt = document.createElement("div");
+        qPrompt.style.marginBottom = "10px";
+        qPrompt.style.fontStyle = "italic";
+        qPrompt.textContent = r.questionPrompt;
+        item.appendChild(qPrompt);
+        const ansInfo = document.createElement("div");
+        ansInfo.style.fontSize = "0.9rem";
+        const strong = document.createElement("strong");
+        strong.textContent = "Atsakymas: ";
+        ansInfo.appendChild(strong);
+        appendResultAnswer(r, ansInfo);
+        item.appendChild(ansInfo);
+        if (r.pendingReview) {
+            const pend = document.createElement("div");
+            pend.style.color = "var(--accent)";
+            pend.style.fontSize = "0.8rem";
+            pend.style.marginTop = "5px";
+            pend.textContent = `⏳ ${t('quiz.pending')}`;
+            item.appendChild(pend);
+        }
+        reviewList.appendChild(item);
+    });
+    card.appendChild(reviewList);
+}
+
+function buildPreviewFinishedInfo(card) {
+    const previewInfo = document.createElement("div");
+    previewInfo.className = "preview-finished-info";
+    previewInfo.style.marginTop = "25px";
+    previewInfo.style.padding = "15px";
+    previewInfo.style.background = "rgba(251, 191, 36, 0.1)";
+    previewInfo.style.border = "1px solid var(--accent)";
+    previewInfo.style.borderRadius = "8px";
+    previewInfo.style.color = "var(--accent)";
+    previewInfo.style.fontWeight = "bold";
+    previewInfo.style.textAlign = "center";
+    previewInfo.textContent = t('quiz.previewFinished');
+    card.appendChild(previewInfo);
+}
+
+function buildResultsRankCard(quiz, results, isPreview, card) {
     const maxStreak = quiz.maxStreak || 0;
-    const accuracy = results.percentage; // 0 to 100
+    const accuracy = results.percentage;
     const score = results.score;
-    // XP Formula: (Score * 100) + (MaxStreak * 50) + (Accuracy * 5)
     const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
     
     if (!isPreview && xpEarned > 0) {
@@ -800,40 +819,19 @@ export function showResults() {
         if (leveledUp) {
             playLevelUp();
             setTimeout(() => {
-                // Show a quick visual alert or just let the sound play
-                if (window.confetti) {
-                    confetti({ particleCount: 200, spread: 100, origin: { y: 0.3 } });
-                }
+                if (window.confetti) confetti({ particleCount: 200, spread: 100, origin: { y: 0.3 } });
             }, 500);
         }
     }
 
-    // Determine rank
-    let rankTitle = t('rank.novice'); // Default
+    let rankTitle = t('rank.novice');
     let rankClass = "rank-novice";
     let rankComment = t('rank.novice.desc');
     let nextLevelXp = 300;
-    if (xpEarned >= 1500) {
-        rankTitle = t('rank.genius');
-        rankClass = "rank-genius";
-        rankComment = t('rank.genius.desc');
-        nextLevelXp = 1500;
-    } else if (xpEarned >= 1000) {
-        rankTitle = t('rank.master');
-        rankClass = "rank-master";
-        rankComment = t('rank.master.desc');
-        nextLevelXp = 1500;
-    } else if (xpEarned >= 600) {
-        rankTitle = t('rank.adept');
-        rankClass = "rank-adept";
-        rankComment = t('rank.adept.desc');
-        nextLevelXp = 1000;
-    } else if (xpEarned >= 300) {
-        rankTitle = t('rank.apprentice');
-        rankClass = "rank-apprentice";
-        rankComment = t('rank.apprentice.desc');
-        nextLevelXp = 600;
-    }
+    if (xpEarned >= 1500) { rankTitle = t('rank.genius'); rankClass = "rank-genius"; rankComment = t('rank.genius.desc'); nextLevelXp = 1500; }
+    else if (xpEarned >= 1000) { rankTitle = t('rank.master'); rankClass = "rank-master"; rankComment = t('rank.master.desc'); nextLevelXp = 1500; }
+    else if (xpEarned >= 600) { rankTitle = t('rank.adept'); rankClass = "rank-adept"; rankComment = t('rank.adept.desc'); nextLevelXp = 1000; }
+    else if (xpEarned >= 300) { rankTitle = t('rank.apprentice'); rankClass = "rank-apprentice"; rankComment = t('rank.apprentice.desc'); nextLevelXp = 600; }
 
     const rankCard = document.createElement("div");
     rankCard.className = `xp-rank-card ${rankClass}`;
@@ -882,7 +880,6 @@ export function showResults() {
     rankBadge.textContent = rankTitle;
     rankCard.appendChild(rankBadge);
 
-    // Humorous/motivational rank comment
     const rankCommentEl = document.createElement("div");
     rankCommentEl.className = "rank-comment-glow";
     rankCommentEl.style.fontSize = "1rem";
@@ -896,7 +893,6 @@ export function showResults() {
     rankCommentEl.textContent = rankComment;
     rankCard.appendChild(rankCommentEl);
 
-    // Progress bar to the next rank
     const progressContainer = document.createElement("div");
     progressContainer.style.width = "100%";
     progressContainer.style.background = "rgba(0, 0, 0, 0.2)";
@@ -916,24 +912,27 @@ export function showResults() {
 
     progressContainer.appendChild(progressBar);
     rankCard.appendChild(progressContainer);
-
     card.appendChild(rankCard);
+}
 
+function buildResultsActions(quiz, container, isPreview, card) {
     const actions = document.createElement("div");
     actions.style.marginTop = "30px";
     actions.style.display = "flex";
     actions.style.gap = "15px";
     actions.style.justifyContent = "center";
+    
     const restartBtn = document.createElement("button");
     restartBtn.id = "restart-quiz-btn";
     restartBtn.className = "btn btn-primary";
     restartBtn.textContent = t('quiz.takeAgain');
     actions.appendChild(restartBtn);
+    
     const menuBtn = document.createElement("button");
     menuBtn.id = "back-to-menu-btn";
     menuBtn.className = "btn";
     menuBtn.textContent = t('quiz.backToMenu');
-    // In preview mode, we hide the menu button to encourage closing the tab
+    
     if (isPreview) {
         menuBtn.style.display = "none";
         const closeBtn = document.createElement("button");
@@ -941,34 +940,30 @@ export function showResults() {
         closeBtn.className = "btn btn-secondary";
         closeBtn.textContent = t('admin.closePreview');
         actions.appendChild(closeBtn);
-    }
-    else {
+    } else {
         actions.appendChild(menuBtn);
     }
     card.appendChild(actions);
-    clearElement(container);
-    container.appendChild(card);
-    window.renderMathInElement(container, {
-        delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }]
-    });
-    document.getElementById("restart-quiz-btn").onclick = () => {
-        setQuiz(new QuizState(quiz.quiz));
-        container.remove();
-        questionContainer.style.display = "block";
-        answersContainer.style.display = "block";
-        statusContainer.style.display = "flex";
-        renderQuiz();
-    };
-    document.getElementById("back-to-menu-btn")?.addEventListener("click", () => {
-        window.location.href = "/";
-    });
-    if (isPreview) {
-        document.getElementById("close-preview-btn")?.addEventListener("click", () => {
-            window.close();
-            // Fallback if window.close doesn't work (most browsers allow it only for tabs they opened)
-            alert(t('quiz.previewFinished'));
+
+    setTimeout(() => {
+        document.getElementById("restart-quiz-btn").onclick = () => {
+            setQuiz(new QuizState(quiz.quiz));
+            container.remove();
+            questionContainer.style.display = "block";
+            answersContainer.style.display = "block";
+            statusContainer.style.display = "flex";
+            renderQuiz();
+        };
+        document.getElementById("back-to-menu-btn")?.addEventListener("click", () => {
+            window.location.href = "/";
         });
-    }
+        if (isPreview) {
+            document.getElementById("close-preview-btn")?.addEventListener("click", () => {
+                window.close();
+                alert(t('quiz.previewFinished'));
+            });
+        }
+    }, 0);
 }
 function appendResultAnswer(r, parent) {
     if (r.type === 'image-upload' && r.answer) {

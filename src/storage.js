@@ -514,7 +514,7 @@ export function getTopicBundles() {
                     id: "cs_js_3",
                     prompt: "What is the result of `\"5\" + 2` in JavaScript?",
                     choices: [
-                        { id: "a", text: '`\"52\"`', isCorrect: true },
+                        { id: "a", text: '`"52"`', isCorrect: true },
                         { id: "b", text: "`7`", isCorrect: false },
                         { id: "c", text: "`NaN`", isCorrect: false },
                         { id: "d", text: "`TypeError`", isCorrect: false }
@@ -1024,8 +1024,8 @@ export function getResultsByQuizId(quizId) {
 export function clearResults() {
     localStorage.removeItem(STORAGE_KEY_RESULTS);
 }
-export function getHighScores() {
-    const results = getResults();
+export function getHighScores(allResults) {
+    const results = allResults || getResults();
     const highScores = new Map();
     results.forEach(r => {
         if (!highScores.has(r.quizId) || r.score > highScores.get(r.quizId).score) {

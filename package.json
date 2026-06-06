@@ -6,12 +6,18 @@
   "scripts": {
     "vercel": "node copy-files.js",
     "build": "node copy-files.js",
-    "start": "http-server dist -o"
+    "start": "http-server dist -o",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "e1tvis",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.1",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.8"
+  }
 }

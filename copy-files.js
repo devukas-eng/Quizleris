@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
+const srcDir = path.join(__dirname, 'src');
 const distDir = path.join(__dirname, 'dist');
 
 // Files and extensions to copy
@@ -14,11 +15,11 @@ function copyFiles() {
     }
     fs.mkdirSync(distDir);
 
-    // Read root directory
-    const files = fs.readdirSync(__dirname);
+    // Read src directory
+    const files = fs.readdirSync(srcDir);
 
     files.forEach(file => {
-        const fullPath = path.join(__dirname, file);
+        const fullPath = path.join(srcDir, file);
         const stat = fs.statSync(fullPath);
 
         if (stat.isFile()) {

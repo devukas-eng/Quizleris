@@ -1,7 +1,6 @@
 import { getTopicBundles, addPlayerXP } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
-import { t } from "./lang.js";
-import { playCorrect, playWrong, playLevelUp, playClick } from "./audio.js";
+import { playCorrect, playWrong, playLevelUp } from "./audio.js";
 
 // --- Game State ---
 let lives = 3;
@@ -123,7 +122,7 @@ function loadNextQuestion() {
         
         answersHtml = `
             <div class="frenzy-answers-grid">
-                ${answers.map((a, i) => `
+                ${answers.map((a) => `
                     <button class="frenzy-ans-btn" data-correct="${a.isCorrect}">${a.text}</button>
                 `).join('')}
             </div>
@@ -183,7 +182,7 @@ function startFuse() {
     void bar.offsetWidth;
 
     // Start shrink
-    bar.style.transition = \`width \${fuseDuration}ms linear\`;
+    bar.style.transition = `width ${fuseDuration}ms linear`;
     bar.style.width = '0%';
 
     fuseStartTime = Date.now();
@@ -191,7 +190,7 @@ function startFuse() {
     
     fuseTimer = setTimeout(() => {
         if (!isAnimating) {
-            handleAnswer(false, null, true); // time ran out
+            handleAnswer(false, null); // time ran out
         }
     }, fuseDuration);
 }
@@ -204,11 +203,11 @@ function stopFuse() {
         const elapsed = Date.now() - fuseStartTime;
         const remainingPct = Math.max(0, 100 - (elapsed / fuseDuration) * 100);
         bar.style.transition = 'none';
-        bar.style.width = \`\${remainingPct}%\`;
+        bar.style.width = `${remainingPct}%`;
     }
 }
 
-function handleAnswer(isCorrect, clickedBtn, isTimeout = false) {
+function handleAnswer(isCorrect, clickedBtn) {
     isAnimating = true;
     stopFuse();
 
@@ -290,14 +289,14 @@ function updateHUD() {
     }
     
     if (multiEl) {
-        multiEl.innerText = \`\${multiplier}x\`;
+        multiEl.innerText = `${multiplier}x`;
         multiEl.className = 'frenzy-multiplier';
         if (multiplier >= 5) multiEl.classList.add('fire');
         else if (multiplier >= 3) multiEl.classList.add('hot');
     }
 
     if (streakEl) {
-        streakEl.innerText = \`Streak: \${streak}\`;
+        streakEl.innerText = `Streak: ${streak}`;
     }
 }
 
@@ -313,7 +312,7 @@ function gameOver() {
             playLevelUp();
             levelUpMsg = "<div style='color:#10b981; font-weight:800; font-size:1.5rem; margin-bottom: 20px;'>LEVEL UP! 🎉</div>";
         } else {
-            levelUpMsg = \`<div style='color:#818cf8; font-weight:700; margin-bottom: 20px;'>+\${xpEarned} XP</div>\`;
+            levelUpMsg = `<div style='color:#818cf8; font-weight:700; margin-bottom: 20px;'>+${xpEarned} XP</div>`;
         }
     }
     
@@ -334,19 +333,19 @@ function gameOver() {
     }
 
     const frenzyRoot = document.getElementById('frenzy-root');
-    frenzyRoot.innerHTML = \`
+    frenzyRoot.innerHTML = `
         <div class="frenzy-gameover-container">
             <h1 class="frenzy-go-title">GAME OVER</h1>
-            <div class="frenzy-go-score">\${score.toLocaleString()}</div>
-            \${levelUpMsg}
-            <div class="frenzy-go-subtitle">\${isNewBest ? '🎉 NEW HIGH SCORE! 🎉' : \`Best Score: \${bestScore}\`}</div>
+            <div class="frenzy-go-score">${score.toLocaleString()}</div>
+            ${levelUpMsg}
+            <div class="frenzy-go-subtitle">${isNewBest ? '🎉 NEW HIGH SCORE! 🎉' : `Best Score: ${bestScore}`}</div>
             
             <div class="frenzy-go-actions">
                 <button class="frenzy-btn-primary" id="frenzy-restart">🔄 Play Again</button>
                 <button class="frenzy-btn-secondary" id="frenzy-quit">🏠 Main Menu</button>
             </div>
         </div>
-    \`;
+    `;
 
     document.getElementById('frenzy-restart').onclick = renderFrenzyMode;
     document.getElementById('frenzy-quit').onclick = exitFrenzy;
