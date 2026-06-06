@@ -35,7 +35,7 @@ export function renderTopicsPage() {
     }
 
     topicsContainer = document.createElement("div");
-    topicsContainer.className = "topics-page-container";
+    topicsContainer.className = "topics-page-container page-transition";
     topicsContainer.style.width = "100%";
     topicsContainer.style.margin = "0 auto";
     topicsContainer.style.padding = "16px 0";

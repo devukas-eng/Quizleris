@@ -2,6 +2,7 @@ import { getRequiredElement } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { renderFrenzyMode } from "./frenzy.js";
+import { showLegalModal } from "./legal.js";
 // DOM Elements
 let startMenu;
 let quizHeader;
@@ -67,7 +68,7 @@ export function renderStartMenu() {
 
     // Inject hero layout
     startMenu.innerHTML = `
-        <div class="hero-section" style="animation: slideUpFade 0.5s cubic-bezier(0.16,1,0.3,1) both;">
+        <div class="hero-section page-transition" style="animation: slideUpFade 0.5s cubic-bezier(0.16,1,0.3,1) both;">
             <h1 class="hero-headline">${t('menu.heroHeadline')}</h1>
 
             <!-- PIN / Quiz ID entry -->
@@ -93,6 +94,10 @@ export function renderStartMenu() {
             <!-- Admin / Dashboard subtle links -->
             <div class="menu-admin-row">
                 <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">${t('menu.admin')}</button>
+            </div>
+            
+            <div style="margin-top: 32px; font-size: 0.8rem; color: var(--muted);">
+                <button id="menu-legal-btn" style="background:none;border:none;color:inherit;cursor:pointer;text-decoration:underline;">Legal & Privacy</button>
             </div>
         </div>
     `;
@@ -139,6 +144,14 @@ export function renderStartMenu() {
     if (adminBtn2) {
         adminBtn2.addEventListener('click', () => {
             try { _adminCallback(); } catch(e) { alert('Admin error: ' + e); }
+        });
+    }
+
+    // Wire legal button
+    const legalBtn = document.getElementById('menu-legal-btn');
+    if (legalBtn) {
+        legalBtn.addEventListener('click', () => {
+            showLegalModal();
         });
     }
 

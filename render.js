@@ -1,9 +1,10 @@
 import { QuizState, quiz, setQuiz } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
-import { saveResult } from "./storage.js";
+import { saveResult, addPlayerXP } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
+import { playCorrect, playWrong, playLevelUp } from "./audio.js";
 /**
  * SANITIZER: Explicitly filters and validates URLs to ensure they contain safe image data.
  * This is a critical security layer to prevent XSS via malicious data URIs or protocols.
@@ -472,12 +473,15 @@ export function onAnswer(answer) {
     if (quiz.quiz.mode !== 'exam') {
         renderQuiz(); // Redraw with feedback
         if (wasCorrect) {
+            playCorrect();
             const activeBtn = document.activeElement;
             if (activeBtn && activeBtn.classList.contains("answer-btn")) {
                 triggerCSSConfetti(activeBtn);
             } else {
                 triggerCSSConfetti(answersContainer);
             }
+        } else {
+            playWrong();
         }
     }
 }
@@ -790,6 +794,19 @@ export function showResults() {
     const score = results.score;
     // XP Formula: (Score * 100) + (MaxStreak * 50) + (Accuracy * 5)
     const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
+    
+    if (!isPreview && xpEarned > 0) {
+        const leveledUp = addPlayerXP(xpEarned);
+        if (leveledUp) {
+            playLevelUp();
+            setTimeout(() => {
+                // Show a quick visual alert or just let the sound play
+                if (window.confetti) {
+                    confetti({ particleCount: 200, spread: 100, origin: { y: 0.3 } });
+                }
+            }, 500);
+        }
+    }
 
     // Determine rank
     let rankTitle = t('rank.novice'); // Default

@@ -1,6 +1,7 @@
-import { getTopicBundles } from "./storage.js";
+import { getTopicBundles, addPlayerXP } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
+import { playCorrect, playWrong, playLevelUp, playClick } from "./audio.js";
 
 // --- Game State ---
 let lives = 3;
@@ -227,6 +228,8 @@ function handleAnswer(isCorrect, clickedBtn, isTimeout = false) {
                 colors: ['#34d399', '#10b981', '#ffffff']
             });
         }
+        
+        playCorrect(multiplier);
 
         // Logic
         streak++;
@@ -241,6 +244,8 @@ function handleAnswer(isCorrect, clickedBtn, isTimeout = false) {
         if (clickedBtn) clickedBtn.classList.add('wrong');
         container.classList.add('flash-red');
         container.classList.add('shake');
+        
+        playWrong();
         
         // Highlight correct answer if MC
         const playArea = document.getElementById('frenzy-play-area');
@@ -299,6 +304,19 @@ function updateHUD() {
 function gameOver() {
     clearTimeout(fuseTimer);
     
+    // XP Calculation
+    const xpEarned = Math.floor(score / 50); // E.g. 500 score = 10 XP
+    let levelUpMsg = "";
+    if (xpEarned > 0) {
+        const leveledUp = addPlayerXP(xpEarned);
+        if (leveledUp) {
+            playLevelUp();
+            levelUpMsg = "<div style='color:#10b981; font-weight:800; font-size:1.5rem; margin-bottom: 20px;'>LEVEL UP! 🎉</div>";
+        } else {
+            levelUpMsg = \`<div style='color:#818cf8; font-weight:700; margin-bottom: 20px;'>+\${xpEarned} XP</div>\`;
+        }
+    }
+    
     // Check High Score
     const isNewBest = score > bestScore;
     if (isNewBest) {
@@ -320,6 +338,7 @@ function gameOver() {
         <div class="frenzy-gameover-container">
             <h1 class="frenzy-go-title">GAME OVER</h1>
             <div class="frenzy-go-score">\${score.toLocaleString()}</div>
+            \${levelUpMsg}
             <div class="frenzy-go-subtitle">\${isNewBest ? '🎉 NEW HIGH SCORE! 🎉' : \`Best Score: \${bestScore}\`}</div>
             
             <div class="frenzy-go-actions">

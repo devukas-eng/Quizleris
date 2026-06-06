@@ -1,4 +1,34 @@
 import { t } from "./lang.js";
+
+// ─── Player Profile & Progression System ───
+export const STORAGE_KEY_XP = "quizleris_player_xp";
+
+export function getPlayerXP() {
+    return parseInt(localStorage.getItem(STORAGE_KEY_XP) || "0", 10);
+}
+
+export function getPlayerLevel(xp) {
+    // Basic curve: Level = 1 + floor(sqrt(XP / 100))
+    // e.g. 0 XP = Lv 1. 100 XP = Lv 2. 400 XP = Lv 3. 900 XP = Lv 4.
+    return 1 + Math.floor(Math.sqrt(Math.max(0, xp) / 100));
+}
+
+export function getXPForNextLevel(level) {
+    return Math.pow(level, 2) * 100;
+}
+
+export function addPlayerXP(amount) {
+    if (amount <= 0) return false;
+    const oldXp = getPlayerXP();
+    const oldLevel = getPlayerLevel(oldXp);
+    
+    const newXp = oldXp + amount;
+    localStorage.setItem(STORAGE_KEY_XP, newXp);
+    
+    const newLevel = getPlayerLevel(newXp);
+    return newLevel > oldLevel; // Returns true if leveled up
+}
+
 // Storage keys
 export const STORAGE_KEY_PREFIX = "quiz_";
 export const STORAGE_KEY_ALL_IDS = "quiz_all_ids";

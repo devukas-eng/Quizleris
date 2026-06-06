@@ -6,6 +6,8 @@ import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
+import { showProfileModal } from "./profile.js";
+import { toggleMute, getIsMuted } from "./audio.js";
 
 /**
  * The main application bootstrap function.
@@ -98,11 +100,30 @@ function initApp() {
             item.addEventListener('mouseleave', () => { applyTheme(currentTheme); });
         });
 
-        document.addEventListener('click', (e) => {
-            if (popupOpen && themePopup && !themePopup.contains(e.target)) closeThemePopup();
+        window.addEventListener('click', () => {
+            if (popupOpen) closeThemePopup();
         });
-
         updateThemePickerUI(currentTheme);
+
+        // --- Global Actions (Profile / Mute) ---
+        const btnProfile = document.getElementById('btn-global-profile');
+        if (btnProfile) {
+            btnProfile.addEventListener('click', () => {
+                showProfileModal();
+            });
+        }
+        
+        const btnMute = document.getElementById('btn-global-mute');
+        if (btnMute) {
+            btnMute.textContent = getIsMuted() ? '🔇' : '🔊';
+            btnMute.addEventListener('click', () => {
+                const muted = toggleMute();
+                btnMute.textContent = muted ? '🔇' : '🔊';
+            });
+        }
+
+        // --- Core App Callbacks ---
+        // Register callbacks from menu.js to setupDashboard / setupAdmin
 
         const onHome = () => renderStartMenu();
         const onAdmin = () => toggleAdminMode();
