@@ -222,7 +222,8 @@ function loadNextQuestion() {
     const isShortAnswer = q.type === 'short-answer' || (!q.choices && q.correctAnswer);
     const questionText = q.prompt || q.text || "Missing Question Text";
     
-    let answersHtml = '';
+    // Prepare answers (shuffle them)
+    let answersHtml;
     if (!isShortAnswer) {
         let answers = [];
         if (q.choices) {

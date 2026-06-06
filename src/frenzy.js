@@ -120,7 +120,7 @@ function loadNextQuestion() {
     const questionText = q.prompt || q.text || "Missing Question Text";
     
     // Prepare answers (shuffle them)
-    let answersHtml = '';
+    let answersHtml;
     if (!isShortAnswer) {
         let answers = [];
         if (q.choices) {
