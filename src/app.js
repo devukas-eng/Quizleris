@@ -105,23 +105,6 @@ function initApp() {
         });
         updateThemePickerUI(currentTheme);
 
-        // --- Global Actions (Profile / Mute) ---
-        const btnProfile = document.getElementById('btn-global-profile');
-        if (btnProfile) {
-            btnProfile.addEventListener('click', () => {
-                showProfileModal();
-            });
-        }
-        
-        const btnMute = document.getElementById('btn-global-mute');
-        if (btnMute) {
-            btnMute.textContent = getIsMuted() ? '🔇' : '🔊';
-            btnMute.addEventListener('click', () => {
-                const muted = toggleMute();
-                btnMute.textContent = muted ? '🔇' : '🔊';
-            });
-        }
-
         // --- Core App Callbacks ---
         // Register callbacks from menu.js to setupDashboard / setupAdmin
 

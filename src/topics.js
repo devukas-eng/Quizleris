@@ -1,4 +1,5 @@
 import { getTopicBundles, getHighScores } from "./storage.js";
+import { renderFrenzyMode } from "./frenzy.js";
 import { getRequiredElement } from "./dom.js";
 import { renderStartMenu } from "./menu.js";
 import { initializeQuiz } from "./render.js";
@@ -64,6 +65,38 @@ function renderTopicsContent(container) {
     ];
 
     let categoriesHtml = '';
+    
+    if (activeCategory === 'all') {
+        categoriesHtml += `
+            <div class="category-section" style="position: relative;">
+                <h2 class="category-section-title">🔥 Arcade Modes</h2>
+                <div class="bundle-row-wrapper" style="position: relative;">
+                    <div class="bundle-row wrap-row" style="scroll-behavior: smooth;">
+                        <!-- Frenzy Card -->
+                        <div class="bundle-card kahoot-card" id="card-frenzy-mode" style="cursor: pointer; border: 2px solid #ef4444; min-width: 280px; flex: 0 0 auto;">
+                            <div class="kahoot-card-header" style="background: linear-gradient(135deg, #7f1d1d, #b91c1c);">
+                                <span class="kahoot-card-icon">🔥</span>
+                                <h3 class="kahoot-card-title">Frenzy Survival</h3>
+                            </div>
+                            <div class="kahoot-card-body">
+                                <div class="kahoot-badges" style="display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;">
+                                    <span class="kahoot-badge" style="color: #ef4444; background: #ef444418; border-color: #ef444440;">🔴 Endless</span>
+                                    <span class="kahoot-badge" style="color: #ef4444; background: #ef444418; border-color: #ef444440;">⏱️ Rapid Fire</span>
+                                </div>
+                                <div class="kahoot-card-desc" style="color: var(--muted); font-size: 0.9rem; margin-top: 10px; margin-bottom: 10px;">
+                                    Survive as long as you can! Answer quickly before the fuse burns out.
+                                </div>
+                                <button id="btn-start-frenzy-topics" class="kahoot-play-btn" style="background: #ef4444; width: 100%;">
+                                    ▶ Play Frenzy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     const catsToRender = activeCategory === 'all' 
         ? categories.filter(c => c.id !== 'all') 
         : categories.filter(c => c.id === activeCategory);
@@ -161,6 +194,13 @@ function renderTopicsContent(container) {
             };
         }
     });
+
+    const frenzyBtn = document.getElementById('btn-start-frenzy-topics');
+    if (frenzyBtn) {
+        frenzyBtn.onclick = () => {
+            renderFrenzyMode();
+        };
+    }
 }
 
 function renderBundleCard(bundle) {

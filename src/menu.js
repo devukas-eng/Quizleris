@@ -72,19 +72,9 @@ export function renderStartMenu() {
                 <span>${t('menu.discover')}</span>
             </button>
 
-            <!-- Frenzy button -->
-            <button class="discover-btn" id="hero-frenzy-btn" style="background: linear-gradient(135deg,#7f1d1d,#b91c1c); border: 1.5px solid rgba(239,68,68,0.5); margin-top: 4px;">
-                <span>🔥</span>
-                <span>Frenzy Survival</span>
-            </button>
-
             <!-- Admin / Dashboard subtle links -->
             <div class="menu-admin-row">
                 <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">${t('menu.admin')}</button>
-            </div>
-            
-            <div style="margin-top: 32px; font-size: 0.8rem; color: var(--muted);">
-                <button id="menu-legal-btn" style="background:none;border:none;color:inherit;cursor:pointer;text-decoration:underline;">Legal & Privacy</button>
             </div>
         </div>
     `;
@@ -118,13 +108,7 @@ export function renderStartMenu() {
         });
     }
 
-    // Wire Frenzy button
-    const frenzyBtn = document.getElementById('hero-frenzy-btn');
-    if (frenzyBtn) {
-        frenzyBtn.addEventListener('click', () => {
-            renderFrenzyMode();
-        });
-    }
+
 
     // Wire admin button
     const adminBtn2 = document.getElementById('menu-btn-admin');
@@ -134,13 +118,7 @@ export function renderStartMenu() {
         });
     }
 
-    // Wire legal button
-    const legalBtn = document.getElementById('menu-legal-btn');
-    if (legalBtn) {
-        legalBtn.addEventListener('click', () => {
-            showLegalModal();
-        });
-    }
+
 
     // Update translations
     updatePageLanguage();
