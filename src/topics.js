@@ -92,22 +92,22 @@ function renderTopicsContent(container) {
                             </div>
                         </div>
 
-                        <!-- Ghost Racer Card -->
-                        <div class="bundle-card kahoot-card" id="card-ghost-mode" style="cursor: pointer; border: 2px solid #6366f1; min-width: 280px; flex: 0 0 auto; margin-left: 16px;">
+                        <!-- Race Mode Card -->
+                        <div class="bundle-card kahoot-card" id="card-race-mode" style="cursor: pointer; border: 2px solid #6366f1; min-width: 280px; flex: 0 0 auto; margin-left: 16px;">
                             <div class="kahoot-card-header" style="background: linear-gradient(135deg, #4f46e5, #6366f1);">
-                                <span class="kahoot-card-icon">👻</span>
-                                <h3 class="kahoot-card-title">Ghost Racer</h3>
+                                <span class="kahoot-card-icon">🏎️</span>
+                                <h3 class="kahoot-card-title">Real-Time Race</h3>
                             </div>
                             <div class="kahoot-card-body">
                                 <div class="kahoot-badges" style="display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;">
-                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">👻 Versus AI</span>
-                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">🏁 Race to 15</span>
+                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">🤖 VS Bots</span>
+                                    <span class="kahoot-badge" style="color: #6366f1; background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3);">🏁 Race to 10</span>
                                 </div>
                                 <div class="kahoot-card-desc" style="color: var(--muted); font-size: 0.9rem; margin-top: 10px; margin-bottom: 10px;">
-                                    Race against an AI ghost! First one to answer 15 questions correctly wins.
+                                    Race in real-time against 3 other opponents! First one to answer 10 questions wins.
                                 </div>
-                                <button id="btn-start-ghost-topics" class="kahoot-play-btn" style="background: #6366f1; width: 100%;">
-                                    ▶ Play Ghost
+                                <button id="btn-start-race-topics" class="kahoot-play-btn" style="background: #6366f1; width: 100%;">
+                                    ▶ Join Race
                                 </button>
                             </div>
                         </div>
@@ -115,8 +115,40 @@ function renderTopicsContent(container) {
                 </div>
             </div>
         `;
+        
+        let community = [];
+        try {
+            community = JSON.parse(localStorage.getItem("quizleris_community_quizzes") || "[]");
+        } catch(e) {}
+        
+        if (community.length > 0) {
+            categoriesHtml += `
+                <div class="category-section" style="position: relative; margin-top: 40px;">
+                    <h2 class="category-section-title" style="color: var(--accent);">🌍 Community Quizzes</h2>
+                    <div class="bundle-row-wrapper" style="position: relative;">
+                        <div class="bundle-row" style="scroll-behavior: smooth;">
+                            ${community.map(q => `
+                                <div class="bundle-card kahoot-card" style="cursor: pointer; border: 2px solid var(--accent); min-width: 250px; flex: 0 0 auto;" onclick="window.location.search = '?quiz=' + encodeURIComponent('${q.shareCode}')">
+                                    <div class="kahoot-card-header" style="background: linear-gradient(135deg, var(--accent), var(--primary));">
+                                        <h3 class="kahoot-card-title" style="font-size: 1.1rem;">${q.title}</h3>
+                                    </div>
+                                    <div class="kahoot-card-body">
+                                        <div class="kahoot-badges" style="display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap;">
+                                            <span class="kahoot-badge" style="color: var(--accent); background: rgba(0,0,0,0.2);">👤 Community</span>
+                                            <span class="kahoot-badge" style="color: var(--accent); background: rgba(0,0,0,0.2);">❓ ${q.qCount} Qs</span>
+                                        </div>
+                                        <button class="kahoot-play-btn" style="background: var(--accent); width: 100%; margin-top: 15px;">
+                                            ▶ Play
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     }
-
     const catsToRender = activeCategory === 'all' 
         ? categories.filter(c => c.id !== 'all') 
         : categories.filter(c => c.id === activeCategory);
@@ -222,10 +254,10 @@ function renderTopicsContent(container) {
         };
     }
 
-    const ghostBtn = document.getElementById('btn-start-ghost-topics');
-    if (ghostBtn) {
-        ghostBtn.onclick = () => {
-            import("./ghost.js").then(m => m.renderGhostRacerMode());
+    const raceBtn = document.getElementById('btn-start-race-topics');
+    if (raceBtn) {
+        raceBtn.onclick = () => {
+            import("./race.js").then(m => m.renderRaceMode());
         };
     }
 }

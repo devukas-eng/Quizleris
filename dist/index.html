@@ -121,6 +121,13 @@
             <input type="text" id="admin-quiz-title" class="input-field"
               data-i18n-placeholder="admin.quizTitlePlaceholder" placeholder="My Math Quiz" />
           </label>
+          <label style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+            <span>Visibility:</span>
+            <select id="admin-quiz-visibility" class="input-field" style="max-width: 200px;">
+                <option value="private">Private (Deletes in 45 days)</option>
+                <option value="public">Public (Community Quizzes)</option>
+            </select>
+          </label>
           <div
             style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
             <div style="flex: 1;">

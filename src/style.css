@@ -3002,18 +3002,16 @@ body.admin-mode-active #language-toggle-container {
     background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px);
 }
 .frenzy-go-title {
-    font-size: 5rem; font-weight: 900; color: var(--accent); margin: 0;
-    text-shadow: 0 0 40px var(--accent); letter-spacing: 2px;
+    font-size: 5rem; font-weight: 900; color: var(--accent, #ef4444); margin: 0;
+    text-shadow: 0 0 40px var(--accent, #ef4444); letter-spacing: 2px;
 }
 .frenzy-go-score {
     font-size: 8rem; font-weight: 900; line-height: 1;
-    background: linear-gradient(135deg, var(--accent), var(--primary));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 10px 30px var(--accent));
+    background-clip: text; color: var(--accent, #fbbf24);
     margin: 20px 0;
 }
 .frenzy-go-subtitle {
-    font-size: 1.5rem; font-weight: 700; color: var(--muted); margin-bottom: 48px;
+    font-size: 1.5rem; font-weight: 700; color: var(--muted, #94a3b8); margin-bottom: 48px;
 }
 .frenzy-go-actions { display: flex; gap: 16px; }
 .frenzy-btn-primary {
@@ -3197,18 +3195,16 @@ body.admin-mode-active #language-toggle-container {
     background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(10px);
 }
 .frenzy-go-title {
-    font-size: 5rem; font-weight: 900; color: #ef4444; margin: 0;
-    text-shadow: 0 0 40px rgba(239, 68, 68, 0.6); letter-spacing: 2px;
+    font-size: 5rem; font-weight: 900; color: var(--accent, #ef4444); margin: 0;
+    text-shadow: 0 0 40px var(--accent, #ef4444); letter-spacing: 2px;
 }
 .frenzy-go-score {
     font-size: 8rem; font-weight: 900; line-height: 1;
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 10px 30px rgba(245, 158, 11, 0.4));
+    background-clip: text; color: var(--accent, #fbbf24);
     margin: 20px 0;
 }
 .frenzy-go-subtitle {
-    font-size: 1.5rem; font-weight: 700; color: #94a3b8; margin-bottom: 48px;
+    font-size: 1.5rem; font-weight: 700; color: var(--muted, #94a3b8); margin-bottom: 48px;
 }
 .frenzy-go-actions { display: flex; gap: 16px; }
 .frenzy-btn-primary {
