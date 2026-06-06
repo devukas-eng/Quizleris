@@ -115,9 +115,20 @@ function loadNextQuestion() {
     const playArea = document.getElementById('frenzy-play-area');
     
     // Prepare answers (shuffle them)
+    // Normalize question object to support different formats
+    const isShortAnswer = q.type === 'short-answer' || (!q.choices && q.correctAnswer);
+    const questionText = q.prompt || q.text || "Missing Question Text";
+    
+    // Prepare answers (shuffle them)
     let answersHtml = '';
-    if (q.type === 'multiple-choice' || q.type === 'true-false') {
-        const answers = [...q.options].map((text, i) => ({ text, isCorrect: i === q.correctIndex }));
+    if (!isShortAnswer) {
+        let answers = [];
+        if (q.choices) {
+            answers = [...q.choices].map(c => ({ text: c.text, isCorrect: c.isCorrect }));
+        } else if (q.options) {
+            answers = [...q.options].map((text, i) => ({ text, isCorrect: i === q.correctIndex }));
+        }
+        
         answers.sort(() => Math.random() - 0.5);
         
         answersHtml = `
@@ -127,7 +138,7 @@ function loadNextQuestion() {
                 `).join('')}
             </div>
         `;
-    } else if (q.type === 'short-answer') {
+    } else {
         answersHtml = `
             <div class="frenzy-short-ans">
                 <input type="text" id="frenzy-sa-input" placeholder="Type your answer..." autocomplete="off">
@@ -138,12 +149,12 @@ function loadNextQuestion() {
 
     playArea.innerHTML = `
         <div class="frenzy-topic-badge">${q._topicName}</div>
-        <div class="frenzy-question-text">${q.text}</div>
+        <div class="frenzy-question-text">${questionText}</div>
         ${answersHtml}
     `;
 
     // Attach listeners
-    if (q.type === 'short-answer') {
+    if (isShortAnswer) {
         const submitBtn = document.getElementById('frenzy-sa-submit');
         const input = document.getElementById('frenzy-sa-input');
         input.focus();
