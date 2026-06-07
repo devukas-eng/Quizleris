@@ -63,14 +63,14 @@ export function getCurrentUser() {
 }
 
 function updateMenuAuthButton() {
-    const btn = document.getElementById("menu-auth-btn");
+    const btn = document.getElementById("nav-auth-btn");
     if (!btn) return;
     
     if (currentUser) {
         btn.textContent = currentUser.role === "owner" ? "Owner Dashboard" : "Teacher Dashboard";
         btn.onclick = () => {
             // Trigger Dashboard Open Event
-            document.dispatchEvent(new CustomEvent("open-dashboard"));
+            document.dispatchEvent(new window.CustomEvent("open-dashboard"));
         };
     } else {
         btn.textContent = "Prisijungti";

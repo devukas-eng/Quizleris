@@ -17,7 +17,7 @@ import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent
 function initApp() {
     try {
         // Initialize analytics & error tracking early
-        initAnalytics();
+        initAnalytics();\n        initAuthUI();\n        initDashboardUI();
 
         // Initialize language system first
         initLanguage();
@@ -112,6 +112,7 @@ function initApp() {
         const onAdmin = () => toggleAdminMode();
         // 1. Setup Dashboard (needs onHome)
         setupDashboard({ onHome });
+        document.addEventListener("open-editor", () => { toggleAdminMode(); });
         // 2. Setup Menu (needs onAdmin only)
         setupMenu({ onAdmin });
         // 3. Setup Admin (needs onHome)

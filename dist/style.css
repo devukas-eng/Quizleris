@@ -493,34 +493,53 @@ body {
 
 .admin-choice-item input[type="radio"],
 .admin-choice-item input[type="checkbox"] {
-    appearance: auto;
-    -webkit-appearance: radio;
-    width: auto;
-    height: auto;
-    border: none;
-    /* Reset any custom borders */
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 50%;
     outline: none;
     background: transparent;
     cursor: pointer;
     margin: 0;
-    accent-color: var(--accent);
-    /* Native green dot/checkmark */
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
 }
 
-/* Ensure no custom outlines interfere */
+.admin-choice-item input[type="checkbox"] {
+    border-radius: 4px;
+}
+
 .admin-choice-item input[type="radio"]:checked,
 .admin-choice-item input[type="checkbox"]:checked {
-    outline: none;
-    box-shadow: none;
+    border-color: var(--accent);
 }
 
-/* Remove any custom pseudo-elements from previous attempts */
-.admin-choice-item input[type="radio"]::before,
-.admin-choice-item input[type="radio"]:checked::before,
-.admin-choice-item input[type="checkbox"]::before,
-.admin-choice-item input[type="checkbox"]:checked::before {
-    display: none;
-    content: none;
+.admin-choice-item input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background-color: var(--accent);
+    border-radius: 50%;
+}
+
+.admin-choice-item input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(45deg);
+    width: 5px;
+    height: 10px;
+    border: solid var(--accent);
+    border-width: 0 2px 2px 0;
 }
 
 /* Answer Image Upload Button - Compact Pill Style */
@@ -3422,28 +3441,26 @@ body.admin-mode-active #language-toggle-container {
 /* Floating Math Editor */
 .floating-math-editor {
   position: fixed;
-  bottom: 0;
+  top: 100px;
   right: 20px;
   width: 380px;
   max-width: 90vw;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-bottom: none;
-  border-radius: 12px 12px 0 0;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 9999;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
 }
 
-.floating-math-editor.collapsed {
-  transform: translateY(calc(100% - 46px));
+.floating-math-editor.collapsed .palette-content-wrapper {
+  display: none;
 }
 
 .math-editor-header {
   padding: 12px 18px;
-  cursor: pointer;
+  cursor: move;
   font-weight: bold;
   color: var(--text);
   display: flex;
@@ -3455,14 +3472,36 @@ body.admin-mode-active #language-toggle-container {
   border-radius: 12px 12px 0 0;
 }
 
+.floating-math-editor.collapsed .math-editor-header {
+  border-radius: 12px;
+  border-bottom: none;
+}
+
 .math-editor-header:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
 .math-editor-chevron {
   transition: transform 0.3s ease;
+  cursor: pointer;
 }
 
 .floating-math-editor.collapsed .math-editor-chevron {
   transform: rotate(180deg);
+}
+
+/* MathLive Overrides */
+math-field {
+  --contains-highlight-background-color: transparent !important;
+  --selection-background-color: rgba(99, 102, 241, 0.3) !important;
+  --selection-color: var(--text) !important;
+}
+
+math-field:focus, math-field:focus-within {
+  background-color: var(--bg-input) !important;
+}
+
+/* Hide MathLive virtual keyboard action toolbar (Cut/Copy/Paste) */
+math-virtual-keyboard::part(action-toolbar) {
+  display: none !important;
 }

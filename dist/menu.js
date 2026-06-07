@@ -71,11 +71,6 @@ export function renderStartMenu() {
                 <span>🔍</span>
                 <span>${t('menu.discover')}</span>
             </button>
-
-            <!-- Admin / Dashboard subtle links -->
-            <div class="menu-admin-row">
-                <button id="menu-btn-admin" class="btn" style="font-size:0.82rem; padding:6px 14px; opacity:0.7;" data-i18n="menu.admin">${t('menu.admin')}</button>
-            </div>
         </div>
     `;
 
@@ -110,13 +105,7 @@ export function renderStartMenu() {
 
 
 
-    // Wire admin button
-    const adminBtn2 = document.getElementById('menu-btn-admin');
-    if (adminBtn2) {
-        adminBtn2.addEventListener('click', () => {
-            try { _adminCallback(); } catch(e) { alert('Admin error: ' + e); }
-        });
-    }
+    // (Admin button was removed)
 
 
 

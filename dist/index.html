@@ -11,6 +11,10 @@
   <link rel="icon" type="image/x-icon" href="./favicon.ico">
   <!-- Link to your stylesheet (we'll create style.css next) -->
   <link rel="stylesheet" href="style.css" />
+  
+  <!-- DOMPurify for HTML sanitization (CodeQL fixes) -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+  
   <!-- KaTeX CSS for LaTeX rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <link rel="stylesheet" href="style.css?v=0.5.0">
@@ -41,6 +45,7 @@
         ← <span data-i18n="quiz.backBtn">Back</span>
       </button>
       <div style="flex: 1;"></div>
+      <button id="quiz-mute-btn" class="btn btn-icon" style="font-size: 1.2rem; background: transparent; border: none; padding: 4px; margin-right: 10px;" title="Toggle Mute">🔊</button>
       <button id="admin-toggle" class="btn" style="display: none;" data-i18n="admin.adminMode">Admin Mode</button>
     </header>
     <section id="start-menu" class="start-menu">
@@ -73,8 +78,8 @@
     </section>
     <!-- Admin panel (hidden by default) -->
     <section id="admin-panel" class="admin-panel" style="display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
-        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; flex: 1;">
           <h2 style="margin: 0;" data-i18n="admin.title">Create/Edit Quiz</h2>
           <!-- Auto-Save Status Badge -->
           <span id="admin-draft-status" style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s ease;">
@@ -83,11 +88,9 @@
           </span>
           <!-- Undo / Redo buttons -->
           <div style="display: flex; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)" aria-label="Undo">⏪</button>
-            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)" aria-label="Redo">⏩</button>
+            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
           </div>
-        </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
           <!-- Local Quiz Selector -->
           <div style="display: flex; align-items: center; gap: 8px;">
             <select id="admin-local-selector" class="btn" style="font-size: 0.85rem; padding: 4px 10px; height: 35px; max-width: 180px; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: inherit;" title="Load Saved Quiz">
@@ -95,9 +98,9 @@
             </select>
             <button id="admin-local-delete-btn" class="btn btn-danger btn-icon" style="height: 35px; padding: 0 10px; display: none;" title="Delete Selected Quiz" aria-label="Delete Quiz">🗑️</button>
           </div>
-          <button id="admin-btn-back" class="btn" style="font-size: 0.9rem; padding: 6px 12px;"
-            data-i18n="admin.backToMenu">Back to Menu</button>
         </div>
+        <button id="admin-btn-back" class="btn" style="font-size: 0.9rem; padding: 6px 12px; height: 35px;"
+            data-i18n="admin.backToMenu">Back to Menu</button>
       </div>
       <div class="admin-form">
           <!-- Unsaved Draft Recovery Banner -->
@@ -376,12 +379,12 @@
   </div>
 
   <!-- Legal Footer (rendered inside #app-root bottom by JS, but declared here) -->
-<div class="floating-math-editor collapsed" id="admin-math-editor-toggle">
+<div class="floating-math-editor collapsed" id="admin-math-editor-toggle" style="display: none;">
             <div class="math-editor-header" id="math-editor-header">
               <span>📐 Math Editor / LaTeX</span>
               <span class="math-editor-chevron">▲</span>
             </div>
-            <div style="padding: 0 18px 18px 18px; display: flex; gap: 15px; flex-wrap: wrap;">
+            <div style="padding: 0 18px 18px 18px; display: flex; gap: 15px; flex-wrap: wrap;" class="palette-content-wrapper">
               <!-- LaTeX Math Quick-Click Symbol Palette -->
               <div id="admin-latex-palette" style="flex: 2; min-width: 300px;">
                 <h3 class="palette-title" style="margin: 0 0 12px 0; font-size: 1.1rem; font-weight: bold; color: var(--accent);" data-i18n="admin.latexPaletteTitle">LaTeX & Simboliai</h3>
@@ -457,6 +460,9 @@
                   <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Alt+N</kbd> <span data-i18n="admin.shortcutNew" style="opacity: 0.85; margin-left: 4px;">Naujas kl.</span></li>
                   <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+M</kbd> <span data-i18n="admin.shortcutWrap" style="opacity: 0.85; margin-left: 4px;">LaTeX apgaub.</span></li>
                   <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+Z</kbd> / <kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Y</kbd> <span data-i18n="admin.shortcutUndoRedo" style="opacity: 0.85; margin-left: 4px;">Atšaukti/Grąžinti</span></li>
+                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Shift</kbd> <span style="opacity: 0.85; margin-left: 4px;">Keičia simbolius (Klaviatūroje)</span></li>
+                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+C/V</kbd> <span style="opacity: 0.85; margin-left: 4px;">Kopijuoti/Įklijuoti</span></li>
+                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+A</kbd> <span style="opacity: 0.85; margin-left: 4px;">Pasirinkti viską</span></li>
                 </ul>
               </div>
             </div>

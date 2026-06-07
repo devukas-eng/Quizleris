@@ -52,7 +52,13 @@ export function initDashboardUI() {
         } else {
             body.innerHTML = "<p>Kraunama...</p>";
             const quizzes = await getTeacherQuizzes(user.uid);
-            let html = `<h3>Mano Testai</h3>`;
+            let html = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0;">Mano Testai</h3>
+                    <button id="dashboard-create-btn" class="btn btn-primary">Sukurti naują testą</button>
+                </div>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;" />
+            `;
             if (quizzes.length === 0) {
                 html += `<p>Jūs dar neturite sukurtų testų.</p>`;
             } else {
@@ -74,6 +80,15 @@ export function initDashboardUI() {
                 html += `</div>`;
             }
             body.innerHTML = html;
+            
+            // Wire events
+            const createBtn = document.getElementById("dashboard-create-btn");
+            if (createBtn) {
+                createBtn.addEventListener("click", () => {
+                    dashboardModal.style.display = "none";
+                    document.dispatchEvent(new window.CustomEvent("open-editor"));
+                });
+            }
         }
     });
 }
