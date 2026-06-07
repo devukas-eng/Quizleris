@@ -19,8 +19,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
   <!-- Canvas Confetti for Frenzy Mode -->
   <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <!-- Tesseract.js for OCR -->
-  <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
+  <!-- Canvas Confetti for Frenzy Mode -->
   <!-- Our app entrypoint (this will be built from app.ts to app.js) -->
   <script type="module" src="app.js?v=0.5.0"></script>
 </head>
@@ -118,8 +117,8 @@
           <label style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
             <span>Visibility:</span>
             <select id="admin-quiz-visibility" class="input-field" style="max-width: 200px;">
-                <option value="private">Private (Deletes in 45 days)</option>
-                <option value="public">Public (Community Quizzes)</option>
+                <option value="private">Private (Ištrinama po 45 dienų / Deletes in 45 days)</option>
+                <option value="public">Public (Bendruomenės Testai / Community Quizzes)</option>
             </select>
           </label>
           <div
@@ -280,9 +279,7 @@
           <div id="admin-questions-list"></div>
           <div class="admin-question-actions">
             <button id="admin-add-question" class="btn" data-i18n="admin.addQuestion">+ Add Question</button>
-            <button id="admin-scan-question" class="btn" data-i18n="admin.scanQuestion">📷 Scan Question (OCR)</button>
             <button id="admin-bulk-import-btn" class="btn" data-i18n="admin.bulkImport">📝 Bulk Import</button>
-            <input type="file" id="admin-ocr-input" accept="image/*" style="display: none;" />
           </div>
           <div class="admin-actions">
             <button id="admin-save" class="btn btn-primary" data-i18n="admin.saveQuiz">Save Quiz</button>

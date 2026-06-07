@@ -883,23 +883,7 @@ function previewQuiz() {
   const previewUrl = `${base}?quiz=${shareCode}&preview=true`;
   window.open(previewUrl, "_blank");
 }
-async function handleOCRUpload(event) {
-  const file = event.target.files?.[0];
-  if (!file || !adminQuiz) return;
-  adminScanQuestionBtn.textContent = "Processing...";
-  try {
-    const result = await processOCRImage(file);
-    if (result) {
-      saveStateForUndo();
-      adminQuiz.questions.push({ id: `q${adminQuiz.questions.length + 1}`, prompt: result.prompt, choices: result.choices.map((t2, i) => ({ id: String.fromCharCode(97 + i), text: t2, isCorrect: i === 0 })) });
-      renderAdminForm();
-    }
-  } catch {
-    alert("OCR failed");
-  } finally {
-    adminScanQuestionBtn.textContent = t("admin.scanOCR");
-  }
-}
+
 
 function setupAdminEventsInternal() {
   adminToggle.addEventListener("click", toggleAdminMode);
