@@ -667,7 +667,7 @@ function renderQuestionConfig(q, qIdx) {
             <div class="admin-choice-item" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;">
                 <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin-top: 12px;" />
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                    <math-field class="admin-choice-text" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${unwrapMath(choice.text)}</math-field>
+                    <math-field class="admin-choice-text" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.3rem; background: var(--bg-input); color: var(--text);">${unwrapMath(choice.text)}</math-field>
                     
                 </div>
                 
@@ -1454,15 +1454,39 @@ function checkAndPromptDraft() {
   
   try {
     const draft = JSON.parse(draftStr);
-    if (!draft || !draft.questions || draft.questions.length === 0) {
+    
+    // Check if the draft is effectively just a blank default quiz
+    let isDraftEmpty = true;
+    if (draft) {
+      const defaultTitle1 = t("admin.newQuiz") || "New Quiz";
+      const titleChanged = draft.title && draft.title.trim() !== "" && draft.title !== defaultTitle1 && draft.title !== "New Quiz" && draft.title !== "Naujas testas";
+      const descChanged = draft.description && draft.description.trim() !== "";
+      
+      let hasContent = false;
+      if (draft.questions && draft.questions.length > 0) {
+        hasContent = draft.questions.some(q => {
+          if (q.prompt && q.prompt.trim() !== "") return true;
+          if (q.image && q.image.trim() !== "") return true;
+          if (q.choices && q.choices.some(c => (c.text && c.text.trim() !== "") || (c.image && c.image.trim() !== ""))) return true;
+          return false;
+        });
+      }
+      
+      if (titleChanged || descChanged || hasContent) {
+        isDraftEmpty = false;
+      }
+    }
+    
+    if (!draft || isDraftEmpty) {
       if (adminDraftBanner) adminDraftBanner.style.display = "none";
       return;
     }
     
-    const currentQuizStr = JSON.stringify(adminQuiz);
-    const draftQuizStr = JSON.stringify(draft);
+    // Ignore ID differences when comparing draft to current quiz
+    const currentQuizCopy = adminQuiz ? { ...adminQuiz, id: "" } : null;
+    const draftCopy = { ...draft, id: "" };
     
-    if (currentQuizStr !== draftQuizStr) {
+    if (JSON.stringify(currentQuizCopy) !== JSON.stringify(draftCopy)) {
       if (adminDraftBanner) {
         adminDraftBanner.style.display = "flex";
         if (adminDraftBannerText) {

@@ -14,6 +14,7 @@ export class QuizState {
         this.userAnswers = new Map();
         this.questionStartTimes = new Map();
         this.questionDurations = new Map();
+        this.questionScores = new Map();
         this.quiz = quiz;
         // Perform a deep clone to safely shuffle without affecting the original quiz template.
         this.shuffledQuestions = JSON.parse(JSON.stringify(quiz.questions));
@@ -68,7 +69,22 @@ export class QuizState {
         if (this.quiz.mode !== 'exam') {
             this.hasAnswered = true;
             if (grading.isCorrect) {
-                this.score += 1;
+                // Dynamic Scoring Calculation
+                const timeTakenSec = (this.questionDurations.get(targetQ.id) || 0) / 1000;
+                // Base limit 30s if not specified globally or on question
+                const limit = targetQ.timeLimit || this.quiz.timeLimitSeconds || 30;
+                
+                // Speed calculation: 1000 base, drops to 500 over the time limit
+                const timeRatio = Math.min(Math.max(timeTakenSec / limit, 0), 1);
+                const speedScore = Math.round(1000 - (500 * timeRatio));
+                
+                // Multiplier: 1x to 5x based on current streak
+                const multiplier = Math.min((this.streak || 0) + 1, 5);
+                const points = speedScore * multiplier;
+                
+                this.questionScores.set(targetQ.id, points);
+                this.score += points;
+                
                 this.streak += 1;
                 if (this.streak > this.maxStreak) {
                     this.maxStreak = this.streak;
@@ -165,12 +181,24 @@ export class QuizState {
      */
     getResults() {
         let finalScore = 0;
+        let correctCount = 0;
         const totalQuestions = this.shuffledQuestions.length;
         const results = this.shuffledQuestions.map(q => {
             const answer = this.userAnswers.get(q.id);
             const grading = this.gradeQuestion(q, answer);
-            if (grading.isCorrect)
-                finalScore++;
+            
+            let pts = 0;
+            if (grading.isCorrect) {
+                correctCount++;
+                if (this.quiz.mode === 'exam') {
+                    // Exam mode is flat points
+                    pts = 1000; 
+                } else {
+                    pts = this.questionScores.get(q.id) || 0;
+                }
+                finalScore += pts;
+            }
+            
             return {
                 questionId: q.id,
                 questionPrompt: q.prompt,
@@ -178,13 +206,23 @@ export class QuizState {
                 answer: answer,
                 isCorrect: grading.isCorrect,
                 pendingReview: grading.pendingReview,
+                points: pts,
                 timeSpent: this.questionDurations.get(q.id) || 0
             };
         });
+        
+        // Add final bonus for hearts if in practice mode
+        if (this.quiz.mode !== 'exam') {
+            const heartsRemaining = window.quizHearts !== undefined ? window.quizHearts : 0;
+            const heartsBonus = heartsRemaining * 500;
+            finalScore += heartsBonus;
+        }
+
         return {
             score: finalScore,
+            correctCount: correctCount,
             total: totalQuestions,
-            percentage: totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0,
+            percentage: totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0,
             totalTime: this.totalTime,
             questionResults: results,
         };

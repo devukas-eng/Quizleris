@@ -38,7 +38,7 @@ function getSessionId() {
     if (sessionId) return sessionId;
     let sid = sessionStorage.getItem(SESSION_KEY);
     if (!sid) {
-        sid = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        sid = `s_${Date.now()}_${crypto.randomUUID().split('-')[0]}`;
         sessionStorage.setItem(SESSION_KEY, sid);
     }
     sessionId = sid;

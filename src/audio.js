@@ -67,9 +67,8 @@ export function playCorrect(multiplier = 1) {
 }
 
 export function playWrong() {
-    // Harsh, dissonant low buzzer
-    playTone(150, 'sawtooth', 0.3, 0.1, 100);
-    playTone(155, 'square', 0.3, 0.1, 105);
+    // Soft but disappointing descending tone
+    playTone(200, 'triangle', 0.4, 0.08, 150);
 }
 
 export function playLevelUp() {

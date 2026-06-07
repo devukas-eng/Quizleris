@@ -4,7 +4,19 @@ import { startTimer, clearTimer } from "./timer.js";
 import { saveResult, addPlayerXP } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
-import { playCorrect, playWrong, playLevelUp } from "./audio.js";
+import { playCorrect, playWrong, playLevelUp, toggleMute, getIsMuted } from "./audio.js";
+
+// Setup Mute Button
+document.addEventListener("DOMContentLoaded", () => {
+    const muteBtn = document.getElementById("quiz-mute-btn");
+    if (muteBtn) {
+        muteBtn.textContent = getIsMuted() ? "🔇" : "🔊";
+        muteBtn.addEventListener("click", () => {
+            const muted = toggleMute();
+            muteBtn.textContent = muted ? "🔇" : "🔊";
+        });
+    }
+});
 /**
  * SANITIZER: Explicitly filters and validates URLs to ensure they contain safe image data.
  * This is a critical security layer to prevent XSS via malicious data URIs or protocols.
@@ -678,6 +690,9 @@ export function showResults() {
     const isPreview = params.get("preview") === "true";
     const results = quiz.getResults();
     const studentName = localStorage.getItem("current_student_name") || "Anonymous";
+    const timeSpentSec = results.totalTime / 1000;
+    const avgSpeed = results.total > 0 ? (timeSpentSec / results.total).toFixed(1) : 0;
+    
     saveResult({
         name: studentName,
         quizId: quiz.quiz.id,
@@ -685,6 +700,9 @@ export function showResults() {
         score: results.score,
         maxScore: results.total,
         date: new Date().toISOString(),
+        heartsLeft: window.quizHearts !== undefined ? window.quizHearts : 0,
+        avgSpeed: avgSpeed,
+        mode: quiz.quiz.mode || 'practice',
         details: results.questionResults
     });
     // Clean UI
@@ -714,15 +732,41 @@ export function showResults() {
     percentDiv.textContent = `${results.percentage}%`;
     const ratioDiv = document.createElement("div");
     ratioDiv.className = "small-ratio";
-    ratioDiv.textContent = `${results.score} / ${results.total}`;
+    ratioDiv.textContent = `${results.correctCount} / ${results.total}`;
+    
+    const pointsDiv = document.createElement("div");
+    pointsDiv.className = "total-points";
+    pointsDiv.style.fontSize = "1.2rem";
+    pointsDiv.style.fontWeight = "bold";
+    pointsDiv.style.color = "var(--primary-light)";
+    pointsDiv.style.marginTop = "5px";
+    pointsDiv.textContent = `${results.score} PTS`;
+    
     scoreDiv.appendChild(percentDiv);
     scoreDiv.appendChild(ratioDiv);
+    scoreDiv.appendChild(pointsDiv);
     card.appendChild(scoreDiv);
     const statsDiv = document.createElement("div");
     statsDiv.className = "final-stats";
     const timeSpan = document.createElement("span");
-    timeSpan.textContent = `⏱ ${timeMin}:${timeSec.toString().padStart(2, '0')}`;
+    timeSpan.textContent = `⏱️ ${timeMin}:${timeSec.toString().padStart(2, '0')}`;
+    
+    const timeSpentSecVal = results.totalTime / 1000;
+    const avgSpeedVal = results.total > 0 ? (timeSpentSecVal / results.total).toFixed(1) : 0;
+    const speedSpan = document.createElement("span");
+    speedSpan.style.marginLeft = "15px";
+    speedSpan.textContent = `⚡ ${avgSpeedVal}s / q`;
+    
+    const heartsRemaining = window.quizHearts !== undefined ? window.quizHearts : 0;
+    const heartsSpan = document.createElement("span");
+    heartsSpan.style.marginLeft = "15px";
+    heartsSpan.textContent = `❤️ ${heartsRemaining}`;
+
     statsDiv.appendChild(timeSpan);
+    if (quiz.quiz.mode !== 'exam') {
+        statsDiv.appendChild(speedSpan);
+        statsDiv.appendChild(heartsSpan);
+    }
     card.appendChild(statsDiv);
     // In Exam mode, we hide the detailed per-question review to maintain integrity.
     // In Practice mode, we show it unless explicitly disabled in the config.
@@ -811,7 +855,7 @@ function buildPreviewFinishedInfo(card) {
 function buildResultsRankCard(quiz, results, isPreview, card) {
     const maxStreak = quiz.maxStreak || 0;
     const accuracy = results.percentage;
-    const score = results.score;
+    const score = results.correctCount || 0;
     const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
     
     if (!isPreview && xpEarned > 0) {
