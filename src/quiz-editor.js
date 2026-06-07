@@ -15,8 +15,6 @@ let adminQuizTitle;
 let adminQuizVisibility;
 let adminQuestionsList;
 let adminAddQuestionBtn;
-let adminScanQuestionBtn;
-let adminOcrInput;
 let adminSaveBtn;
 let adminPreviewBtn;
 let adminExportBtn;
@@ -86,8 +84,6 @@ function setupAdmin(callbacks) {
   adminQuizVisibility = getRequiredElement("admin-quiz-visibility");
   adminQuestionsList = getRequiredElement("admin-questions-list");
   adminAddQuestionBtn = getRequiredElement("admin-add-question");
-  adminScanQuestionBtn = getRequiredElement("admin-scan-question");
-  adminOcrInput = getRequiredElement("admin-ocr-input");
   adminSaveBtn = getRequiredElement("admin-save");
   adminPreviewBtn = getRequiredElement("admin-preview");
   adminExportBtn = getRequiredElement("admin-export");
