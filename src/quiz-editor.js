@@ -261,14 +261,10 @@ function renderAdminForm() {
 
         <label>
           ${t("admin.promptLabel")}
-          <textarea class="admin-question-prompt" data-qidx="${qIdx}">${q.prompt || ""}</textarea>
+          <math-field class="admin-question-prompt" math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" style="width: 100%; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${q.prompt || ""}</math-field>
         </label>
 
-        <!-- Real-Time LaTeX/Text Preview -->
-        <div class="live-preview-container" id="live-preview-${qIdx}" style="margin: 10px 0 15px 0; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15);">
-          <small style="color: var(--accent); font-weight: bold; display: block; margin-bottom: 4px; font-size: 0.8rem;">${t('admin.livePreview') || 'Live Preview'}</small>
-          <div class="live-preview-content" style="color: white; min-height: 20px; font-size: 1rem; white-space: pre-wrap;"></div>
-        </div>
+        
         
         <div class="admin-q-config-area" data-qidx="${qIdx}">
           ${renderQuestionConfig(q, qIdx)}
@@ -667,9 +663,8 @@ function renderQuestionConfig(q, qIdx) {
             <div class="admin-choice-item" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;">
                 <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin-top: 12px;" />
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                    <input type="text" class="admin-choice-text" data-qidx="${qIdx}" data-cidx="${cIdx}" value="${choice.text || ""}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px;" />
-                    <!-- Real-time mathematical choice-level preview -->
-                    <div class="choice-live-preview" id="choice-preview-${qIdx}-${cIdx}" style="display: ${choice.text ? "inline-block" : "none"};"></div>
+                    <math-field class="admin-choice-text" math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${choice.text || ""}</math-field>
+                    
                 </div>
                 
                 ${choice.image ? `
@@ -988,7 +983,7 @@ function setupAdminEventsInternal() {
   if (adminPanel) {
     adminPanel.addEventListener("focusin", (e) => {
       const target = e.target;
-      if (target && target.matches("input, textarea, select")) {
+      if (target && target.matches("input, textarea, select, math-field")) {
         saveStateForUndo();
       }
     }, { capture: true });
@@ -1024,7 +1019,7 @@ function setupAdminEventsInternal() {
   // Track last active input field (excluding sidebar elements)
   const trackActiveField = (e) => {
     const target = e.target;
-    if (target && target.closest("#admin-panel") && !target.closest(".admin-sidebar-column") && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+    if (target && target.closest("#admin-panel") && !target.closest(".admin-sidebar-column") && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "MATH-FIELD")) {
       lastActiveInputField = target;
     }
   };
