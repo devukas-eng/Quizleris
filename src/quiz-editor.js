@@ -7,6 +7,10 @@ import { exportQuizForSharing } from "./admin-export.js";
 import { parseBulkImportText } from "./admin-import.js";
 import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
+
+// Function to unwrap latex
+const unwrapMath = (str) => (str || "").replace(/^\\\(/, "").replace(/\\\)$/, "");
+
 let adminMode = false;
 let adminQuiz = null;
 let adminToggle;
@@ -168,8 +172,6 @@ function toggleAdminMode() {
 function renderAdminForm() {
   if (!adminQuiz) return;
   const focusState = captureFocusAndScroll();
-  // Function to unwrap latex
-  const unwrapMath = (str) => (str || "").replace(/^\\\(/, "").replace(/\\\)$/, "");
   adminQuizTitle.value = adminQuiz.title;
   if (adminQuizVisibility) adminQuizVisibility.value = adminQuiz.visibility || "private";
   if (!adminQuiz.timerConfig) {
@@ -263,7 +265,7 @@ function renderAdminForm() {
 
         <label>
           ${t("admin.promptLabel")}
-          <math-field class="admin-question-prompt" math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" style="width: 100%; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${q.prompt || ""}</math-field>
+          <math-field class="admin-question-prompt" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" style="width: 100%; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${unwrapMath(q.prompt)}</math-field>
         </label>
 
         
@@ -665,7 +667,7 @@ function renderQuestionConfig(q, qIdx) {
             <div class="admin-choice-item" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;">
                 <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin-top: 12px;" />
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                    <math-field class="admin-choice-text" math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${choice.text || ""}</math-field>
+                    <math-field class="admin-choice-text" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${unwrapMath(choice.text)}</math-field>
                     
                 </div>
                 
@@ -776,8 +778,10 @@ function updateQuizFromDOM() {
         if (multToggle) q.allowMultipleAnswers = multToggle.checked;
         qDiv.querySelectorAll(".admin-choice-text").forEach((input) => {
           const idx = parseInt(input.dataset.cidx);
-          if (q.choices?.[idx]) const v = input.value.trim();
-          q.choices[idx].text = v ? "\\(" + v + "\\)" : "";
+          if (q.choices?.[idx]) {
+            const v = input.value.trim();
+            q.choices[idx].text = v ? "\\(" + v + "\\)" : "";
+          }
         });
         break;
       }
