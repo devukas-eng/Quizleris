@@ -5,6 +5,8 @@ import { setupDashboard, renderDashboard } from "./dashboard.js";
 import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
+import { initAuthUI } from "./auth-ui.js";
+import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
 
 /**
