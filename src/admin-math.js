@@ -79,7 +79,11 @@ export function insertTextAtCursor(element, text, autoWrapMath = false) {
 
   // MathLive support
   if (element.tagName === "MATH-FIELD" || element.tagName === "MATH-FIELD") {
-    element.executeCommand(["insert", text]);
+    if (text === "\\text{}") {
+        element.executeCommand(["insert", "\\text{#0}"]);
+    } else {
+        element.executeCommand(["insert", text]);
+    }
     element.focus();
     return;
   }

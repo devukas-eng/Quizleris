@@ -168,6 +168,8 @@ function toggleAdminMode() {
 function renderAdminForm() {
   if (!adminQuiz) return;
   const focusState = captureFocusAndScroll();
+  // Function to unwrap latex
+  const unwrapMath = (str) => (str || "").replace(/^\\\(/, "").replace(/\\\)$/, "");
   adminQuizTitle.value = adminQuiz.title;
   if (adminQuizVisibility) adminQuizVisibility.value = adminQuiz.visibility || "private";
   if (!adminQuiz.timerConfig) {
@@ -764,7 +766,8 @@ function updateQuizFromDOM() {
     const qIdx = parseInt(promptArea.dataset.qidx);
     const q = adminQuiz.questions[qIdx];
     if (!q) return;
-    q.prompt = promptArea.value;
+    const val = promptArea.value.trim();
+    q.prompt = val ? "\\(" + val + "\\)" : "";
     const typeSelector = qDiv.querySelector(".admin-q-type-selector");
     if (typeSelector) q.type = typeSelector.value;
     switch (q.type) {
@@ -773,7 +776,8 @@ function updateQuizFromDOM() {
         if (multToggle) q.allowMultipleAnswers = multToggle.checked;
         qDiv.querySelectorAll(".admin-choice-text").forEach((input) => {
           const idx = parseInt(input.dataset.cidx);
-          if (q.choices?.[idx]) q.choices[idx].text = input.value;
+          if (q.choices?.[idx]) const v = input.value.trim();
+          q.choices[idx].text = v ? "\\(" + v + "\\)" : "";
         });
         break;
       }
