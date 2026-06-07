@@ -76,6 +76,13 @@ export function findSmartCursorOffset(text) {
 
 export function insertTextAtCursor(element, text, autoWrapMath = false) {
   if (!element) return;
+
+  // MathLive support
+  if (element.tagName === "MATH-FIELD" || element.tagName === "MATH-FIELD") {
+    element.executeCommand(["insert", text]);
+    element.focus();
+    return;
+  }
   
   let finalText = text;
   if (autoWrapMath) {
