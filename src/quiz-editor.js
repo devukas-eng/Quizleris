@@ -134,6 +134,12 @@ function toggleAdminMode() {
   }
   adminMode = !adminMode;
   adminPanel.style.display = adminMode ? "block" : "none";
+  
+  const startMenu = document.getElementById("start-menu");
+  if (startMenu) startMenu.style.display = adminMode ? "none" : "flex";
+
+  const mathEditor = document.getElementById("admin-math-editor-toggle");
+  if (mathEditor) mathEditor.style.display = adminMode ? "flex" : "none";
   if (adminMode) {
     document.body.classList.add("admin-mode-active");
   } else {
