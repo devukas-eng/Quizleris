@@ -52,7 +52,7 @@ let collapsedQuestions = {}; // Tracks collapsed state of questions by ID
 
 
 // DOM references for QoL features
-let adminNavigator = null; // Sticky Question Navigator sidebar
+ // Sticky Question Navigator sidebar
 let adminDraftStatus = null;
 let adminUndoBtn = null;
 let adminRedoBtn = null;
@@ -115,7 +115,7 @@ function setupAdmin(callbacks) {
   bulkImportTextarea = getRequiredElement("bulk-import-textarea");
 
   // QoL references
-  adminNavigator = getRequiredElement("admin-navigator");
+  
   adminDraftStatus = getRequiredElement("admin-draft-status");
   adminUndoBtn = getRequiredElement("admin-undo-btn");
   adminRedoBtn = getRequiredElement("admin-redo-btn");
@@ -144,9 +144,7 @@ function toggleAdminMode() {
   } else {
     document.body.classList.remove("admin-mode-active");
   }
-  if (adminNavigator) {
-    adminNavigator.style.display = adminMode ? "flex" : "none";
-  }
+  
   adminToggle.textContent = adminMode ? t("admin.playerMode") : t("admin.adminMode");
   if (adminMode) {
     if (quiz) {
@@ -429,7 +427,7 @@ function renderAdminForm() {
           renderAdminForm();
         } else {
           triggerAutoSave();
-          renderQuestionNavigator();
+          
         }
       });
 
@@ -537,7 +535,7 @@ function renderAdminForm() {
             } else {
               adminQuiz.questions[qIdx].choices[idx].isCorrect = target.checked;
               triggerAutoSave();
-              renderQuestionNavigator();
+              
             }
           });
         });
@@ -551,7 +549,7 @@ function renderAdminForm() {
             saveStateForUndo();
             adminQuiz.questions[qIdx].isTrue = e.target.value === "true";
             triggerAutoSave();
-            renderQuestionNavigator();
+            
           });
         });
       }

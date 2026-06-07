@@ -1889,17 +1889,9 @@ body {
 
 /* --- Theme-Adaptive Dropdown Select and Options --- */
 /* --- Admin Grid Layout and Advanced QoL Sidebar Styles --- */
-.admin-grid-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    width: 100%;
-}
 
-.admin-main-column {
-    flex: 1;
-    min-width: 0;
-}
+
+
 
 .admin-sidebar-column {
     width: 100%;
@@ -1908,14 +1900,7 @@ body {
     gap: 20px;
 }
 
-.admin-navigator-column {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    background: var(--panel) !important;
-    border: 1px solid var(--border-color) !important;
-}
+
 
 /* Horizontal mini-map on small/medium screens */
 @media (max-width: 1023px) {
@@ -1941,16 +1926,9 @@ body {
 
 /* Glassmorphic & 3-Column layout for Large Screens */
 @media (min-width: 1024px) {
-    #app-root:has(.admin-grid-layout) {
-        width: min(1380px, 100%);
-        transition: width 0.3s ease;
-    }
     
-    .admin-grid-layout {
-        display: grid;
-        grid-template-columns: 240px 1fr;
-        align-items: start;
-    }
+    
+    
     
     .admin-navigator-column {
         position: sticky;
