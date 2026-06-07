@@ -2,7 +2,6 @@ import { quiz } from "./state.js";
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, loadQuizFromStorage } from "./storage.js";
 import { isAdminAccessAllowed, promptAdminPassword } from "./auth.js";
-import { processOCRImage } from "./ocr.js";
 import { t, updatePageLanguage } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
 import { parseBulkImportText } from "./admin-import.js";
@@ -647,7 +646,7 @@ function renderAdminForm() {
     }
   });
 
-  renderQuestionNavigator();
+  
   restoreFocusAndScroll(focusState);
 }
 function renderQuestionConfig(q, qIdx) {
@@ -801,7 +800,7 @@ function updateQuizFromDOM() {
     }
   });
   triggerAutoSave();
-  renderQuestionNavigator();
+  
 }
 function updateTimerLimitVisibility() {
   const parent = adminTimerLimit.parentElement;
@@ -903,8 +902,6 @@ function setupAdminEventsInternal() {
       }
     }, 100);
   });
-  adminScanQuestionBtn.addEventListener("click", () => adminOcrInput.click());
-  adminOcrInput.addEventListener("change", handleOCRUpload);
   adminSaveBtn.addEventListener("click", saveAdminQuiz);
   adminPreviewBtn.addEventListener("click", previewQuiz);
   adminExportBtn.addEventListener("click", () => {
@@ -1266,114 +1263,6 @@ function validateQuestion(q) {
   };
 }
 
-function renderQuestionNavigator() {
-  if (!adminNavigator || !adminQuiz) return;
-
-  const totalQuestions = adminQuiz.questions.length;
-  let validCount = 0;
-  let warningCount = 0;
-  
-  const validationResults = adminQuiz.questions.map(q => {
-    const res = validateQuestion(q);
-    if (res.isValid) validCount++;
-    else warningCount++;
-    return res;
-  });
-
-  const completionRate = totalQuestions > 0 ? Math.round((validCount / totalQuestions) * 100) : 0;
-
-  adminNavigator.innerHTML = `
-    <div style="display: flex; flex-direction: column; width: 100%; gap: 15px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0; font-size: 1.05rem; font-weight: bold; color: var(--accent);" data-i18n="admin.navigatorTitle">${t('admin.navigatorTitle') || 'Klausimų Žemėlapis'}</h3>
-        <span style="font-size: 0.75rem; background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 10px; font-weight: bold;">
-          ${validCount}/${totalQuestions}
-        </span>
-      </div>
-
-      <div class="navigator-header-actions" style="display: flex; gap: 8px; justify-content: space-between;">
-        <button id="admin-nav-expand-all" class="btn" style="flex:1; padding: 6px; font-size: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); font-weight: bold;" title="Expand All">
-          ${t('admin.expandAll') || 'Išskleisti visas'}
-        </button>
-        <button id="admin-nav-collapse-all" class="btn" style="flex:1; padding: 6px; font-size: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); font-weight: bold;" title="Collapse All">
-          ${t('admin.collapseAll') || 'Suskleisti visas'}
-        </button>
-      </div>
-
-      <div class="nav-badges-grid">
-        ${adminQuiz.questions.map((q, idx) => {
-          const res = validationResults[idx];
-          const badgeClass = res.isValid ? "valid" : "warning";
-          const statusChar = res.isValid ? "✓" : "⚠️";
-          const shortType = getShortTypeLabel(q.type);
-          
-          return `
-            <div class="nav-badge-item ${badgeClass}" data-qidx="${idx}" title="${t('admin.question') || 'Question'} ${idx + 1}: ${shortType}">
-              ${idx + 1}
-              <span class="nav-badge-type">${shortType}</span>
-              <span class="nav-badge-status-dot ${badgeClass}">${statusChar}</span>
-            </div>
-          `;
-        }).join('')}
-        
-        ${totalQuestions === 0 ? `
-          <div style="text-align: center; color: var(--muted); font-size: 0.8rem; padding: 10px 0; width: 100%;">
-            ${t('admin.noQuestionsYet') || 'Klausimų nėra'}
-          </div>
-        ` : ''}
-      </div>
-
-      <div class="nav-stats-card">
-        <div class="nav-stat-row">
-          <span>${t('admin.statCompletion') || 'Užpildymas:'}</span>
-          <strong>${completionRate}%</strong>
-        </div>
-        <div class="nav-stat-row">
-          <span>${t('admin.statValid') || 'Teisingi:'}</span>
-          <strong style="color: #10b981;">${validCount}</strong>
-        </div>
-        <div class="nav-stat-row">
-          <span>${t('admin.statWarnings') || 'Įspėjimai:'}</span>
-          <strong style="${warningCount > 0 ? 'color: #f59e0b;' : 'color: var(--muted);'}">${warningCount}</strong>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("admin-nav-expand-all")?.addEventListener("click", () => {
-    adminQuiz.questions.forEach(q => collapsedQuestions[q.id] = false);
-    renderAdminForm();
-  });
-
-  document.getElementById("admin-nav-collapse-all")?.addEventListener("click", () => {
-    adminQuiz.questions.forEach(q => collapsedQuestions[q.id] = true);
-    renderAdminForm();
-  });
-
-  adminNavigator.querySelectorAll(".nav-badge-item").forEach(badge => {
-    badge.addEventListener("click", () => {
-      const idx = parseInt(badge.dataset.qidx);
-      const items = adminQuestionsList.querySelectorAll(".admin-question-item");
-      const card = items[idx];
-      if (card) {
-        const qId = adminQuiz.questions[idx].id;
-        if (collapsedQuestions[qId]) {
-          collapsedQuestions[qId] = false;
-          renderAdminForm();
-          const newItems = adminQuestionsList.querySelectorAll(".admin-question-item");
-          const newCard = newItems[idx];
-          if (newCard) {
-            newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            flashCard(newCard);
-          }
-        } else {
-          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          flashCard(card);
-        }
-      }
-    });
-  });
-}
 
 function getShortTypeLabel(type) {
   switch (type) {
