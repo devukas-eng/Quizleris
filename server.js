@@ -6,7 +6,8 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'dist');
 
 const server = http.createServer((req, res) => {
-    let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'index.html' : req.url);
+    const cleanUrl = req.url.split('?')[0];
+    let filePath = path.join(PUBLIC_DIR, cleanUrl === '/' ? 'index.html' : cleanUrl);
     const extname = path.extname(filePath);
     let contentType = 'text/html';
 
