@@ -1,10 +1,10 @@
 import { QuizState, quiz, setQuiz } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
-import { saveResult, addPlayerXP } from "./storage.js";
+import { saveResult } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
-import { playCorrect, playWrong, playLevelUp, toggleMute, getIsMuted } from "./audio.js";
+import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
 
 // Setup Mute Button
 document.addEventListener("DOMContentLoaded", () => {
@@ -820,7 +820,7 @@ export function showResults() {
         buildPreviewFinishedInfo(card);
     }
     
-    buildResultsRankCard(quiz, results, isPreview, card);
+
     buildResultsActions(quiz, container, isPreview, card);
     
     clearElement(container);
@@ -893,9 +893,7 @@ function buildPreviewFinishedInfo(card) {
     card.appendChild(previewInfo);
 }
 
-function buildResultsRankCard(quiz, results, isPreview, card) {
-    // XP and Rank rendering has been requested to be removed.
-}
+
 
 function buildResultsActions(quiz, container, isPreview, card) {
     const actions = document.createElement("div");

@@ -1,0 +1,266 @@
+[
+  {
+    "id": "demo",
+    "title": "quiz.demoTitle",
+    "questions": [
+      {
+        "id": "q1",
+        "prompt": "What is the derivative of \\(x^2\\)?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "\\(2x\\)",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "\\(x\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "\\(x^2\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "\\(2\\)",
+            "isCorrect": false
+          }
+        ]
+      }
+    ],
+    "shuffleConfig": {
+      "questions": true,
+      "answers": true
+    }
+  },
+  {
+    "id": "algebra",
+    "title": "quiz.algebraTitle",
+    "questions": [
+      {
+        "id": "a1",
+        "prompt": "Solve for \\(x\\): \\(2x + 5 = 15\\)",
+        "choices": [
+          {
+            "id": "a",
+            "text": "5",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "10",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "2.5",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "7.5",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "a2",
+        "prompt": "Expand the expression \\((x+3)(x-3)\\)",
+        "choices": [
+          {
+            "id": "a",
+            "text": "\\(x^2 - 9\\)",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "\\(x^2 + 9\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "\\(x^2 - 6x + 9\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "\\(x^2 + 6x + 9\\)",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "a3",
+        "prompt": "Simplify: \\(3(x - 2) + 4x\\)",
+        "choices": [
+          {
+            "id": "a",
+            "text": "\\(7x - 6\\)",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "\\(7x - 2\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "\\(x - 6\\)",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "\\(12x - 6\\)",
+            "isCorrect": false
+          }
+        ]
+      }
+    ],
+    "shuffleConfig": {
+      "questions": true,
+      "answers": true
+    }
+  },
+  {
+    "id": "combinatorics",
+    "title": "quiz.combinatoricsTitle",
+    "questions": [
+      {
+        "id": "c1",
+        "prompt": "How many distinct ways can the letters in the word 'BANANA' be arranged?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "60",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "120",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "720",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "360",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "c2",
+        "prompt": "A committee of 3 people is to be chosen from a group of 10. How many different committees are possible?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "120",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "720",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "30",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "1000",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "c3",
+        "prompt": "In how many ways can 5 people span in a line?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "120",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "24",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "720",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "25",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "c4",
+        "prompt": "What is the coefficient of \\(x^2\\) in the expansion of \\((1+x)^5\\)?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "10",
+            "isCorrect": true
+          },
+          {
+            "id": "b",
+            "text": "5",
+            "isCorrect": false
+          },
+          {
+            "id": "c",
+            "text": "20",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "1",
+            "isCorrect": false
+          }
+        ]
+      },
+      {
+        "id": "c5",
+        "prompt": "You have 4 different math books and 5 different history books. How many ways can you arrange them on a shelf if books of the same subject must be together?",
+        "choices": [
+          {
+            "id": "a",
+            "text": "69,120",
+            "isCorrect": false
+          },
+          {
+            "id": "b",
+            "text": "5,760",
+            "isCorrect": true
+          },
+          {
+            "id": "c",
+            "text": "362,880",
+            "isCorrect": false
+          },
+          {
+            "id": "d",
+            "text": "20",
+            "isCorrect": false
+          }
+        ]
+      }
+    ],
+    "shuffleConfig": {
+      "questions": true,
+      "answers": true
+    }
+  }
+]

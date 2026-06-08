@@ -1,22 +1,23 @@
 
-// ─── Player Profile & Progression System ───
-export const STORAGE_KEY_XP = "quizleris_player_xp";
 
-export function getPlayerXP() {
+// ─── Player Profile & Progression System ───
+const STORAGE_KEY_XP = "quizleris_player_xp";
+
+function getPlayerXP() {
     return parseInt(localStorage.getItem(STORAGE_KEY_XP) || "0", 10);
 }
 
-export function getPlayerLevel(xp) {
+function getPlayerLevel(xp) {
     // Basic curve: Level = 1 + floor(sqrt(XP / 100))
     // e.g. 0 XP = Lv 1. 100 XP = Lv 2. 400 XP = Lv 3. 900 XP = Lv 4.
     return 1 + Math.floor(Math.sqrt(Math.max(0, xp) / 100));
 }
 
-export function getXPForNextLevel(level) {
+function getXPForNextLevel(level) {
     return Math.pow(level, 2) * 100;
 }
 
-export function addPlayerXP(amount) {
+function addPlayerXP(amount) {
     if (amount <= 0) return false;
     const oldXp = getPlayerXP();
     const oldLevel = getPlayerLevel(oldXp);
@@ -29,48 +30,73 @@ export function addPlayerXP(amount) {
 }
 
 // Storage keys
-export const STORAGE_KEY_PREFIX = "quiz_";
-export const STORAGE_KEY_ALL_IDS = "quiz_all_ids";
-export const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
+const STORAGE_KEY_PREFIX = "quiz_";
+const STORAGE_KEY_ALL_IDS = "quiz_all_ids";
+const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
 /**
  * Generates a unique-enough ID for a quiz using the current timestamp.
  * NOTE: In a multi-user or high-concurrency environment, this should be replaced with a UUID.
  */
-export function generateQuizId() {
+function generateQuizId() {
     return `quiz_${Date.now()}`;
 }
-import { saveQuizToCloud } from "./api.js";
+
 
 /**
- * 2026 Senior Concept: Pure Cloud Mode. Saves instantly to cloud. LocalStorage is deprecated for quizzes.
+ * Persists a quiz object to localStorage and updates the global ID index.
+ * 2026 Senior Concept: Local-First storage. Saves instantly locally, syncs to cloud in background.
  */
-export async function saveQuizToStorage(quizData) {
-    // Cloud Sync
-    const result = await saveQuizToCloud(quizData);
-    if (result.success) {
-        console.log(`[CloudSync] Quiz ${quizData.id} synced to MySQL!`);
+function saveQuizToStorage(quizData) {
+    const key = STORAGE_KEY_PREFIX + quizData.id;
+    localStorage.setItem(key, JSON.stringify(quizData));
+    // Track all quiz IDs
+    const allIds = getAllQuizIds();
+    if (!allIds.includes(quizData.id)) {
+        allIds.push(quizData.id);
+        localStorage.setItem(STORAGE_KEY_ALL_IDS, JSON.stringify(allIds));
     }
-    return result;
+    
+    // Cloud Sync (Background)
+    saveQuizToCloud(quizData).then(success => {
+        if (success) console.log(`[CloudSync] Quiz ${quizData.id} synced to MySQL!`);
+    });
 }
-// Load quiz strictly from the cloud
-export async function loadQuizFromStorage(quizId) {
+// Load quiz from localStorage by ID
+function loadQuizFromStorage(quizId) {
+    const key = STORAGE_KEY_PREFIX + quizId;
+    const data = localStorage.getItem(key);
+    if (!data) {
+        // Fallback to premade
+        if (quizId === "demo")
+            return getDemoQuiz();
+        const premade = getPremadeQuizzes().find(q => q.id === quizId);
+        return premade || null;
+    }
     try {
-        const res = await fetch('/api/quizzes/' + quizId);
-        if (res.ok) {
-            const data = await res.json();
-            return data;
-        }
-        return null;
-    } catch (err) {
-        console.error("Cloud fetch failed", err);
+        return JSON.parse(data);
+    }
+    catch {
         return null;
     }
 }
-// Get all saved quiz IDs (Deprecated)
-export function getAllQuizIds() {
-    return [];
+// Get all saved quiz IDs
+function getAllQuizIds() {
+    const data = localStorage.getItem(STORAGE_KEY_ALL_IDS);
+    if (!data)
+        return [];
+    try {
+        return JSON.parse(data);
+    }
+    catch {
+        return [];
+    }
 }
-export async function loadQuiz() {
+/**
+ * The primary loading routine for the application.
+ * Checks for a 'quiz' URL parameter (Base64 data) first, then falls back to localStorage.
+ * Handles the heavy lifting of Base64 decoding and image registry restoration.
+ */
+function loadQuiz() {
     // Check URL param first: ?quiz=abc123
     const params = new URLSearchParams(window.location.search);
     const quizParam = params.get("quiz");
@@ -78,20 +104,34 @@ export async function loadQuiz() {
         // Try to decode as base64 JSON (for sharing)
         try {
             // Enhanced decoding: supports UTF-8 (Lithuanian chars) and handles binary data safety.
+            // Uses TextDecoder to correctly interpret multi-byte characters.
             const binary = atob(quizParam);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++)
                 bytes[i] = binary.charCodeAt(i);
             const decoded = new TextDecoder().decode(bytes);
             const parsed = JSON.parse(decoded);
+            // Restore image prefixes (Approach #1) and Local Registry references (Approach #2)
             const prefix = "data:image/jpeg;base64,";
             parsed.questions.forEach(q => {
+                // Handle Approach #1 (Prefix Stripping)
                 if (q.image && !q.image.startsWith("data:") && !q.image.startsWith("local:")) {
                     q.image = prefix + q.image;
                 }
+                // Handle Approach #2 (Local Registry)
+                if (q.image?.startsWith("local:")) {
+                    const imgId = q.image.substring(6);
+                    q.image = getImageFromRegistry(parsed.id, imgId) || "";
+                }
                 q.choices?.forEach(c => {
+                    // Handle Approach #1
                     if (c.image && !c.image.startsWith("data:") && !c.image.startsWith("local:")) {
                         c.image = prefix + c.image;
+                    }
+                    // Handle Approach #2
+                    if (c.image?.startsWith("local:")) {
+                        const imgId = c.image.substring(6);
+                        c.image = getImageFromRegistry(parsed.id, imgId) || "";
                     }
                 });
             });
@@ -99,16 +139,145 @@ export async function loadQuiz() {
         }
         catch (e) {
             console.warn("Base64 decode failed, trying raw string lookup", e);
-            // It might be a quiz ID from the cloud database
-            const loaded = await loadQuizFromStorage(quizParam);
-            return loaded || null;
+            // If not base64, treat as localStorage ID
+            const loaded = loadQuizFromStorage(quizParam);
+            if (loaded)
+                return loaded;
         }
     }
-    return null;
+    // Try to load from localStorage (most recent, or first available)
+    const allIds = getAllQuizIds();
+    if (allIds.length > 0) {
+        const lastId = allIds[allIds.length - 1];
+        const loaded = loadQuizFromStorage(lastId);
+        if (loaded)
+            return loaded;
+    }
+    // Fallback: return a default demo quiz
+    // Fallback: return a default demo quiz
+    return getDemoQuiz();
 }
-
-
-export function getTopicBundles() {
+function getDemoQuiz() {
+    return {
+        id: "demo",
+        title: t('quiz.demoTitle'),
+        questions: [
+            {
+                id: "q1",
+                prompt: "What is the derivative of \\(x^2\\)?",
+                choices: [
+                    { id: "a", text: "\\(2x\\)", isCorrect: true },
+                    { id: "b", text: "\\(x\\)", isCorrect: false },
+                    { id: "c", text: "\\(x^2\\)", isCorrect: false },
+                    { id: "d", text: "\\(2\\)", isCorrect: false },
+                ],
+            },
+        ],
+    };
+}
+function getPremadeQuizzes() {
+    return [
+        {
+            ...getDemoQuiz(),
+            shuffleConfig: { questions: true, answers: true }
+        },
+        {
+            id: "algebra",
+            title: t('quiz.algebraTitle'),
+            questions: [
+                {
+                    id: "a1",
+                    prompt: "Solve for \\(x\\): \\(2x + 5 = 15\\)",
+                    choices: [
+                        { id: "a", text: "5", isCorrect: true },
+                        { id: "b", text: "10", isCorrect: false },
+                        { id: "c", text: "2.5", isCorrect: false },
+                        { id: "d", text: "7.5", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "a2",
+                    prompt: "Expand the expression \\((x+3)(x-3)\\)",
+                    choices: [
+                        { id: "a", text: "\\(x^2 - 9\\)", isCorrect: true },
+                        { id: "b", text: "\\(x^2 + 9\\)", isCorrect: false },
+                        { id: "c", text: "\\(x^2 - 6x + 9\\)", isCorrect: false },
+                        { id: "d", text: "\\(x^2 + 6x + 9\\)", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "a3",
+                    prompt: "Simplify: \\(3(x - 2) + 4x\\)",
+                    choices: [
+                        { id: "a", text: "\\(7x - 6\\)", isCorrect: true },
+                        { id: "b", text: "\\(7x - 2\\)", isCorrect: false },
+                        { id: "c", text: "\\(x - 6\\)", isCorrect: false },
+                        { id: "d", text: "\\(12x - 6\\)", isCorrect: false }
+                    ]
+                }
+            ],
+            shuffleConfig: { questions: true, answers: true }
+        },
+        {
+            id: "combinatorics",
+            title: t('quiz.combinatoricsTitle'),
+            questions: [
+                {
+                    id: "c1",
+                    prompt: "How many distinct ways can the letters in the word 'BANANA' be arranged?",
+                    choices: [
+                        { id: "a", text: "60", isCorrect: true },
+                        { id: "b", text: "120", isCorrect: false },
+                        { id: "c", text: "720", isCorrect: false },
+                        { id: "d", text: "360", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "c2",
+                    prompt: "A committee of 3 people is to be chosen from a group of 10. How many different committees are possible?",
+                    choices: [
+                        { id: "a", text: "120", isCorrect: true },
+                        { id: "b", text: "720", isCorrect: false },
+                        { id: "c", text: "30", isCorrect: false },
+                        { id: "d", text: "1000", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "c3",
+                    prompt: "In how many ways can 5 people span in a line?",
+                    choices: [
+                        { id: "a", text: "120", isCorrect: true },
+                        { id: "b", text: "24", isCorrect: false },
+                        { id: "c", text: "720", isCorrect: false },
+                        { id: "d", text: "25", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "c4",
+                    prompt: "What is the coefficient of \\(x^2\\) in the expansion of \\((1+x)^5\\)?",
+                    choices: [
+                        { id: "a", text: "10", isCorrect: true },
+                        { id: "b", text: "5", isCorrect: false },
+                        { id: "c", text: "20", isCorrect: false },
+                        { id: "d", text: "1", isCorrect: false }
+                    ]
+                },
+                {
+                    id: "c5",
+                    prompt: "You have 4 different math books and 5 different history books. How many ways can you arrange them on a shelf if books of the same subject must be together?",
+                    choices: [
+                        { id: "a", text: "69,120", isCorrect: false },
+                        { id: "b", text: "5,760", isCorrect: true },
+                        { id: "c", text: "362,880", isCorrect: false },
+                        { id: "d", text: "20", isCorrect: false }
+                    ]
+                }
+            ],
+            shuffleConfig: { questions: true, answers: true }
+        }
+    ];
+}
+function getTopicBundles() {
     return [
         {
             id: "algebra-linear-beginner",
@@ -836,16 +1005,16 @@ export function getTopicBundles() {
         }
     ];
 }
-export const STORAGE_KEY_RESULTS = "quiz_results";
+const STORAGE_KEY_RESULTS = "quiz_results";
 /**
  * Records a student's quiz result in the local history.
  */
-export function saveResult(result) {
+function saveResult(result) {
     const results = getResults();
     results.push(result);
     localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(results));
 }
-export function getResults() {
+function getResults() {
     const data = localStorage.getItem(STORAGE_KEY_RESULTS);
     if (!data)
         return [];
@@ -856,13 +1025,13 @@ export function getResults() {
         return [];
     }
 }
-export function getResultsByQuizId(quizId) {
+function getResultsByQuizId(quizId) {
     return getResults().filter(r => r.quizId === quizId);
 }
-export function clearResults() {
+function clearResults() {
     localStorage.removeItem(STORAGE_KEY_RESULTS);
 }
-export function getHighScores(allResults) {
+function getHighScores(allResults) {
     const results = allResults || getResults();
     const highScores = new Map();
     results.forEach(r => {
@@ -876,11 +1045,11 @@ export function getHighScores(allResults) {
  * Stores a map of image IDs to Base64 data for a specific quiz.
  * This is used to keep shareable URLs short by moving image data to local storage.
  */
-export function saveImageRegistry(quizId, images) {
+function saveImageRegistry(quizId, images) {
     const key = STORAGE_KEY_IMAGE_REGISTRY_PREFIX + quizId;
     localStorage.setItem(key, JSON.stringify(images));
 }
-export function getImageFromRegistry(quizId, imgId) {
+function getImageFromRegistry(quizId, imgId) {
     const key = STORAGE_KEY_IMAGE_REGISTRY_PREFIX + quizId;
     const data = localStorage.getItem(key);
     if (!data)
@@ -898,7 +1067,7 @@ export function getImageFromRegistry(quizId, imgId) {
  * Clears all locally saved quizzes from localStorage.
  * Preserves the result history, but wipes all user-created quizzes and their image registries.
  */
-export function clearAllLocalQuizzes() {
+function clearAllLocalQuizzes() {
     const allIds = getAllQuizIds();
     allIds.forEach(id => {
         localStorage.removeItem(STORAGE_KEY_PREFIX + id);
@@ -906,3 +1075,6 @@ export function clearAllLocalQuizzes() {
     });
     localStorage.removeItem(STORAGE_KEY_ALL_IDS);
 }
+
+
+module.exports = { getPremadeQuizzes };

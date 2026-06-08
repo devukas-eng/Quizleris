@@ -16,6 +16,8 @@ let adminQuiz = null;
 let adminToggle;
 let adminPanel;
 let adminQuizTitle;
+let adminQuizId;
+let adminQuizIdContainer;
 let adminQuizVisibility;
 let adminQuestionsList;
 let adminAddQuestionBtn;
@@ -85,6 +87,8 @@ function setupAdmin(callbacks) {
   adminToggle = getRequiredElement("admin-toggle");
   adminPanel = getRequiredElement("admin-panel");
   adminQuizTitle = getRequiredElement("admin-quiz-title");
+  adminQuizId = document.getElementById("admin-quiz-id");
+  adminQuizIdContainer = document.getElementById("admin-quiz-id-container");
   adminQuizVisibility = getRequiredElement("admin-quiz-visibility");
   adminQuestionsList = getRequiredElement("admin-questions-list");
   adminAddQuestionBtn = getRequiredElement("admin-add-question");
@@ -171,6 +175,25 @@ function renderAdminForm() {
   if (!adminQuiz) return;
   const focusState = captureFocusAndScroll();
   adminQuizTitle.value = adminQuiz.title;
+  
+  if (adminQuizIdContainer && adminQuizId) {
+      const userStr = localStorage.getItem('quizleris_user');
+      let isAdmin = false;
+      try {
+          const user = JSON.parse(userStr);
+          isAdmin = user && user.role === 'admin';
+      } catch(e) {
+          console.warn("Could not parse user string", e);
+      }
+      
+      if (isAdmin) {
+          adminQuizIdContainer.style.display = 'block';
+          adminQuizId.value = adminQuiz.id;
+      } else {
+          adminQuizIdContainer.style.display = 'none';
+      }
+  }
+  
   if (adminQuizVisibility) adminQuizVisibility.value = adminQuiz.visibility || "private";
   if (!adminQuiz.timerConfig) {
     adminTimerMode.value = "question";
@@ -752,6 +775,13 @@ function renderQuestionConfig(q, qIdx) {
 function updateQuizFromDOM() {
   if (!adminQuiz) return;
   adminQuiz.title = adminQuizTitle.value;
+  if (adminQuizId && adminQuizIdContainer && adminQuizIdContainer.style.display !== 'none') {
+      const newId = adminQuizId.value.trim();
+      if (newId) {
+          // Santize ID: allow alphanumeric, dashes, underscores
+          adminQuiz.id = newId.replace(/[^a-zA-Z0-9_-]/g, '-');
+      }
+  }
   if (adminQuizVisibility) adminQuiz.visibility = adminQuizVisibility.value;
   adminQuiz.mode = adminQuizMode.value;
   adminQuiz.shuffleConfig = { questions: adminShuffleQuestions.checked, answers: adminShuffleAnswers.checked };
@@ -807,14 +837,18 @@ function updateTimerLimitVisibility() {
   const parent = adminTimerLimit.parentElement;
   if (parent) parent.style.display = adminTimerMode.value === "none" ? "none" : "block";
 }
-function saveAdminQuiz() {
+async function saveAdminQuiz() {
   if (!adminQuiz) return;
   updateQuizFromDOM();
   if (adminQuiz.questions.length === 0) {
-    alert(t("admin.errorNoQuestions"));
+    alert(t("admin.errorNoQuestions") || "Testas neturi klausimų.");
     return;
   }
-  saveQuizToStorage(adminQuiz);
+  const saveResult = await saveQuizToStorage(adminQuiz);
+  if (saveResult && !saveResult.success) {
+      alert("Nepavyko išsaugoti: " + (saveResult.error || "Nežinoma klaida"));
+      return;
+  }
   localStorage.removeItem("quiz_editor_draft");
   if (adminDraftBanner) adminDraftBanner.style.display = "none";
   populateLocalSelector();
@@ -840,10 +874,23 @@ function saveAdminQuiz() {
   const base = window.location.origin + "/";
   const shareUrl = `${base}?quiz=${shareCode}`;
   const dashUrl = `${base}?dashboard=${escapeHtml(adminQuiz.id)}`;
+  
+  let warningHtml = '';
+  if (saveResult && saveResult.expires_at) {
+      const expDate = new Date(saveResult.expires_at).toLocaleDateString('lt-LT');
+      const bytes = saveResult.storage_bytes || 0;
+      const kb = (bytes / 1024).toFixed(1);
+      warningHtml = `
+      <div style="background: rgba(255, 152, 0, 0.1); border: 1px solid rgba(255, 152, 0, 0.3); padding: 10px; border-radius: 8px; margin-top: 15px;">
+          <strong style="color: #ff9800;">⚠️ Nemokamas planas</strong><br>
+          <span style="font-size: 0.9em; color: #eee;">Šis testas galios iki <strong>${expDate}</strong>.<br>Dydis: <strong>${kb} KB</strong>. Norėdami išlaikyti testus visam laikui be limito, įsigykite Premium planą.</span>
+      </div>`;
+  }
+  
   adminShareCode.style.display = "block";
   adminShareCode.innerHTML = `
         <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); padding: 15px; border-radius: 8px;">
-            <strong style="color: #4CAF50;">\u2713 ${t("admin.saveSuccess")}</strong><br><br>
+            <strong style="color: #4CAF50;">\u2713 ${t("admin.saveSuccess") || "Išsaugota sėkmingai!"}</strong><br><br>
             <div style="margin-bottom: 10px;">
                 <label style="display: block; font-weight: bold;">Student URL:</label>
                 <div style="display: flex; gap: 10px;">
@@ -859,6 +906,7 @@ function saveAdminQuiz() {
                 </div>
             </div>
             <div><label style="display: block; font-weight: bold;">Quiz ID:</label><code>${escapeHtml(adminQuiz.id)}</code></div>
+            ${warningHtml}
         </div>`;
   document.getElementById("copy-share-btn")?.addEventListener("click", () => {
     const input = document.getElementById("share-url-input");
@@ -1469,7 +1517,7 @@ function dismissDraft() {
   if (adminDraftBanner) adminDraftBanner.style.display = "none";
 }
 
-function populateLocalSelector() {
+async function populateLocalSelector() {
   if (!adminLocalSelector) return;
   
   adminLocalSelector.innerHTML = "";
@@ -1479,19 +1527,28 @@ function populateLocalSelector() {
   defaultOpt.textContent = t("admin.loadSavedQuiz") || "-- Load Saved Quiz --";
   adminLocalSelector.appendChild(defaultOpt);
   
-  const allIds = getAllQuizIds();
-  allIds.forEach(id => {
-    const quizData = loadQuizFromStorage(id);
-    if (quizData) {
-      const opt = document.createElement("option");
-      opt.value = quizData.id;
-      const displayTitle = quizData.title.length > 25 ? quizData.title.substring(0, 22) + "..." : quizData.title;
-      opt.textContent = `${displayTitle} (${quizData.questions.length} q.)`;
-      adminLocalSelector.appendChild(opt);
-    }
-  });
+  try {
+      const token = localStorage.getItem("quizleris_token");
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const res = await fetch('/api/quizzes', { headers });
+      if (res.ok) {
+          const quizzes = await res.json();
+          quizzes.forEach(q => {
+              const opt = document.createElement("option");
+              opt.value = q.id;
+              const displayTitle = q.title.length > 25 ? q.title.substring(0, 22) + "..." : q.title;
+              // We don't have question count in the summary API, so omit it
+              opt.textContent = `${displayTitle} (${q.visibility})`;
+              adminLocalSelector.appendChild(opt);
+          });
+      }
+  } catch (err) {
+      console.error("Failed to load quizzes for dropdown", err);
+  }
   
-  if (adminQuiz && allIds.includes(adminQuiz.id)) {
+  if (adminQuiz) {
     adminLocalSelector.value = adminQuiz.id;
   } else {
     adminLocalSelector.value = "";
@@ -1509,7 +1566,7 @@ function toggleLocalDeleteButtonVisibility() {
   }
 }
 
-function handleLocalSelectorChange() {
+async function handleLocalSelectorChange() {
   if (!adminLocalSelector) return;
   const selectedId = adminLocalSelector.value;
   if (!selectedId) {
@@ -1517,7 +1574,7 @@ function handleLocalSelectorChange() {
     return;
   }
   
-  const loadedQuiz = loadQuizFromStorage(selectedId);
+  const loadedQuiz = await loadQuizFromStorage(selectedId);
   if (loadedQuiz) {
     saveStateForUndo();
     adminQuiz = JSON.parse(JSON.stringify(loadedQuiz));
@@ -1530,20 +1587,27 @@ function handleLocalSelectorChange() {
   }
 }
 
-function handleLocalDeleteClick() {
+async function handleLocalDeleteClick() {
   if (!adminLocalSelector) return;
   const selectedId = adminLocalSelector.value;
   if (!selectedId) return;
   
-  const confirmMsg = t("admin.deleteConfirm") || "Are you sure you want to delete this saved quiz from your device?";
+  const confirmMsg = t("admin.deleteConfirm") || "Are you sure you want to delete this saved quiz from your device and the cloud?";
   if (!confirm(confirmMsg)) return;
   
+  try {
+      const token = localStorage.getItem("quizleris_token");
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      await fetch('/api/quizzes/' + selectedId, { method: 'DELETE', headers });
+  } catch (err) {
+      console.error("Failed to delete quiz from cloud", err);
+  }
+  
+  // Also clean local if it happens to be there
   localStorage.removeItem("quiz_" + selectedId);
   localStorage.removeItem("quiz-images_" + selectedId);
-  
-  let allIds = getAllQuizIds();
-  allIds = allIds.filter(id => id !== selectedId);
-  localStorage.setItem("quiz_all_ids", JSON.stringify(allIds));
   
   if (adminQuiz && adminQuiz.id === selectedId) {
     adminQuiz = {
@@ -1559,7 +1623,7 @@ function handleLocalDeleteClick() {
     renderAdminForm();
   }
   
-  populateLocalSelector();
+  await populateLocalSelector();
 }
 export {
   previewQuiz,

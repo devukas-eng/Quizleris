@@ -12,14 +12,10 @@ let isStudentMenuOpen = false;
 /**
  * Bootstraps the main menu DOM references and top-level navigation buttons.
  */
-// Store callbacks at module level
-let _adminCallback = null;
-
-export function setupMenu(callbacks) {
+export function setupMenu(_callbacks) {
     startMenu = getRequiredElement("start-menu");
     quizHeader = document.querySelector(".quiz-header");
     quizMain = document.querySelector(".quiz-main");
-    _adminCallback = callbacks.onAdmin;
     // Note: the static #menu-btn-student / #menu-btn-admin buttons no longer exist;
     // they are now injected dynamically by renderStartMenu.
 }
@@ -295,23 +291,12 @@ function startStudentQuizDirect(name, quizData) {
     quizMain.style.display = "flex";
     initializeQuiz(quizData);
 }
-import { loadQuizFromStorage, getDemoQuiz, getPremadeQuizzes } from "./storage.js";
+import { loadQuizFromStorage } from "./storage.js";
 import { initializeQuiz } from "./render.js";
-function startStudentQuiz(name, quizId) {
+async function startStudentQuiz(name, quizId) {
     quizId = quizId.trim() || "demo"; // default to demo if empty
-    let quiz = loadQuizFromStorage(quizId);
-    // If not found in storage, check premade quizzes
-    if (!quiz) {
-        if (quizId === "demo") {
-            quiz = getDemoQuiz();
-        }
-        else {
-            const premade = getPremadeQuizzes().find(q => q.id === quizId);
-            if (premade) {
-                quiz = premade;
-            }
-        }
-    }
+    let quiz = await loadQuizFromStorage(quizId);
+    
     if (!quiz) {
         alert("Quiz not found with that ID.");
         return;

@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, query, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
 // TODO: Replace with real config once provided
 const firebaseConfig = {
@@ -29,7 +29,7 @@ const mockAuth = {
     currentUser: null,
     listeners: [],
     notify: function() { this.listeners.forEach(cb => cb(this.currentUser)); },
-    signIn: async (email, pass) => {
+    signIn: async (email, _pass) => {
         if (email === "owner@quizleris.com") {
             mockAuth.currentUser = { uid: "owner123", email, role: "owner" };
             localStorage.setItem("mock_user", JSON.stringify(mockAuth.currentUser));

@@ -1681,8 +1681,7 @@ body {
     }
 
     .bundle-row .bundle-card {
-        flex: 0 0 85vw;
-        padding: 20px;
+        flex: 0 0 240px;
     }
 
     .topics-page-container h1 {

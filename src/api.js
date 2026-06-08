@@ -40,8 +40,12 @@ export async function register(username, email, password) {
 }
 
 export async function fetchCloudQuizzes() {
-    // Fetches public quizzes and premade quizzes
-    const res = await fetch(`${API_BASE}/quizzes`);
+    const token = getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    // Fetches public quizzes and premade quizzes (or ALL if admin)
+    const res = await fetch(`${API_BASE}/quizzes`, { headers });
     if (!res.ok) return [];
     return await res.json();
 }
@@ -54,7 +58,7 @@ export async function fetchQuizDetails(quizId) {
 
 export async function saveQuizToCloud(quizData) {
     const token = getToken();
-    if (!token) return false; // Guest users just save locally
+    if (!token) return { success: false, error: "Not logged in" };
     
     try {
         const res = await fetch(`${API_BASE}/quizzes`, {
@@ -65,9 +69,14 @@ export async function saveQuizToCloud(quizData) {
             },
             body: JSON.stringify(quizData)
         });
-        return res.ok;
+        const data = await res.json();
+        if (res.ok) {
+            return { success: true, ...data };
+        } else {
+            return { success: false, error: data.error || "Failed to save" };
+        }
     } catch (e) {
-        console.error("Cloud sync failed, saved locally only.", e);
-        return false;
+        console.error("Cloud sync failed", e);
+        return { success: false, error: "Network error" };
     }
 }

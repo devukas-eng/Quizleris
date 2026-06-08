@@ -7,8 +7,9 @@ export async function syncCloudQuizzes() {
         let allIds = [];
         try {
             allIds = JSON.parse(localStorage.getItem(STORAGE_KEY_ALL_IDS)) || [];
-        } catch(e) {}
-
+        } catch(e) {
+            console.warn("Failed to parse ALL_IDS from localStorage", e);
+        }
         let updated = false;
 
         for (const quiz of quizzes) {
