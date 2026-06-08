@@ -30,8 +30,12 @@ app.use(express.json({ limit: '10mb' })); // Allow large JSON payloads for quizz
 // 1. Strict rate limiting for authentication (prevents brute-force)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // 10 auth attempts per IP per 15 minutes
-    message: { error: 'Too many login attempts from this IP, please try again after 15 minutes' }
+    max: 20, // 20 auth attempts per IP per 15 minutes
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        res.status(429).json({ error: 'Too many login attempts. Please wait 15 minutes and try again.' });
+    }
 });
 app.use('/api/auth/', authLimiter);
 
