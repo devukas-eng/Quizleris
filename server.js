@@ -80,6 +80,20 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
+// --- HEALTH CHECK (SAFE DIAGNOSTIC) ---
+app.get('/api/health', async (req, res) => {
+    const status = { ok: false, db: false, error: null, node: process.version };
+    try {
+        await pool.query('SELECT 1');
+        status.db = true;
+        status.ok = true;
+        res.json(status);
+    } catch (e) {
+        status.error = e.message;
+        res.status(500).json(status);
+    }
+});
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -96,8 +110,8 @@ app.post('/api/auth/login', async (req, res) => {
         
         res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('[LOGIN ERROR]', error.message, error.code);
+        res.status(500).json({ error: 'Internal server error', detail: error.message });
     }
 });
 
