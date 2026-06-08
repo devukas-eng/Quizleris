@@ -740,6 +740,7 @@ function renderQuestionConfig(q, qIdx) {
           </label>
           <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">${t("admin.keywords")}</label>
           <input type="text" class="admin-text-keywords" data-qidx="${qIdx}" value="${(q.expectedKeywords || []).join(", ")}" style="width: 100%; padding: 8px;" />
+          <button class="btn btn-sm btn-light" onclick="document.getElementById('shortcuts-panel').style.display='block'">View Shortcuts</button>
         </div>
       `;
     case "image-upload":
@@ -1024,6 +1025,22 @@ function setupAdminEventsInternal() {
     const target = e.target;
     if (target && target.closest("#admin-panel") && !target.closest(".admin-sidebar-column") && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "MATH-FIELD")) {
       lastActiveInputField = target;
+    }
+    
+    // Toggle Shortcuts Panel
+    const shortcutsPanel = document.getElementById("math-shortcuts-panel");
+    if (shortcutsPanel) {
+      if (document.activeElement && document.activeElement.tagName === "MATH-FIELD") {
+        shortcutsPanel.style.display = "block";
+        // Position it above the virtual keyboard if possible
+        if (window.mathVirtualKeyboard && window.mathVirtualKeyboard.boundingRect) {
+            shortcutsPanel.style.bottom = (window.mathVirtualKeyboard.boundingRect.height + 20) + "px";
+        } else {
+            shortcutsPanel.style.bottom = "320px"; // safe default fallback
+        }
+      } else {
+        shortcutsPanel.style.display = "none";
+      }
     }
   };
   document.addEventListener("focusin", trackActiveField);

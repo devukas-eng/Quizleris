@@ -379,6 +379,18 @@
   </div>
 
   <!-- Legal Footer (rendered inside #app-root bottom by JS, but declared here) -->
+  <!-- MathLive Shortcuts Panel -->
+  <div id="math-shortcuts-panel" class="glass-card" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 10000; padding: 15px; width: 250px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+    <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; font-weight: bold; color: var(--accent);" data-i18n="admin.shortcutsTitle">Greitieji klavišai</h4>
+    <ul style="margin: 0; padding-left: 15px; font-size: 0.75rem; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; color: var(--text); list-style-type: disc;">
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Ctrl+S</kbd> / <kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Alt+S</kbd> <span data-i18n="admin.shortcutSave" style="opacity: 0.85; margin-left: 4px;">Išsaugoti</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Alt+N</kbd> <span data-i18n="admin.shortcutNew" style="opacity: 0.85; margin-left: 4px;">Naujas kl.</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Ctrl+M</kbd> <span data-i18n="admin.shortcutWrap" style="opacity: 0.85; margin-left: 4px;">LaTeX apgaub.</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Ctrl+Z</kbd> / <kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Y</kbd> <span data-i18n="admin.shortcutUndoRedo" style="opacity: 0.85; margin-left: 4px;">Atšaukti/Grąžinti</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Shift</kbd> <span style="opacity: 0.85; margin-left: 4px;">Keičia simbolius</span></li>
+    </ul>
+  </div>
+
 </body>
 
 </html>

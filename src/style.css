@@ -3493,8 +3493,14 @@ body.admin-mode-active #language-toggle-container {
 /* MathLive Overrides */
 math-field {
   --contains-highlight-background-color: transparent !important;
+  --active-expr-background-color: transparent !important;
   --selection-background-color: rgba(99, 102, 241, 0.3) !important;
-  --selection-color: var(--text) !important;
+  --selection-color: inherit !important;
+}
+
+math-field::part(selection) {
+  background-color: rgba(99, 102, 241, 0.3) !important;
+  color: inherit !important;
 }
 
 math-field:focus, math-field:focus-within {
