@@ -182,7 +182,7 @@ app.get('/api/admin/init-db', async (req, res) => {
 });
 
 // Fallback to index.html for SPA routing
-app.get('*', (req, res) => {
+app.use((req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
