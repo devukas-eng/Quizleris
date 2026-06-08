@@ -8,6 +8,7 @@ import { renderTopicsPage } from "./topics.js";
 import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
+import { syncCloudQuizzes } from "./sync.js";
 
 /**
  * The main application bootstrap function.
@@ -23,6 +24,9 @@ function initApp() {
 
         // Initialize language system first
         initLanguage();
+        
+        // Background sync quizzes from cloud
+        syncCloudQuizzes();
 
         // ── Apple-like Theme Picker ──────────────────────────────────
         const THEMES = [

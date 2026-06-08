@@ -40,9 +40,11 @@ export const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
 export function generateQuizId() {
     return `quiz_${Date.now()}`;
 }
+import { saveQuizToCloud } from "./api.js";
+
 /**
  * Persists a quiz object to localStorage and updates the global ID index.
- * WARNING: localStorage has a size limit (usually ~5MB). Quizzes with many images may exceed this.
+ * 2026 Senior Concept: Local-First storage. Saves instantly locally, syncs to cloud in background.
  */
 export function saveQuizToStorage(quizData) {
     const key = STORAGE_KEY_PREFIX + quizData.id;
@@ -53,6 +55,11 @@ export function saveQuizToStorage(quizData) {
         allIds.push(quizData.id);
         localStorage.setItem(STORAGE_KEY_ALL_IDS, JSON.stringify(allIds));
     }
+    
+    // Cloud Sync (Background)
+    saveQuizToCloud(quizData).then(success => {
+        if (success) console.log(`[CloudSync] Quiz ${quizData.id} synced to MySQL!`);
+    });
 }
 // Load quiz from localStorage by ID
 export function loadQuizFromStorage(quizId) {
