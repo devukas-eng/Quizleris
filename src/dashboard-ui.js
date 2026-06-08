@@ -9,7 +9,7 @@ export function initDashboardUI() {
             <div class="modal-content glass-card" style="max-width: 800px; width: 100%; height: 80vh; padding: 30px; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2 id="dashboard-title" style="margin: 0;">Dashboard</h2>
-                    <button id="dashboard-close-btn" class="btn" style="background: none; border: none; font-size: 1.5rem;">&times;</button>
+                    <button id="dashboard-modal-close-btn" class="btn" style="background: none; border: none; font-size: 1.5rem;">&times;</button>
                 </div>
                 <div id="dashboard-body" style="flex: 1; overflow-y: auto;">
                     <!-- Content injected here -->
@@ -20,7 +20,7 @@ export function initDashboardUI() {
     document.body.insertAdjacentHTML("beforeend", modalHTML);
     dashboardModal = document.getElementById("dashboard-modal");
 
-    document.getElementById("dashboard-close-btn").addEventListener("click", () => {
+    document.getElementById("dashboard-modal-close-btn").addEventListener("click", () => {
         dashboardModal.style.display = "none";
     });
 

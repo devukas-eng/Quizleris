@@ -12,8 +12,6 @@ export function initAuthUI() {
                 <input type="email" id="auth-email" class="input-field" placeholder="El. paštas" style="width: 100%; margin-bottom: 10px;" />
                 <input type="password" id="auth-password" class="input-field" placeholder="Slaptažodis" style="width: 100%; margin-bottom: 20px;" />
                 <button id="auth-login-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Prisijungti su El. paštu</button>
-                <div style="margin: 15px 0; color: rgba(255,255,255,0.5);">— arba —</div>
-                <button id="auth-google-btn" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">Prisijungti su Google</button>
                 <button id="auth-close-btn" class="btn" style="width: 100%;">Atšaukti</button>
             </div>
         </div>
@@ -32,15 +30,6 @@ export function initAuthUI() {
         if (!email || !pass) return alert("Įveskite duomenis");
         try {
             await loginWithEmail(email, pass);
-            authModal.style.display = "none";
-        } catch (e) {
-            alert("Klaida: " + e.message);
-        }
-    });
-
-    document.getElementById("auth-google-btn").addEventListener("click", async () => {
-        try {
-            await loginWithGoogle();
             authModal.style.display = "none";
         } catch (e) {
             alert("Klaida: " + e.message);
