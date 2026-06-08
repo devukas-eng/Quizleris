@@ -5,7 +5,8 @@
 
   [![Vanilla JS](https://img.shields.io/badge/Vanilla%20JS-ES2020-yellow?style=for-the-badge&logo=javascript)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
   [![KaTeX](https://img.shields.io/badge/KaTeX-Math%20Typesetting-333333?style=for-the-badge&logo=latex)](https://katex.org/)
-  [![Version](https://img.shields.io/badge/version-v0.6.0-blue?style=for-the-badge)](package.json)
+  [![Version](https://img.shields.io/badge/version-v0.5.4-blue?style=for-the-badge)](package.json)
+  [![Vercel](https://img.shields.io/badge/deploy-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
   [![Vercel](https://img.shields.io/badge/deploy-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
 </div>
 
@@ -97,7 +98,13 @@ Quizleris is built using **Pure Vanilla JS (ES2020+)** and avoids heavy framewor
 
 ## 📜 Recent Changelog
 
-### v0.6.0
+### v0.6.0 (Upcoming)
+*   **Major Architecture Shift**: Transitioning from `localStorage` to a centralized database hosted on Hostinger.
+*   **Cloud Sync**: Full backend integration for persistent user data and global quiz sharing.
+
+### v0.5.4 (Final Database-Less Release)
+*   **MathLive Integration**: Replaced raw KaTeX inputs with the interactive MathLive virtual keyboard for unparalleled equation editing.
+*   **Teacher Dashboard**: Comprehensive UI for managing local quizzes and student results.
 *   **Major Feature**: Netflix-style horizontal carousel for quiz discovery.
 *   **Design**: Introduced the custom split-flag sliding toggle for language selection.
 *   **UX**: Smart layout ratio optimization (`#app-root` dynamically adjusts width to aspect-ratio bounds).
