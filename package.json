@@ -2,7 +2,7 @@
   "name": "quizleris",
   "version": "0.5.3-early",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.html",
   "scripts": {
     "vercel": "node copy-files.js",
     "build": "node copy-files.js",
