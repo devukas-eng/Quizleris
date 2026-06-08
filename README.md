@@ -88,7 +88,7 @@ Quizleris is built using **Pure Vanilla JS (ES2020+)** and avoids heavy framewor
 ## 🏗️ Project Structure
 *   `app.js` - Core bootstrapping and global event delegation.
 *   `topics.js` - Handles the Netflix-style discovery landing page.
-*   `admin.js` & `quiz-editor.js` - The quiz creation suite and LaTeX/OCR integrations.
+*   `admin.js` & `quiz-editor.js` - The quiz creation suite and "LaTeX/OCR" integrations.
 *   `render.js` - The student exam/practice mode DOM rendering engine.
 *   `i18n.js` & `lang.js` - Localization dictionaries and toggle logic.
 *   `storage.js` - LocalStorage interaction and file export/import.
