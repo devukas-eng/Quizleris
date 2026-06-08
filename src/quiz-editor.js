@@ -1334,14 +1334,6 @@ function handleEditorKeyboardShortcuts(e) {
       adminAddQuestionBtn.click();
     }
   }
-  // Ctrl+M -> LaTeX wrap inline
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "m") {
-    e.preventDefault();
-    if (lastActiveInputField) {
-      saveStateForUndo();
-      wrapSelectedInMathMode(lastActiveInputField, false);
-    }
-  }
 }
 
 function triggerAutoSave() {
