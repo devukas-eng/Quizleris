@@ -27,6 +27,10 @@ export class QuizState {
             this.shuffledQuestions.forEach(q => {
                 if (q.choices && q.choices.length > 0) {
                     this.shuffleArray(q.choices);
+                    // Reassign IDs after shuffling to keep A, B, C, D in order
+                    q.choices.forEach((c, idx) => {
+                        c.id = String.fromCharCode(97 + idx); // 'a', 'b', 'c', 'd'...
+                    });
                 }
             });
         }

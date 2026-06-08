@@ -221,8 +221,8 @@ function renderAdminForm() {
           </div>
           <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
             <span class="card-collapse-toggle" data-qidx="${qIdx}" title="Expand" style="font-size: 1.1rem; padding: 4px 8px;">▼</span>
-            <button class="admin-duplicate-question-btn btn btn-secondary btn-icon" data-qidx="${qIdx}" title="${t('admin.duplicate') || 'Clone'}" style="padding: 0; width: 28px; height: 28px; min-width: 28px; font-size: 0.8rem; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3);">📄</button>
-            <button class="admin-remove-question-btn btn btn-danger btn-icon" data-qidx="${qIdx}" title="${t('admin.removeQuestion') || 'Remove'}" style="padding: 0; width: 28px; height: 28px; min-width: 28px; font-size: 0.8rem;">🗑️</button>
+            <button class="admin-duplicate-question-btn btn btn-secondary btn-icon" data-qidx="${qIdx}" title="${t('admin.duplicate') || 'Clone'}" aria-label="${t('admin.duplicate') || 'Clone'}" style="padding: 0; width: 28px; height: 28px; min-width: 28px; font-size: 0.8rem; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3);">📄</button>
+            <button class="admin-remove-question-btn btn btn-danger btn-icon" data-qidx="${qIdx}" title="${t('admin.removeQuestion') || 'Remove'}" aria-label="${t('admin.removeQuestion') || 'Remove'}" style="padding: 0; width: 28px; height: 28px; min-width: 28px; font-size: 0.8rem;">🗑️</button>
           </div>
         </div>
       `;
@@ -253,7 +253,7 @@ function renderAdminForm() {
           ${q.image ? `
             <div style="position: relative; display: inline-block;">
               <img src="${q.image.startsWith("data:") ? q.image : "data:image/jpeg;base64," + q.image}" style="max-height: 120px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);" />
-              <button class="admin-remove-q-image btn btn-danger btn-icon" data-qidx="${qIdx}" 
+              <button class="admin-remove-q-image btn btn-danger btn-icon" aria-label="Remove Image" data-qidx="${qIdx}" 
                       style="position: absolute; top: -10px; right: -10px; width: 24px; height: 24px; padding: 0; min-width: 24px; font-size: 10px;">\u2715</button>
             </div>
           ` : `
@@ -674,13 +674,13 @@ function renderQuestionConfig(q, qIdx) {
                 ${choice.image ? `
                   <div style="position: relative; display: inline-block; margin-top: 4px;">
                     <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
-                    <button class="admin-choice-remove-image btn btn-danger" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">\u2715</button>
+                    <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">\u2715</button>
                   </div>
                 ` : `
-                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" style="margin-top: 4px;">\u{1F4F7}</button>
+                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t(" aria-label="${t("admin.addImage")}" style="margin-top: 4px;">\u{1F4F7}</button>
                 `}
                 
-                <button class="admin-remove-choice-btn btn btn-danger btn-icon" data-cidx="${cIdx}" style="margin-top: 4px;">\u2715</button>
+                <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}" style="margin-top: 4px;">\u2715</button>
             </div>
           `).join("")}
         </div>
@@ -709,7 +709,7 @@ function renderQuestionConfig(q, qIdx) {
       const blankCount = (q.prompt.match(/___/g) || []).length;
       return `
         <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">
-          <button class="btn btn-secondary btn-icon admin-insert-blank-btn" style="font-size: 0.8rem;">\u2795 ${t("admin.insertBlank")}</button>
+          <button class="btn btn-secondary btn-icon admin-insert-blank-btn" aria-label="${t('admin.insertBlank')}" style="font-size: 0.8rem;">\u2795 ${t("admin.insertBlank")}</button>
           <span style="font-size: 0.8rem; color: #fbbf24;">\u{1F4A1} ${t("admin.blankHint")}</span>
         </div>
         <div class="admin-blanks-list" data-qidx="${qIdx}" style="display: flex; flex-direction: column; gap: 12px;">
