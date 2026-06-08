@@ -1,5 +1,6 @@
 import { getCurrentUser, showAuthModal } from "./auth-ui.js";
-import { getTeacherQuizzes, getAllUsers } from "./firebase-service.js";
+import { getAllUsers } from "./firebase-service.js";
+import { getAllQuizIds, loadQuizFromStorage } from "./storage.js";
 
 let dashboardModal = null;
 
@@ -51,7 +52,8 @@ export function initDashboardUI() {
             body.innerHTML = html;
         } else {
             body.innerHTML = "<p>Kraunama...</p>";
-            const quizzes = await getTeacherQuizzes(user.uid);
+            const quizIds = getAllQuizIds();
+            const quizzes = quizIds.map(id => loadQuizFromStorage(id)).filter(q => q !== null);
             let html = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0;">Mano Testai</h3>

@@ -737,7 +737,8 @@ export function showResults() {
         name: studentName,
         quizId: quiz.quiz.id,
         quizTitle: quiz.quiz.title,
-        score: results.score,
+        score: results.correctCount,
+        xpScore: results.score,
         maxScore: results.total,
         date: new Date().toISOString(),
         heartsLeft: window.quizHearts !== undefined ? window.quizHearts : 0,
@@ -893,110 +894,7 @@ function buildPreviewFinishedInfo(card) {
 }
 
 function buildResultsRankCard(quiz, results, isPreview, card) {
-    const maxStreak = quiz.maxStreak || 0;
-    const accuracy = results.percentage;
-    const score = results.correctCount || 0;
-    const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
-    
-    if (!isPreview && xpEarned > 0) {
-        const leveledUp = addPlayerXP(xpEarned);
-        if (leveledUp) {
-            playLevelUp();
-            setTimeout(() => {
-                if (window.confetti) confetti({ particleCount: 200, spread: 100, origin: { y: 0.3 } });
-            }, 500);
-        }
-    }
-
-    let rankTitle = t('rank.novice');
-    let rankClass = "rank-novice";
-    let rankComment = t('rank.novice.desc');
-    let nextLevelXp = 300;
-    if (xpEarned >= 1500) { rankTitle = t('rank.genius'); rankClass = "rank-genius"; rankComment = t('rank.genius.desc'); nextLevelXp = 1500; }
-    else if (xpEarned >= 1000) { rankTitle = t('rank.master'); rankClass = "rank-master"; rankComment = t('rank.master.desc'); nextLevelXp = 1500; }
-    else if (xpEarned >= 600) { rankTitle = t('rank.adept'); rankClass = "rank-adept"; rankComment = t('rank.adept.desc'); nextLevelXp = 1000; }
-    else if (xpEarned >= 300) { rankTitle = t('rank.apprentice'); rankClass = "rank-apprentice"; rankComment = t('rank.apprentice.desc'); nextLevelXp = 600; }
-
-    const rankCard = document.createElement("div");
-    rankCard.className = `xp-rank-card ${rankClass}`;
-    rankCard.style.marginTop = "25px";
-    rankCard.style.padding = "20px";
-    rankCard.style.borderRadius = "12px";
-    rankCard.style.background = "rgba(255, 255, 255, 0.05)";
-    rankCard.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-    rankCard.style.textAlign = "center";
-    rankCard.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.15)";
-    rankCard.style.backdropFilter = "blur(12px)";
-    rankCard.style.webkitBackdropFilter = "blur(12px)";
-
-    const xpTitle = document.createElement("h4");
-    xpTitle.style.margin = "0 0 10px 0";
-    xpTitle.style.fontSize = "1rem";
-    xpTitle.style.color = "var(--muted)";
-    xpTitle.textContent = t('quiz.xpEarned');
-    rankCard.appendChild(xpTitle);
-
-    const xpVal = document.createElement("div");
-    xpVal.className = "xp-value-glow";
-    xpVal.style.fontSize = "2.2rem";
-    xpVal.style.fontWeight = "800";
-    xpVal.style.color = "var(--accent)";
-    xpVal.style.marginBottom = "5px";
-    xpVal.textContent = `+${xpEarned} XP`;
-    rankCard.appendChild(xpVal);
-
-    const rankLabel = document.createElement("div");
-    rankLabel.style.fontSize = "0.9rem";
-    rankLabel.style.color = "var(--muted)";
-    rankLabel.style.marginBottom = "2px";
-    rankLabel.textContent = t('quiz.rank');
-    rankCard.appendChild(rankLabel);
-
-    const rankBadge = document.createElement("div");
-    rankBadge.className = "rank-badge";
-    rankBadge.style.fontSize = "1.5rem";
-    rankBadge.style.fontWeight = "700";
-    rankBadge.style.display = "inline-block";
-    rankBadge.style.padding = "6px 16px";
-    rankBadge.style.borderRadius = "20px";
-    rankBadge.style.background = "rgba(255, 255, 255, 0.08)";
-    rankBadge.style.marginTop = "5px";
-    rankBadge.textContent = rankTitle;
-    rankCard.appendChild(rankBadge);
-
-    const rankCommentEl = document.createElement("div");
-    rankCommentEl.className = "rank-comment-glow";
-    rankCommentEl.style.fontSize = "1rem";
-    rankCommentEl.style.fontStyle = "italic";
-    rankCommentEl.style.color = "var(--text)";
-    rankCommentEl.style.marginTop = "15px";
-    rankCommentEl.style.marginBottom = "5px";
-    rankCommentEl.style.lineHeight = "1.45";
-    rankCommentEl.style.opacity = "0.95";
-    rankCommentEl.style.fontWeight = "500";
-    rankCommentEl.textContent = rankComment;
-    rankCard.appendChild(rankCommentEl);
-
-    const progressContainer = document.createElement("div");
-    progressContainer.style.width = "100%";
-    progressContainer.style.background = "rgba(0, 0, 0, 0.2)";
-    progressContainer.style.height = "8px";
-    progressContainer.style.borderRadius = "4px";
-    progressContainer.style.marginTop = "15px";
-    progressContainer.style.overflow = "hidden";
-
-    const progressBar = document.createElement("div");
-    progressBar.style.height = "100%";
-    progressBar.style.background = "var(--accent)";
-    progressBar.style.borderRadius = "4px";
-
-    const progressPercent = nextLevelXp > 0 ? (xpEarned / nextLevelXp) * 100 : 100;
-    progressBar.style.width = `${Math.min(100, progressPercent)}%`;
-    progressBar.style.transition = "width 1s ease-out";
-
-    progressContainer.appendChild(progressBar);
-    rankCard.appendChild(progressContainer);
-    card.appendChild(rankCard);
+    // XP and Rank rendering has been requested to be removed.
 }
 
 function buildResultsActions(quiz, container, isPreview, card) {
