@@ -38,7 +38,8 @@ function getSessionId() {
     if (sessionId) return sessionId;
     let sid = sessionStorage.getItem(SESSION_KEY);
     if (!sid) {
-        sid = `s_${Date.now()}_${crypto.randomUUID().split('-')[0]}`;
+        const uuid = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID().split('-')[0] : Math.random().toString(36).substring(2, 8);
+        sid = `s_${Date.now()}_${uuid}`;
         sessionStorage.setItem(SESSION_KEY, sid);
     }
     sessionId = sid;

@@ -17,7 +17,9 @@ import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent
 function initApp() {
     try {
         // Initialize analytics & error tracking early
-        initAnalytics();\n        initAuthUI();\n        initDashboardUI();
+        initAnalytics();
+        initAuthUI();
+        initDashboardUI();
 
         // Initialize language system first
         initLanguage();

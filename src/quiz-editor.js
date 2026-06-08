@@ -677,7 +677,7 @@ function renderQuestionConfig(q, qIdx) {
                     <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">\u2715</button>
                   </div>
                 ` : `
-                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t(" aria-label="${t("admin.addImage")}" style="margin-top: 4px;">\u{1F4F7}</button>
+                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}" style="margin-top: 4px;">\u{1F4F7}</button>
                 `}
                 
                 <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}" style="margin-top: 4px;">\u2715</button>

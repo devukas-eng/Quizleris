@@ -479,23 +479,55 @@ function triggerCSSConfetti(target) {
 export function onAnswer(answer) {
     if (!quiz || (quiz.hasAnswered && quiz.quiz.mode !== 'exam'))
         return;
+    const qId = quiz.currentQuestion.id;
     const grading = quiz.gradeQuestion(quiz.currentQuestion, answer);
     const wasCorrect = grading.isCorrect && !grading.pendingReview;
     quiz.submitAnswer(answer);
+    
     if (quiz.quiz.mode !== 'exam') {
+        const pointsAwarded = quiz.questionScores.get(qId) || 0;
+        
         renderQuiz(); // Redraw with feedback
+        
+        const activeBtn = document.activeElement;
+        const targetElement = (activeBtn && activeBtn.classList.contains("answer-btn")) ? activeBtn : answersContainer;
+        
         if (wasCorrect) {
             playCorrect();
-            const activeBtn = document.activeElement;
-            if (activeBtn && activeBtn.classList.contains("answer-btn")) {
-                triggerCSSConfetti(activeBtn);
-            } else {
-                triggerCSSConfetti(answersContainer);
-            }
+            triggerCSSConfetti(targetElement);
+            spawnFloatingScore(targetElement, `+${pointsAwarded} PTS!`, false);
         } else {
             playWrong();
+            spawnFloatingScore(targetElement, "MISS!", true);
+            
+            // Screen Shake
+            const mainEl = document.querySelector(".quiz-main") || document.body;
+            mainEl.classList.remove("shake-animation");
+            void mainEl.offsetWidth; // trigger reflow
+            mainEl.classList.add("shake-animation");
         }
     }
+}
+
+function spawnFloatingScore(targetElement, text, isNegative) {
+    const rect = targetElement.getBoundingClientRect();
+    const popup = document.createElement("div");
+    popup.className = `floating-score ${isNegative ? 'negative' : ''}`;
+    popup.textContent = text;
+    
+    // Spawn somewhat centered on the element
+    const x = rect.left + (rect.width / 2) - 40 + (Math.random() * 20 - 10);
+    const y = rect.top + (Math.random() * 20 - 10);
+    
+    popup.style.left = `${x}px`;
+    popup.style.top = `${y}px`;
+    
+    document.body.appendChild(popup);
+    
+    // Cleanup after animation
+    setTimeout(() => {
+        if (popup.parentNode) popup.parentNode.removeChild(popup);
+    }, 1000);
 }
 /**
  * The primary entry point for drawing the current state of the quiz.
@@ -516,6 +548,14 @@ export function renderQuiz() {
         renderQuestionCounter();
     }
     renderQuestion(quiz.currentQuestion);
+    
+    // Dynamic Streak UI
+    if (quiz.streak >= 3) {
+        document.body.classList.add("on-fire");
+    } else {
+        document.body.classList.remove("on-fire");
+    }
+
     renderAnswers(quiz.currentQuestion);
     // Status text
     if (quiz.quiz.mode !== 'exam') {
