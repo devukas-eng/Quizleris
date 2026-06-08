@@ -664,23 +664,20 @@ function renderQuestionConfig(q, qIdx) {
         </div>
         <div class="admin-choices-list" data-qidx="${qIdx}">
           ${(q.choices || []).map((choice, cIdx) => `
-            <div class="admin-choice-item" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px;">
-                <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin-top: 12px;" />
+            <div class="admin-choice-item" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin: 0;" />
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                     <math-field class="admin-choice-text" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.3rem; background: var(--bg-input); color: var(--text);">${unwrapMath(choice.text)}</math-field>
-                    
                 </div>
-                
                 ${choice.image ? `
-                  <div style="position: relative; display: inline-block; margin-top: 4px;">
+                  <div style="position: relative; display: inline-block;">
                     <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
                     <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">\u2715</button>
                   </div>
                 ` : `
-                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}" style="margin-top: 4px;">\u{1F4F7}</button>
+                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}" style="margin: 0;">\u{1F4F7}</button>
                 `}
-                
-                <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}" style="margin-top: 4px;">\u2715</button>
+                <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}" style="margin: 0;">\u2715</button>
             </div>
           `).join("")}
         </div>
