@@ -142,8 +142,6 @@ function toggleAdminMode() {
   const startMenu = document.getElementById("start-menu");
   if (startMenu) startMenu.style.display = adminMode ? "none" : "flex";
 
-  const mathEditor = document.getElementById("admin-math-editor-toggle");
-  if (mathEditor) mathEditor.style.display = adminMode ? "flex" : "none";
   if (adminMode) {
     document.body.classList.add("admin-mode-active");
   } else {
@@ -1030,73 +1028,6 @@ function setupAdminEventsInternal() {
   };
   document.addEventListener("focusin", trackActiveField);
   document.addEventListener("click", trackActiveField);
-
-  // LaTeX Palette Tab Switching
-  const paletteCard = document.getElementById("admin-latex-palette");
-  if (paletteCard) {
-    paletteCard.querySelectorAll(".palette-tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        paletteCard.querySelectorAll(".palette-tab-btn").forEach(b => {
-          b.classList.remove("active");
-          b.style.background = "transparent";
-          b.style.color = "var(--text)";
-        });
-        paletteCard.querySelectorAll(".palette-tab-content").forEach(c => c.style.display = "none");
-
-        btn.classList.add("active");
-        btn.style.background = "var(--accent)";
-        btn.style.color = "black";
-        
-        const tabId = btn.getAttribute("data-tab");
-        const tabContent = document.getElementById(`tab-${tabId}`);
-        if (tabContent) {
-          tabContent.style.display = "block";
-        }
-      });
-    });
-    
-    // Initial Math Render inside Palette
-    try {
-      window.renderMathInElement(paletteCard, {
-        delimiters: [
-          { left: "\\(", right: "\\)", display: false },
-          { left: "\\[", right: "\\]", display: true },
-        ],
-      });
-    } catch (err) { console.error("Error rendering math in palette:", err); }
-  }
-
-  // LaTeX Palette Symbol Clicks
-  document.querySelectorAll(".palette-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const latex = btn.getAttribute("data-latex");
-      if (latex && lastActiveInputField) {
-        saveStateForUndo();
-        insertTextAtCursor(lastActiveInputField, latex, true);
-      } else if (!lastActiveInputField) {
-        alert(t("admin.selectFieldFirst") || "Please click on a question input or choice field first!");
-      }
-    });
-  });
-
-  // Selection Wrappers
-  document.getElementById("palette-wrap-inline")?.addEventListener("click", () => {
-    if (lastActiveInputField) {
-      saveStateForUndo();
-      wrapSelectedInMathMode(lastActiveInputField, false);
-    } else {
-      alert(t("admin.selectFieldFirst") || "Please click on a question input or choice field first!");
-    }
-  });
-
-  document.getElementById("palette-wrap-display")?.addEventListener("click", () => {
-    if (lastActiveInputField) {
-      saveStateForUndo();
-      wrapSelectedInMathMode(lastActiveInputField, true);
-    } else {
-      alert(t("admin.selectFieldFirst") || "Please click on a question input or choice field first!");
-    }
-  });
 }
 function setupSegmentedControl() {
   adminResultGroup.querySelectorAll(".segment-btn").forEach((btn) => {
