@@ -20,7 +20,7 @@ if (process.env.DB_USE_TCP === 'true') {
     poolConfig.port = parseInt(process.env.DB_PORT || '3306');
 } else {
     // Default Hostinger socket path — override with DB_SOCKET_PATH if needed
-    poolConfig.socketPath = process.env.DB_SOCKET_PATH || '/var/lib/mysql/mysql.sock';
+    poolConfig.socketPath = process.env.DB_SOCKET_PATH || '/var/run/mysqld/mysqld.sock';
 }
 
 const pool = mysql.createPool(poolConfig);
