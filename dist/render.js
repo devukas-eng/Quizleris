@@ -1,10 +1,10 @@
 import { QuizState, quiz, setQuiz } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
-import { saveResult, addPlayerXP } from "./storage.js";
+import { saveResult } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
-import { playCorrect, playWrong, playLevelUp, toggleMute, getIsMuted } from "./audio.js";
+import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
 
 // Setup Mute Button
 document.addEventListener("DOMContentLoaded", () => {
@@ -479,23 +479,55 @@ function triggerCSSConfetti(target) {
 export function onAnswer(answer) {
     if (!quiz || (quiz.hasAnswered && quiz.quiz.mode !== 'exam'))
         return;
+    const qId = quiz.currentQuestion.id;
     const grading = quiz.gradeQuestion(quiz.currentQuestion, answer);
     const wasCorrect = grading.isCorrect && !grading.pendingReview;
     quiz.submitAnswer(answer);
+    
     if (quiz.quiz.mode !== 'exam') {
+        const pointsAwarded = quiz.questionScores.get(qId) || 0;
+        
         renderQuiz(); // Redraw with feedback
+        
+        const activeBtn = document.activeElement;
+        const targetElement = (activeBtn && activeBtn.classList.contains("answer-btn")) ? activeBtn : answersContainer;
+        
         if (wasCorrect) {
             playCorrect();
-            const activeBtn = document.activeElement;
-            if (activeBtn && activeBtn.classList.contains("answer-btn")) {
-                triggerCSSConfetti(activeBtn);
-            } else {
-                triggerCSSConfetti(answersContainer);
-            }
+            triggerCSSConfetti(targetElement);
+            spawnFloatingScore(targetElement, `+${pointsAwarded} PTS!`, false);
         } else {
             playWrong();
+            spawnFloatingScore(targetElement, "MISS!", true);
+            
+            // Screen Shake
+            const mainEl = document.querySelector(".quiz-main") || document.body;
+            mainEl.classList.remove("shake-animation");
+            void mainEl.offsetWidth; // trigger reflow
+            mainEl.classList.add("shake-animation");
         }
     }
+}
+
+function spawnFloatingScore(targetElement, text, isNegative) {
+    const rect = targetElement.getBoundingClientRect();
+    const popup = document.createElement("div");
+    popup.className = `floating-score ${isNegative ? 'negative' : ''}`;
+    popup.textContent = text;
+    
+    // Spawn somewhat centered on the element
+    const x = rect.left + (rect.width / 2) - 40 + (Math.random() * 20 - 10);
+    const y = rect.top + (Math.random() * 20 - 10);
+    
+    popup.style.left = `${x}px`;
+    popup.style.top = `${y}px`;
+    
+    document.body.appendChild(popup);
+    
+    // Cleanup after animation
+    setTimeout(() => {
+        if (popup.parentNode) popup.parentNode.removeChild(popup);
+    }, 1000);
 }
 /**
  * The primary entry point for drawing the current state of the quiz.
@@ -516,6 +548,14 @@ export function renderQuiz() {
         renderQuestionCounter();
     }
     renderQuestion(quiz.currentQuestion);
+    
+    // Dynamic Streak UI
+    if (quiz.streak >= 3) {
+        document.body.classList.add("on-fire");
+    } else {
+        document.body.classList.remove("on-fire");
+    }
+
     renderAnswers(quiz.currentQuestion);
     // Status text
     if (quiz.quiz.mode !== 'exam') {
@@ -697,7 +737,8 @@ export function showResults() {
         name: studentName,
         quizId: quiz.quiz.id,
         quizTitle: quiz.quiz.title,
-        score: results.score,
+        score: results.correctCount,
+        xpScore: results.score,
         maxScore: results.total,
         date: new Date().toISOString(),
         heartsLeft: window.quizHearts !== undefined ? window.quizHearts : 0,
@@ -779,7 +820,7 @@ export function showResults() {
         buildPreviewFinishedInfo(card);
     }
     
-    buildResultsRankCard(quiz, results, isPreview, card);
+
     buildResultsActions(quiz, container, isPreview, card);
     
     clearElement(container);
@@ -852,112 +893,7 @@ function buildPreviewFinishedInfo(card) {
     card.appendChild(previewInfo);
 }
 
-function buildResultsRankCard(quiz, results, isPreview, card) {
-    const maxStreak = quiz.maxStreak || 0;
-    const accuracy = results.percentage;
-    const score = results.correctCount || 0;
-    const xpEarned = (score * 100) + (maxStreak * 50) + (accuracy * 5);
-    
-    if (!isPreview && xpEarned > 0) {
-        const leveledUp = addPlayerXP(xpEarned);
-        if (leveledUp) {
-            playLevelUp();
-            setTimeout(() => {
-                if (window.confetti) confetti({ particleCount: 200, spread: 100, origin: { y: 0.3 } });
-            }, 500);
-        }
-    }
 
-    let rankTitle = t('rank.novice');
-    let rankClass = "rank-novice";
-    let rankComment = t('rank.novice.desc');
-    let nextLevelXp = 300;
-    if (xpEarned >= 1500) { rankTitle = t('rank.genius'); rankClass = "rank-genius"; rankComment = t('rank.genius.desc'); nextLevelXp = 1500; }
-    else if (xpEarned >= 1000) { rankTitle = t('rank.master'); rankClass = "rank-master"; rankComment = t('rank.master.desc'); nextLevelXp = 1500; }
-    else if (xpEarned >= 600) { rankTitle = t('rank.adept'); rankClass = "rank-adept"; rankComment = t('rank.adept.desc'); nextLevelXp = 1000; }
-    else if (xpEarned >= 300) { rankTitle = t('rank.apprentice'); rankClass = "rank-apprentice"; rankComment = t('rank.apprentice.desc'); nextLevelXp = 600; }
-
-    const rankCard = document.createElement("div");
-    rankCard.className = `xp-rank-card ${rankClass}`;
-    rankCard.style.marginTop = "25px";
-    rankCard.style.padding = "20px";
-    rankCard.style.borderRadius = "12px";
-    rankCard.style.background = "rgba(255, 255, 255, 0.05)";
-    rankCard.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-    rankCard.style.textAlign = "center";
-    rankCard.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.15)";
-    rankCard.style.backdropFilter = "blur(12px)";
-    rankCard.style.webkitBackdropFilter = "blur(12px)";
-
-    const xpTitle = document.createElement("h4");
-    xpTitle.style.margin = "0 0 10px 0";
-    xpTitle.style.fontSize = "1rem";
-    xpTitle.style.color = "var(--muted)";
-    xpTitle.textContent = t('quiz.xpEarned');
-    rankCard.appendChild(xpTitle);
-
-    const xpVal = document.createElement("div");
-    xpVal.className = "xp-value-glow";
-    xpVal.style.fontSize = "2.2rem";
-    xpVal.style.fontWeight = "800";
-    xpVal.style.color = "var(--accent)";
-    xpVal.style.marginBottom = "5px";
-    xpVal.textContent = `+${xpEarned} XP`;
-    rankCard.appendChild(xpVal);
-
-    const rankLabel = document.createElement("div");
-    rankLabel.style.fontSize = "0.9rem";
-    rankLabel.style.color = "var(--muted)";
-    rankLabel.style.marginBottom = "2px";
-    rankLabel.textContent = t('quiz.rank');
-    rankCard.appendChild(rankLabel);
-
-    const rankBadge = document.createElement("div");
-    rankBadge.className = "rank-badge";
-    rankBadge.style.fontSize = "1.5rem";
-    rankBadge.style.fontWeight = "700";
-    rankBadge.style.display = "inline-block";
-    rankBadge.style.padding = "6px 16px";
-    rankBadge.style.borderRadius = "20px";
-    rankBadge.style.background = "rgba(255, 255, 255, 0.08)";
-    rankBadge.style.marginTop = "5px";
-    rankBadge.textContent = rankTitle;
-    rankCard.appendChild(rankBadge);
-
-    const rankCommentEl = document.createElement("div");
-    rankCommentEl.className = "rank-comment-glow";
-    rankCommentEl.style.fontSize = "1rem";
-    rankCommentEl.style.fontStyle = "italic";
-    rankCommentEl.style.color = "var(--text)";
-    rankCommentEl.style.marginTop = "15px";
-    rankCommentEl.style.marginBottom = "5px";
-    rankCommentEl.style.lineHeight = "1.45";
-    rankCommentEl.style.opacity = "0.95";
-    rankCommentEl.style.fontWeight = "500";
-    rankCommentEl.textContent = rankComment;
-    rankCard.appendChild(rankCommentEl);
-
-    const progressContainer = document.createElement("div");
-    progressContainer.style.width = "100%";
-    progressContainer.style.background = "rgba(0, 0, 0, 0.2)";
-    progressContainer.style.height = "8px";
-    progressContainer.style.borderRadius = "4px";
-    progressContainer.style.marginTop = "15px";
-    progressContainer.style.overflow = "hidden";
-
-    const progressBar = document.createElement("div");
-    progressBar.style.height = "100%";
-    progressBar.style.background = "var(--accent)";
-    progressBar.style.borderRadius = "4px";
-
-    const progressPercent = nextLevelXp > 0 ? (xpEarned / nextLevelXp) * 100 : 100;
-    progressBar.style.width = `${Math.min(100, progressPercent)}%`;
-    progressBar.style.transition = "width 1s ease-out";
-
-    progressContainer.appendChild(progressBar);
-    rankCard.appendChild(progressContainer);
-    card.appendChild(rankCard);
-}
 
 function buildResultsActions(quiz, container, isPreview, card) {
     const actions = document.createElement("div");

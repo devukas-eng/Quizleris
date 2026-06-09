@@ -1,4 +1,3 @@
-import { t } from "./lang.js";
 
 // ─── Player Profile & Progression System ───
 export const STORAGE_KEY_XP = "quizleris_player_xp";
@@ -40,56 +39,38 @@ export const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
 export function generateQuizId() {
     return `quiz_${Date.now()}`;
 }
+import { saveQuizToCloud } from "./api.js";
+
 /**
- * Persists a quiz object to localStorage and updates the global ID index.
- * WARNING: localStorage has a size limit (usually ~5MB). Quizzes with many images may exceed this.
+ * 2026 Senior Concept: Pure Cloud Mode. Saves instantly to cloud. LocalStorage is deprecated for quizzes.
  */
-export function saveQuizToStorage(quizData) {
-    const key = STORAGE_KEY_PREFIX + quizData.id;
-    localStorage.setItem(key, JSON.stringify(quizData));
-    // Track all quiz IDs
-    const allIds = getAllQuizIds();
-    if (!allIds.includes(quizData.id)) {
-        allIds.push(quizData.id);
-        localStorage.setItem(STORAGE_KEY_ALL_IDS, JSON.stringify(allIds));
+export async function saveQuizToStorage(quizData) {
+    // Cloud Sync
+    const result = await saveQuizToCloud(quizData);
+    if (result.success) {
+        console.log(`[CloudSync] Quiz ${quizData.id} synced to MySQL!`);
     }
+    return result;
 }
-// Load quiz from localStorage by ID
-export function loadQuizFromStorage(quizId) {
-    const key = STORAGE_KEY_PREFIX + quizId;
-    const data = localStorage.getItem(key);
-    if (!data) {
-        // Fallback to premade
-        if (quizId === "demo")
-            return getDemoQuiz();
-        const premade = getPremadeQuizzes().find(q => q.id === quizId);
-        return premade || null;
-    }
+// Load quiz strictly from the cloud
+export async function loadQuizFromStorage(quizId) {
     try {
-        return JSON.parse(data);
-    }
-    catch {
+        const res = await fetch('/api/quizzes/' + quizId);
+        if (res.ok) {
+            const data = await res.json();
+            return data;
+        }
+        return null;
+    } catch (err) {
+        console.error("Cloud fetch failed", err);
         return null;
     }
 }
-// Get all saved quiz IDs
+// Get all saved quiz IDs (Deprecated)
 export function getAllQuizIds() {
-    const data = localStorage.getItem(STORAGE_KEY_ALL_IDS);
-    if (!data)
-        return [];
-    try {
-        return JSON.parse(data);
-    }
-    catch {
-        return [];
-    }
+    return [];
 }
-/**
- * The primary loading routine for the application.
- * Checks for a 'quiz' URL parameter (Base64 data) first, then falls back to localStorage.
- * Handles the heavy lifting of Base64 decoding and image registry restoration.
- */
-export function loadQuiz() {
+export async function loadQuiz() {
     // Check URL param first: ?quiz=abc123
     const params = new URLSearchParams(window.location.search);
     const quizParam = params.get("quiz");
@@ -97,34 +78,20 @@ export function loadQuiz() {
         // Try to decode as base64 JSON (for sharing)
         try {
             // Enhanced decoding: supports UTF-8 (Lithuanian chars) and handles binary data safety.
-            // Uses TextDecoder to correctly interpret multi-byte characters.
             const binary = atob(quizParam);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++)
                 bytes[i] = binary.charCodeAt(i);
             const decoded = new TextDecoder().decode(bytes);
             const parsed = JSON.parse(decoded);
-            // Restore image prefixes (Approach #1) and Local Registry references (Approach #2)
             const prefix = "data:image/jpeg;base64,";
             parsed.questions.forEach(q => {
-                // Handle Approach #1 (Prefix Stripping)
                 if (q.image && !q.image.startsWith("data:") && !q.image.startsWith("local:")) {
                     q.image = prefix + q.image;
                 }
-                // Handle Approach #2 (Local Registry)
-                if (q.image?.startsWith("local:")) {
-                    const imgId = q.image.substring(6);
-                    q.image = getImageFromRegistry(parsed.id, imgId) || "";
-                }
                 q.choices?.forEach(c => {
-                    // Handle Approach #1
                     if (c.image && !c.image.startsWith("data:") && !c.image.startsWith("local:")) {
                         c.image = prefix + c.image;
-                    }
-                    // Handle Approach #2
-                    if (c.image?.startsWith("local:")) {
-                        const imgId = c.image.substring(6);
-                        c.image = getImageFromRegistry(parsed.id, imgId) || "";
                     }
                 });
             });
@@ -132,144 +99,15 @@ export function loadQuiz() {
         }
         catch (e) {
             console.warn("Base64 decode failed, trying raw string lookup", e);
-            // If not base64, treat as localStorage ID
-            const loaded = loadQuizFromStorage(quizParam);
-            if (loaded)
-                return loaded;
+            // It might be a quiz ID from the cloud database
+            const loaded = await loadQuizFromStorage(quizParam);
+            return loaded || null;
         }
     }
-    // Try to load from localStorage (most recent, or first available)
-    const allIds = getAllQuizIds();
-    if (allIds.length > 0) {
-        const lastId = allIds[allIds.length - 1];
-        const loaded = loadQuizFromStorage(lastId);
-        if (loaded)
-            return loaded;
-    }
-    // Fallback: return a default demo quiz
-    // Fallback: return a default demo quiz
-    return getDemoQuiz();
+    return null;
 }
-export function getDemoQuiz() {
-    return {
-        id: "demo",
-        title: t('quiz.demoTitle'),
-        questions: [
-            {
-                id: "q1",
-                prompt: "What is the derivative of \\(x^2\\)?",
-                choices: [
-                    { id: "a", text: "\\(2x\\)", isCorrect: true },
-                    { id: "b", text: "\\(x\\)", isCorrect: false },
-                    { id: "c", text: "\\(x^2\\)", isCorrect: false },
-                    { id: "d", text: "\\(2\\)", isCorrect: false },
-                ],
-            },
-        ],
-    };
-}
-export function getPremadeQuizzes() {
-    return [
-        {
-            ...getDemoQuiz(),
-            shuffleConfig: { questions: true, answers: true }
-        },
-        {
-            id: "algebra",
-            title: t('quiz.algebraTitle'),
-            questions: [
-                {
-                    id: "a1",
-                    prompt: "Solve for \\(x\\): \\(2x + 5 = 15\\)",
-                    choices: [
-                        { id: "a", text: "5", isCorrect: true },
-                        { id: "b", text: "10", isCorrect: false },
-                        { id: "c", text: "2.5", isCorrect: false },
-                        { id: "d", text: "7.5", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "a2",
-                    prompt: "Expand the expression \\((x+3)(x-3)\\)",
-                    choices: [
-                        { id: "a", text: "\\(x^2 - 9\\)", isCorrect: true },
-                        { id: "b", text: "\\(x^2 + 9\\)", isCorrect: false },
-                        { id: "c", text: "\\(x^2 - 6x + 9\\)", isCorrect: false },
-                        { id: "d", text: "\\(x^2 + 6x + 9\\)", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "a3",
-                    prompt: "Simplify: \\(3(x - 2) + 4x\\)",
-                    choices: [
-                        { id: "a", text: "\\(7x - 6\\)", isCorrect: true },
-                        { id: "b", text: "\\(7x - 2\\)", isCorrect: false },
-                        { id: "c", text: "\\(x - 6\\)", isCorrect: false },
-                        { id: "d", text: "\\(12x - 6\\)", isCorrect: false }
-                    ]
-                }
-            ],
-            shuffleConfig: { questions: true, answers: true }
-        },
-        {
-            id: "combinatorics",
-            title: t('quiz.combinatoricsTitle'),
-            questions: [
-                {
-                    id: "c1",
-                    prompt: "How many distinct ways can the letters in the word 'BANANA' be arranged?",
-                    choices: [
-                        { id: "a", text: "60", isCorrect: true },
-                        { id: "b", text: "120", isCorrect: false },
-                        { id: "c", text: "720", isCorrect: false },
-                        { id: "d", text: "360", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "c2",
-                    prompt: "A committee of 3 people is to be chosen from a group of 10. How many different committees are possible?",
-                    choices: [
-                        { id: "a", text: "120", isCorrect: true },
-                        { id: "b", text: "720", isCorrect: false },
-                        { id: "c", text: "30", isCorrect: false },
-                        { id: "d", text: "1000", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "c3",
-                    prompt: "In how many ways can 5 people span in a line?",
-                    choices: [
-                        { id: "a", text: "120", isCorrect: true },
-                        { id: "b", text: "24", isCorrect: false },
-                        { id: "c", text: "720", isCorrect: false },
-                        { id: "d", text: "25", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "c4",
-                    prompt: "What is the coefficient of \\(x^2\\) in the expansion of \\((1+x)^5\\)?",
-                    choices: [
-                        { id: "a", text: "10", isCorrect: true },
-                        { id: "b", text: "5", isCorrect: false },
-                        { id: "c", text: "20", isCorrect: false },
-                        { id: "d", text: "1", isCorrect: false }
-                    ]
-                },
-                {
-                    id: "c5",
-                    prompt: "You have 4 different math books and 5 different history books. How many ways can you arrange them on a shelf if books of the same subject must be together?",
-                    choices: [
-                        { id: "a", text: "69,120", isCorrect: false },
-                        { id: "b", text: "5,760", isCorrect: true },
-                        { id: "c", text: "362,880", isCorrect: false },
-                        { id: "d", text: "20", isCorrect: false }
-                    ]
-                }
-            ],
-            shuffleConfig: { questions: true, answers: true }
-        }
-    ];
-}
+
+
 export function getTopicBundles() {
     return [
         {

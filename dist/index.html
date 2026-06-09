@@ -8,7 +8,7 @@
   <title>Quizleris</title>
   <meta name="description" content="Quizleris - A fast, modern, and engaging quiz application." />
   <meta name="theme-color" content="#6366f1" />
-  <link rel="icon" type="image/x-icon" href="./favicon.ico">
+
   <!-- Link to your stylesheet (we'll create style.css next) -->
   <link rel="stylesheet" href="style.css" />
   
@@ -118,6 +118,11 @@
             <span data-i18n="admin.quizTitle">Quiz Title:</span>
             <input type="text" id="admin-quiz-title" class="input-field"
               data-i18n-placeholder="admin.quizTitlePlaceholder" placeholder="My Math Quiz" />
+          </label>
+          <label id="admin-quiz-id-container" style="display: none; margin-top: 15px;">
+            <span data-i18n="admin.quizId" style="color: var(--accent);">Custom Quiz ID (Admin Only):</span>
+            <input type="text" id="admin-quiz-id" class="input-field"
+              placeholder="e.g. biology-final" style="border-color: var(--accent);" />
           </label>
           <label style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
             <span>Visibility:</span>
@@ -379,94 +384,17 @@
   </div>
 
   <!-- Legal Footer (rendered inside #app-root bottom by JS, but declared here) -->
-<div class="floating-math-editor collapsed" id="admin-math-editor-toggle" style="display: none;">
-            <div class="math-editor-header" id="math-editor-header">
-              <span>📐 Math Editor / LaTeX</span>
-              <span class="math-editor-chevron">▲</span>
-            </div>
-            <div style="padding: 0 18px 18px 18px; display: flex; gap: 15px; flex-wrap: wrap;" class="palette-content-wrapper">
-              <!-- LaTeX Math Quick-Click Symbol Palette -->
-              <div id="admin-latex-palette" style="flex: 2; min-width: 300px;">
-                <h3 class="palette-title" style="margin: 0 0 12px 0; font-size: 1.1rem; font-weight: bold; color: var(--accent);" data-i18n="admin.latexPaletteTitle">LaTeX & Simboliai</h3>
-                <div class="palette-tabs" style="display: flex; gap: 4px; margin-bottom: 12px; background: rgba(0,0,0,0.15); padding: 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto;">
-                  <button type="button" class="palette-tab-btn active" data-tab="common" style="flex: 1; border: none; background: var(--accent); color: black; padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabCommon">Paprasti</button>
-                  <button type="button" class="palette-tab-btn" data-tab="greek" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabGreek">Graikų</button>
-                  <button type="button" class="palette-tab-btn" data-tab="operators" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabOperators">Operatoriai</button>
-                  <button type="button" class="palette-tab-btn" data-tab="advanced" style="flex: 1; border: none; background: transparent; color: var(--text); padding: 6px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" data-i18n="admin.paletteTabAdvanced">Sudėtingi</button>
-                </div>
-                
-                <!-- Tab Contents -->
-                <div class="palette-tab-content active" id="tab-common">
-                  <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                    <button type="button" class="palette-btn" data-latex="\quad" title="Space (Quad)" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">(Tarpas)</button>
-                    <button type="button" class="palette-btn" data-latex="\frac{a}{b}" title="Fraction" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\frac{a}{b}\)</button>
-                    <button type="button" class="palette-btn" data-latex="^{n}" title="Exponent" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(x^n\)</button>
-                    <button type="button" class="palette-btn" data-latex="_{i}" title="Subscript" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(x_i\)</button>
-                    <button type="button" class="palette-btn" data-latex="\sqrt{x}" title="Square Root" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sqrt{x}\)</button>
-                    <button type="button" class="palette-btn" data-latex="\sqrt[3]{x}" title="Cube Root" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sqrt[3]{x}\)</button>
-                    <button type="button" class="palette-btn" data-latex="\left( x \\right)" title="Parentheses" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\((x)\)</button>
-                    <button type="button" class="palette-btn" data-latex="\left[ x \\right]" title="Brackets" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\([x]\)</button>
-                    <button type="button" class="palette-btn" data-latex="\log_{b}{x}" title="Logarithm" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\log_b x\)</button>
-                  </div>
-                </div>
-                <div class="palette-tab-content" id="tab-greek" style="display: none;">
-                  <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                    <button type="button" class="palette-btn" data-latex="\alpha" title="Alpha" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\alpha\)</button>
-                    <button type="button" class="palette-btn" data-latex="\beta" title="Beta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\beta\)</button>
-                    <button type="button" class="palette-btn" data-latex="\gamma" title="Gamma" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\gamma\)</button>
-                    <button type="button" class="palette-btn" data-latex="\theta" title="Theta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\theta\)</button>
-                    <button type="button" class="palette-btn" data-latex="\pi" title="Pi" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\pi\)</button>
-                    <button type="button" class="palette-btn" data-latex="\Delta" title="Delta" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\Delta\)</button>
-                    <button type="button" class="palette-btn" data-latex="\sigma" title="Sigma" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sigma\)</button>
-                    <button type="button" class="palette-btn" data-latex="\lambda" title="Lambda" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\lambda\)</button>
-                  </div>
-                </div>
-                <div class="palette-tab-content" id="tab-operators" style="display: none;">
-                  <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                    <button type="button" class="palette-btn" data-latex="\pm" title="Plus-Minus" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\pm\)</button>
-                    <button type="button" class="palette-btn" data-latex="\times" title="Times" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\times\)</button>
-                    <button type="button" class="palette-btn" data-latex="\div" title="Divide" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\div\)</button>
-                    <button type="button" class="palette-btn" data-latex="\neq" title="Not Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\neq\)</button>
-                    <button type="button" class="palette-btn" data-latex="\approx" title="Approximate" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\approx\)</button>
-                    <button type="button" class="palette-btn" data-latex="\le" title="Less or Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\le\)</button>
-                    <button type="button" class="palette-btn" data-latex="\ge" title="Greater or Equal" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\ge\)</button>
-                    <button type="button" class="palette-btn" data-latex="\infty" title="Infinity" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\infty\)</button>
-                  </div>
-                </div>
-                <div class="palette-tab-content" id="tab-advanced" style="display: none;">
-                  <div class="palette-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                    <button type="button" class="palette-btn" data-latex="\int_{a}^{b} x \\,dx" title="Definite Integral" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\int_a^b\)</button>
-                    <button type="button" class="palette-btn" data-latex="\sum_{i=1}^{n} x_i" title="Summation" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sum\)</button>
-                    <button type="button" class="palette-btn" data-latex="\lim_{x \\to \\infty}" title="Limit" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\lim\)</button>
-                    <button type="button" class="palette-btn" data-latex="\vec{v}" title="Vector" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\vec{v}\)</button>
-                    <button type="button" class="palette-btn" data-latex="\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}" title="Matrix 2x2" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.65rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s; overflow: hidden; padding: 2px;">\(\begin{pmatrix}a&b\\c&d\end{pmatrix}\)</button>
-                    <button type="button" class="palette-btn" data-latex="\sin{x}" title="Sine" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\sin\)</button>
-                    <button type="button" class="palette-btn" data-latex="\cos{x}" title="Cosine" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\cos\)</button>
-                    <button type="button" class="palette-btn" data-latex="\tan{x}" title="Tangent" style="background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: var(--text); border-radius: 6px; height: 35px; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">\(\tan\)</button>
-                  </div>
-                </div>
+  <!-- MathLive Shortcuts Panel -->
+  <div id="math-shortcuts-panel" class="glass-card" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 10000; padding: 15px; width: 250px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+    <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; font-weight: bold; color: var(--accent);" data-i18n="admin.shortcutsTitle">Greitieji klavišai</h4>
+    <ul style="margin: 0; padding-left: 15px; font-size: 0.75rem; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; color: var(--text); list-style-type: disc;">
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Ctrl+S</kbd> / <kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Alt+S</kbd> <span data-i18n="admin.shortcutSave" style="opacity: 0.85; margin-left: 4px;">Išsaugoti</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Alt+N</kbd> <span data-i18n="admin.shortcutNew" style="opacity: 0.85; margin-left: 4px;">Naujas kl.</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Ctrl+Z</kbd> / <kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Y</kbd> <span data-i18n="admin.shortcutUndoRedo" style="opacity: 0.85; margin-left: 4px;">Atšaukti/Grąžinti</span></li>
+      <li><kbd style="background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(0,0,0,0.1); font-family: monospace;">Shift</kbd> <span style="opacity: 0.85; margin-left: 4px;">Keičia simbolius</span></li>
+    </ul>
+  </div>
 
-                <!-- Wrap selection helpers -->
-                <div class="palette-wrappers" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display: flex; gap: 8px;">
-                  <button type="button" class="palette-btn btn btn-secondary wrapper-btn" data-latex="\text{}" style="flex:1; font-size: 0.85rem; padding: 6px; min-width: 0;" title="Teksto Režimas">Teksto Režimas</button>
-                </div>
-              </div>
-
-              <!-- Keyboard Shortcuts Legend -->
-              <div id="admin-shortcuts-legend" style="flex: 1; min-width: 200px; padding: 15px; border-radius: var(--radius); background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);">
-                <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; font-weight: bold; color: var(--accent);" data-i18n="admin.shortcutsTitle">Greitieji klavišai</h4>
-                <ul style="margin: 0; padding-left: 15px; font-size: 0.75rem; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; color: var(--text); list-style-type: disc;">
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+S</kbd> / <kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Alt+S</kbd> <span data-i18n="admin.shortcutSave" style="opacity: 0.85; margin-left: 4px;">Išsaugoti</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Alt+N</kbd> <span data-i18n="admin.shortcutNew" style="opacity: 0.85; margin-left: 4px;">Naujas kl.</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+M</kbd> <span data-i18n="admin.shortcutWrap" style="opacity: 0.85; margin-left: 4px;">LaTeX apgaub.</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+Z</kbd> / <kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Y</kbd> <span data-i18n="admin.shortcutUndoRedo" style="opacity: 0.85; margin-left: 4px;">Atšaukti/Grąžinti</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Shift</kbd> <span style="opacity: 0.85; margin-left: 4px;">Keičia simbolius (Klaviatūroje)</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+C/V</kbd> <span style="opacity: 0.85; margin-left: 4px;">Kopijuoti/Įklijuoti</span></li>
-                  <li><kbd style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); font-family: monospace;">Ctrl+A</kbd> <span style="opacity: 0.85; margin-left: 4px;">Pasirinkti viską</span></li>
-                </ul>
-              </div>
-            </div>
-          </div>
 </body>
 
 </html>

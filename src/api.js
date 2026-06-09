@@ -21,7 +21,7 @@ export async function login(username, password) {
         body: JSON.stringify({ username, password })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) throw new Error(data.detail ? `${data.error}: ${data.detail}` : data.error);
     
     setToken(data.token);
     localStorage.setItem('quizleris_user', JSON.stringify(data.user));

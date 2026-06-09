@@ -8,19 +8,25 @@ import { renderTopicsPage } from "./topics.js";
 import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
+import { syncCloudQuizzes } from "./sync.js";
 
 /**
  * The main application bootstrap function.
  * Orchestrates the initialization of all modules, sets up global callbacks,
  * handles initial routing via URL parameters, and wires up the language switcher.
  */
-function initApp() {
+async function initApp() {
     try {
         // Initialize analytics & error tracking early
-        initAnalytics();\n        initAuthUI();\n        initDashboardUI();
+        initAnalytics();
+        initAuthUI();
+        initDashboardUI();
 
         // Initialize language system first
         initLanguage();
+        
+        // Background sync quizzes from cloud
+        syncCloudQuizzes();
 
         // ── Apple-like Theme Picker ──────────────────────────────────
         const THEMES = [
@@ -193,7 +199,7 @@ function initApp() {
             renderDashboard(dashParam);
         }
         else if (quizParam) {
-            const quizData = loadQuiz();
+            const quizData = await loadQuiz();
             renderStudentJoin(quizData);
         }
         else if (viewParam === "topics" || path === "/topics" || path.endsWith("/topics")) {
@@ -215,7 +221,7 @@ function initApp() {
             updateThemePickerUI(currentTheme);
         }
 
-        function switchLanguage(newLang) {
+        async function switchLanguage(newLang) {
             setLanguage(newLang);
             updateLangPillUI(newLang);
             updatePageLanguage();
@@ -226,7 +232,7 @@ function initApp() {
             if (currentDash) {
                 renderDashboard(currentDash);
             } else if (currentQuiz) {
-                renderStudentJoin(loadQuiz());
+                renderStudentJoin(await loadQuiz());
             } else if (window.location.pathname.includes('/topics')) {
                 renderTopicsPage();
             } else {
@@ -458,7 +464,10 @@ function getLegalContent(type, lang) {
 
 // Initialize admin UI & Menu after DOM is ready
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initApp);
+    document.addEventListener("DOMContentLoaded", async () => {
+        await loadQuiz();
+        initApp();
+    });
 }
 else {
     initApp();
@@ -468,4 +477,3 @@ window.onpopstate = () => {
     // Simple routing reload
     location.reload();
 };
-

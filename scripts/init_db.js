@@ -25,6 +25,8 @@ async function initDB() {
                 title VARCHAR(255) NOT NULL,
                 visibility ENUM('public', 'private') DEFAULT 'private',
                 quiz_data JSON NOT NULL,
+                storage_bytes INT DEFAULT 0,
+                expires_at TIMESTAMP NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL

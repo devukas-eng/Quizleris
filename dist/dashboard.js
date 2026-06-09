@@ -56,7 +56,8 @@ function renderDashboardList(quizId) {
     `;
     results.forEach(r => {
         const dateStr = new Date(r.date).toLocaleDateString() + " " + new Date(r.date).toLocaleTimeString();
-        const percentage = Math.round((r.score / r.maxScore) * 100);
+        const displayScore = (r.correctCount !== undefined) ? r.correctCount : (r.score > r.maxScore ? Math.round((r.percentage || 0) / 100 * r.maxScore) : r.score);
+        const percentage = Math.round((displayScore / r.maxScore) * 100);
         const scoreClass = percentage >= 80 ? "good" : percentage < 50 ? "bad" : "avg";
         html += `
             <tr data-result-idx="${allResults.indexOf(r)}">
@@ -64,7 +65,7 @@ function renderDashboardList(quizId) {
                 <td>${escapeHtml(r.name)}</td>
                 ${!quizId ? `<td>${escapeHtml(r.quizTitle || r.quizId)}</td>` : ''}
                 <td class="score-${scoreClass}">
-                    ${r.score}/${r.maxScore} (${percentage}%)
+                    ${displayScore}/${r.maxScore} (${percentage}%)
                 </td>
                 <td>
                     <button class="btn btn-secondary view-details-btn" style="padding: 6px 12px; font-size: 0.85rem;">${t('dashboard.details')}</button>
@@ -90,12 +91,13 @@ function renderDashboardList(quizId) {
                     <tbody>
     `;
     highScores.forEach(h => {
-        const percentage = Math.round((h.score / h.maxScore) * 100);
+        const displayScore = (h.correctCount !== undefined) ? h.correctCount : (h.score > h.maxScore ? Math.round((h.percentage || 0) / 100 * h.maxScore) : h.score);
+        const percentage = Math.round((displayScore / h.maxScore) * 100);
         html += `
             <tr>
                 ${!quizId ? `<td>${escapeHtml(h.quizId)}</td>` : ''}
                 <td>${escapeHtml(h.name)}</td>
-                <td class="score-good">${h.score}/${h.maxScore} (${percentage}%)</td>
+                <td class="score-good">${displayScore}/${h.maxScore} (${percentage}%)</td>
                 <td>${new Date(h.date).toLocaleDateString()}</td>
             </tr>
          `;
@@ -130,7 +132,7 @@ function showResultDetails(result) {
         </div>
         <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.quiz')}: <strong>${escapeHtml(result.quizTitle || result.quizId)}</strong></p>
         <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.date')}: <strong>${new Date(result.date).toLocaleString()}</strong></p>
-        <p style="font-size: 1.1rem; margin-bottom: 24px;">${t('dashboard.score')}: <strong class="text-success">${result.score} / ${result.maxScore}</strong></p>
+        <p style="font-size: 1.1rem; margin-bottom: 24px;">${t('dashboard.score')}: <strong class="text-success">${(result.correctCount !== undefined ? result.correctCount : (result.score > result.maxScore ? Math.round((result.percentage || 0) / 100 * result.maxScore) : result.score))} / ${result.maxScore}</strong></p>
         
         <div class="results-review" style="max-height: 50vh; overflow-y: auto; margin-top: 24px; padding-right: 10px;">
     `;

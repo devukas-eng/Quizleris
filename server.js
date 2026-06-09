@@ -10,6 +10,10 @@ const pool = require('./src/backend/db.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Trust the first proxy (Hostinger nginx) so express-rate-limit
+// can correctly read X-Forwarded-For without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 
 // Security Middlewares (2026 Senior Concepts)
@@ -98,9 +102,28 @@ app.get('/api/health', async (req, res) => {
     }
 });
 
+// --- DEBUG: Check table schema (safe — no data exposed) ---
+app.get('/api/debug/tables', async (req, res) => {
+    try {
+        const [tables] = await pool.query('SHOW TABLES');
+        const tableNames = tables.map(t => Object.values(t)[0]);
+        const result = { tables: tableNames };
+        if (tableNames.includes('users')) {
+            const [cols] = await pool.query('SHOW COLUMNS FROM users');
+            result.users_columns = cols.map(c => c.Field);
+        }
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Username and password are required.' });
+        }
         
         const [rows] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
         const user = rows[0];

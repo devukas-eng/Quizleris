@@ -1681,8 +1681,7 @@ body {
     }
 
     .bundle-row .bundle-card {
-        flex: 0 0 85vw;
-        padding: 20px;
+        flex: 0 0 240px;
     }
 
     .topics-page-container h1 {
@@ -3493,8 +3492,14 @@ body.admin-mode-active #language-toggle-container {
 /* MathLive Overrides */
 math-field {
   --contains-highlight-background-color: transparent !important;
+  --active-expr-background-color: transparent !important;
   --selection-background-color: rgba(99, 102, 241, 0.3) !important;
-  --selection-color: var(--text) !important;
+  --selection-color: inherit !important;
+}
+
+math-field::part(selection) {
+  background-color: rgba(99, 102, 241, 0.3) !important;
+  color: inherit !important;
 }
 
 math-field:focus, math-field:focus-within {
@@ -3504,4 +3509,54 @@ math-field:focus, math-field:focus-within {
 /* Hide MathLive virtual keyboard action toolbar (Cut/Copy/Paste) */
 math-virtual-keyboard::part(action-toolbar) {
   display: none !important;
+}
+
+/* --- GAME FEEL & JUICE ANIMATIONS --- */
+
+/* Screen Shake on wrong answer */
+@keyframes shake-error {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(10px); }
+  60% { transform: translateX(-10px); }
+  80% { transform: translateX(10px); }
+  100% { transform: translateX(0); }
+}
+
+.shake-animation {
+  animation: shake-error 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+/* Floating Score Popups */
+.floating-score {
+  position: absolute;
+  pointer-events: none;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #10b981;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.8), 0 0 20px rgba(16, 185, 129, 0.4);
+  z-index: 1000;
+  animation: float-up-fade 1s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.floating-score.negative {
+  color: #ef4444;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes float-up-fade {
+  0% { transform: translateY(0) scale(0.8); opacity: 1; }
+  50% { transform: translateY(-30px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-60px) scale(1); opacity: 0; }
+}
+
+/* Intense Streak Pulse for background/borders */
+@keyframes intense-streak-pulse {
+  0% { box-shadow: inset 0 0 0px rgba(255, 78, 80, 0); }
+  50% { box-shadow: inset 0 0 40px rgba(255, 78, 80, 0.15); }
+  100% { box-shadow: inset 0 0 0px rgba(255, 78, 80, 0); }
+}
+
+.on-fire {
+  animation: intense-streak-pulse 1.5s infinite alternate;
 }
