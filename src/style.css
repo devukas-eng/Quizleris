@@ -3024,9 +3024,6 @@ body.admin-mode-active #language-toggle-container {
 }
 .frenzy-btn-secondary:hover { background: rgba(255,255,255,0.05); }
 
-@media (max-width: 600px) {
-    .frenzy-hud { padding: 16px; flex-wrap: wrap; gap: 12px; }
-    .frenzy-lives { font-size: 1.5rem; }
 #frenzy-root {
     position: fixed;
     inset: 0;
@@ -3559,4 +3556,868 @@ math-virtual-keyboard::part(action-toolbar) {
 
 .on-fire {
   animation: intense-streak-pulse 1.5s infinite alternate;
+}
+
+/* ==========================================================================
+   Form system — one shape, height and colour scheme for every editor control
+   ========================================================================== */
+
+/* Per-theme tokens. Declared on every theme class (not only :root) so that
+   var() references resolve against the active theme on <body>. */
+:root, .theme-emerald, .theme-cyberpunk, .theme-solar, .theme-slate-dark {
+    --control-radius: 10px;
+    --control-height: 44px;
+    --control-border: color-mix(in srgb, var(--text) 16%, transparent);
+    --control-border-hover: color-mix(in srgb, var(--text) 30%, transparent);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+    --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+    --danger-strong: #dc2626;
+    --surface-solid: #ffffff;
+    /* Aliases for names used in older rules that were never defined */
+    --bg-input: var(--input-bg);
+    --bg-card: var(--card-bg);
+}
+.theme-cyberpunk { --surface-solid: #160d38; --danger-strong: #ff6b8b; }
+.theme-solar { --surface-solid: #1f1710; --danger-strong: #f87171; }
+.theme-slate-dark { --surface-solid: #1e293b; --danger-strong: #f87171; }
+
+.admin-form input[type="text"],
+.admin-form input[type="number"],
+.admin-form select,
+.admin-form textarea,
+.admin-select-compact,
+.admin-math-input,
+.admin-share-field input {
+    width: 100%;
+    min-height: var(--control-height);
+    margin-top: 0;
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background-color: var(--input-bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.3s ease;
+}
+
+.admin-form textarea {
+    padding: 10px 14px;
+}
+
+.admin-form input[type="text"]:hover,
+.admin-form input[type="number"]:hover,
+.admin-form select:hover,
+.admin-form textarea:hover,
+.admin-select-compact:hover,
+.admin-math-input:hover {
+    border-color: var(--control-border-hover);
+}
+
+.admin-form input:focus,
+.admin-form select:focus,
+.admin-form textarea:focus,
+.admin-select-compact:focus,
+.admin-math-input:focus-within,
+.admin-share-field input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+    outline: none;
+}
+
+/* Selects: own chevron, readable options in every theme */
+.admin-form select,
+.admin-select-compact {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 40px;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238B95A5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 12px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-form select option,
+.admin-select-compact option {
+    background-color: var(--surface-solid);
+    color: var(--text);
+}
+
+.admin-select-compact {
+    width: auto;
+    min-width: 180px;
+    max-width: 260px;
+    min-height: 38px;
+    font-size: 0.875rem;
+}
+
+/* Where supported, the open list gets the same rounded card look as the field */
+@supports (appearance: base-select) {
+    .admin-form select,
+    .admin-select-compact,
+    .admin-form select::picker(select),
+    .admin-select-compact::picker(select) {
+        appearance: base-select;
+    }
+
+    .admin-form select {
+        display: flex;
+        align-items: center;
+    }
+
+    .admin-select-compact {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .admin-form select::picker-icon,
+    .admin-select-compact::picker-icon {
+        display: none;
+    }
+
+    .admin-form select::picker(select),
+    .admin-select-compact::picker(select) {
+        margin-top: 6px;
+        padding: 6px;
+        border: 1px solid var(--control-border);
+        border-radius: var(--control-radius);
+        background: var(--surface-solid);
+        color: var(--text);
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+    }
+
+    .admin-form select option,
+    .admin-select-compact option {
+        padding: 9px 12px;
+        border-radius: 7px;
+        font-size: 0.92rem;
+        cursor: pointer;
+    }
+
+    .admin-form select option:hover,
+    .admin-form select option:focus-visible,
+    .admin-select-compact option:hover,
+    .admin-select-compact option:focus-visible {
+        background-color: var(--accent-soft);
+        outline: none;
+    }
+
+    .admin-form select option:checked,
+    .admin-select-compact option:checked {
+        background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+        font-weight: 600;
+    }
+
+    .admin-form select option::checkmark,
+    .admin-select-compact option::checkmark {
+        color: var(--accent);
+    }
+}
+
+/* MathLive fields share the same frame */
+.admin-math-input {
+    display: block;
+    min-height: 48px;
+    padding: 8px 12px;
+    font-size: 1.15rem;
+}
+
+/* Labels */
+.admin-form label {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.01em;
+}
+
+.admin-form label > input,
+.admin-form label > select,
+.admin-form label > math-field {
+    margin-top: 6px;
+}
+
+/* Editor header */
+.admin-undo-group {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: var(--input-bg);
+}
+
+.admin-undo-group .btn-icon {
+    width: 32px;
+    min-width: 32px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.admin-undo-group .btn-icon:hover:not(:disabled) {
+    background: var(--accent-soft);
+}
+
+.admin-undo-group .btn-icon:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.admin-load-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-compact {
+    min-height: 38px;
+    padding: 6px 14px;
+    font-size: 0.9rem;
+}
+
+/* Visibility + settings blocks */
+.admin-visibility-field {
+    display: block;
+    margin: 18px 0 20px;
+    max-width: 420px;
+}
+
+.admin-settings-card {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+}
+
+.admin-settings-card > div {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.admin-settings-card .segmented-control {
+    margin-top: 0;
+}
+
+/* Segmented controls: shorter, theme-coloured */
+.segment-btn {
+    min-height: 52px;
+    padding: 8px 14px;
+    line-height: 1.25;
+}
+
+.segment-btn.active {
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
+    text-shadow: none;
+}
+
+.segment-btn:hover:not(.active) {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+/* Question cards stand out from the grey panel */
+.admin-question-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    padding: 18px;
+}
+
+.admin-question-item h3 {
+    font-size: 1.05rem;
+}
+
+.admin-question-item label:has(> .admin-q-type-selector),
+.admin-question-item div:has(> .admin-q-type-selector) > label {
+    white-space: nowrap;
+}
+
+/* Choice rows: field + equal square icon buttons */
+.admin-choice-item {
+    gap: 10px;
+}
+
+.admin-choice-item .btn-icon,
+.admin-choice-add-image {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    margin: 0 !important;
+    padding: 0;
+    border-radius: var(--control-radius);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* Destructive actions: quiet until hovered, instead of solid red blocks */
+.admin-remove-choice-btn,
+.admin-remove-question-btn,
+.admin-delete-saved,
+.dash-delete {
+    background: transparent;
+    color: var(--danger-strong);
+    border: 1px solid color-mix(in srgb, var(--danger-strong) 35%, transparent);
+    box-shadow: none;
+}
+
+.admin-remove-choice-btn:hover,
+.admin-remove-question-btn:hover,
+.admin-delete-saved:hover,
+.dash-delete:hover {
+    transform: none;
+    animation: none;
+    background: color-mix(in srgb, var(--danger-strong) 10%, transparent);
+    border-color: var(--danger-strong);
+    box-shadow: none;
+}
+
+.btn-light {
+    background: var(--btn-bg);
+}
+
+/* Fill-in-the-blank rows */
+.admin-blank-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+
+.admin-blank-label {
+    min-width: 80px;
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.admin-blank-row input {
+    flex: 1;
+}
+
+/* Action rows: never wrap a label onto two lines */
+.admin-question-actions,
+.admin-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.admin-question-actions .btn,
+.admin-actions .btn {
+    white-space: nowrap;
+    min-height: var(--control-height);
+}
+
+.admin-actions {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.admin-actions #admin-cancel {
+    margin-left: auto;
+}
+
+/* Save result / plan notices */
+.admin-notice {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid;
+    border-radius: var(--radius);
+    color: var(--text);
+}
+
+.admin-notice.success {
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.admin-notice.success > strong {
+    color: color-mix(in srgb, var(--success) 70%, var(--text));
+}
+
+.admin-notice.warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.admin-notice.warning > strong {
+    color: #b45309;
+}
+
+.admin-share {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.admin-share-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 !important;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.admin-share-field {
+    display: flex;
+    gap: 8px;
+}
+
+.admin-share-field input {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   Confirm / alert dialog
+   ========================================================================== */
+.app-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, visibility 0.15s;
+}
+
+.app-dialog-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.app-dialog {
+    width: 100%;
+    max-width: 400px;
+    padding: 24px;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    text-align: center;
+    transform: translateY(8px) scale(0.98);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-dialog-overlay.open .app-dialog {
+    transform: none;
+}
+
+.app-dialog-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 1.3rem;
+    font-weight: 800;
+}
+
+.app-dialog[data-tone="danger"] .app-dialog-icon {
+    background: color-mix(in srgb, var(--danger-strong) 12%, transparent);
+    color: var(--danger-strong);
+}
+
+.app-dialog-title {
+    margin: 0 0 8px;
+    font-size: 1.1rem;
+}
+
+.app-dialog-message {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.app-dialog-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.app-dialog-actions .btn {
+    flex: 1;
+    min-height: var(--control-height);
+}
+
+.app-dialog-actions .btn[hidden] {
+    display: none;
+}
+
+.app-dialog-actions .btn-danger {
+    background: var(--danger-strong);
+}
+
+.app-dialog-actions .btn-danger:hover {
+    transform: none;
+    animation: none;
+    filter: brightness(0.92);
+}
+
+/* ==========================================================================
+   Teacher / admin dashboard
+   ========================================================================== */
+.dash-overlay {
+    padding: 16px;
+}
+
+.dash-window {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 820px;
+    max-height: min(88vh, 900px);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--panel);
+    background-color: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    overflow: hidden;
+}
+
+.dash-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dash-header h2 {
+    margin: 0 auto 0 0;
+    font-size: 1.35rem;
+}
+
+.dash-close {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.dash-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.dash-muted {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.dash-profile {
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+}
+
+.dash-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.dash-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.dash-identity-text {
+    min-width: 0;
+    flex: 1;
+}
+
+.dash-identity-text .dash-muted {
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.dash-plan-badge {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.dash-plan-badge.free {
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--muted);
+}
+
+.dash-plan-badge.premium {
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+    color: #fff;
+}
+
+.dash-plan-badge.admin {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.dash-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.dash-stat {
+    padding: 12px 14px;
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.dash-stat-label {
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dash-stat-value {
+    font-size: 0.98rem;
+    font-weight: 600;
+}
+
+.dash-meter {
+    height: 6px;
+    margin-top: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    overflow: hidden;
+}
+
+.dash-meter span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+}
+
+.dash-hint {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.dash-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dash-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dash-section-head h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.dash-empty {
+    padding: 32px 20px;
+    border: 1.5px dashed var(--control-border);
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.dash-empty-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.dash-empty h4 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+}
+
+.dash-empty p {
+    max-width: 420px;
+    margin: 0 auto;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.dash-quiz-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dash-quiz {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+    background: var(--card-bg);
+}
+
+.dash-quiz-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.dash-quiz-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-quiz-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 0.82rem;
+}
+
+.dash-quiz-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.dash-quiz-actions .btn {
+    min-height: 38px;
+    padding: 6px 14px;
+    font-size: 0.88rem;
+}
+
+.dash-quiz-actions .btn-icon {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+}
+
+.dash-chip {
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.dash-chip.public {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.dash-chip.private {
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--muted);
+}
+
+.dash-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+}
+
+.dash-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.dash-table th,
+.dash-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.dash-table th {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+
+.dash-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+@media (max-width: 560px) {
+    .dash-header { padding: 16px; }
+    .dash-body { padding: 16px; }
+    .dash-identity { flex-wrap: wrap; }
+    .dash-quiz { flex-wrap: wrap; }
+    .dash-quiz-actions { width: 100%; justify-content: flex-end; }
+    .admin-select-compact { min-width: 0; max-width: 100%; }
 }

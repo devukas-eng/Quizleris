@@ -87,19 +87,19 @@
             <span>Draft Saved</span>
           </span>
           <!-- Undo / Redo buttons -->
-          <div style="display: flex; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-            <button id="admin-undo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-            <button id="admin-redo-btn" class="btn btn-icon" style="padding: 4px 8px; height: 26px; min-width: 32px; font-size: 0.85rem;" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+          <div class="admin-undo-group">
+            <button id="admin-undo-btn" class="btn btn-icon" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+            <button id="admin-redo-btn" class="btn btn-icon" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
           </div>
           <!-- Local Quiz Selector -->
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <select id="admin-local-selector" class="btn" style="font-size: 0.85rem; padding: 4px 10px; height: 35px; max-width: 180px; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); color: inherit;" title="Load Saved Quiz">
+          <div class="admin-load-group">
+            <select id="admin-local-selector" class="admin-select-compact" title="Load Saved Quiz">
               <option value="">-- Load Saved Quiz --</option>
             </select>
-            <button id="admin-local-delete-btn" class="btn btn-danger btn-icon" style="height: 35px; padding: 0 10px; display: none;" title="Delete Selected Quiz" aria-label="Delete Quiz">🗑️</button>
+            <button id="admin-local-delete-btn" class="btn btn-secondary btn-icon admin-delete-saved" style="display: none;" title="Delete Selected Quiz" aria-label="Delete Quiz">🗑</button>
           </div>
         </div>
-        <button id="admin-btn-back" class="btn" style="font-size: 0.9rem; padding: 6px 12px; height: 35px;"
+        <button id="admin-btn-back" class="btn btn-secondary btn-compact"
             data-i18n="admin.backToMenu">Back to Menu</button>
       </div>
       <div class="admin-form">
@@ -124,15 +124,14 @@
             <input type="text" id="admin-quiz-id" class="input-field"
               placeholder="e.g. biology-final" style="border-color: var(--accent);" />
           </label>
-          <label style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
-            <span>Visibility:</span>
-            <select id="admin-quiz-visibility" class="input-field" style="max-width: 200px;">
-                <option value="private">Private (Ištrinama po 45 dienų / Deletes in 45 days)</option>
-                <option value="public">Public (Bendruomenės Testai / Community Quizzes)</option>
+          <label class="admin-visibility-field">
+            <span data-i18n="admin.visibility">Visibility</span>
+            <select id="admin-quiz-visibility">
+                <option value="private">Private</option>
+                <option value="public">Public</option>
             </select>
           </label>
-          <div
-            style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+          <div class="admin-settings-card">
             <div style="flex: 1;">
               <label for="admin-timer-mode" style="display: block; margin-bottom: 5px;" data-i18n="admin.timerMode">Timer
                 Mode:</label>
@@ -149,8 +148,7 @@
                 style="width: 100%;" />
             </div>
           </div>
-          <div
-            style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+          <div class="admin-settings-card admin-settings-card-top">
             <div style="flex: 1;">
               <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.quizMode">Quiz
                 Mode:</span>
@@ -205,7 +203,7 @@
           </div>
           <div class="admin-actions">
             <button id="admin-save" class="btn btn-primary" data-i18n="admin.saveQuiz">Save Quiz</button>
-            <button id="admin-preview" class="btn btn-secondary" style="background: var(--accent); color: black;"
+            <button id="admin-preview" class="btn btn-secondary"
               data-i18n="admin.preview">Peržiūra</button>
             <button id="admin-export" class="btn btn-secondary" data-i18n="admin.exportJson">Export JSON</button>
             <button id="admin-import-btn" class="btn btn-secondary" data-i18n="admin.importJson">Import JSON</button>

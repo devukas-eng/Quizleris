@@ -5,6 +5,7 @@ import { saveResult } from "./storage.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
 import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
+import { confirmDialog } from "./dialog.js";
 
 // Setup Mute Button
 document.addEventListener("DOMContentLoaded", () => {
@@ -685,12 +686,12 @@ export function renderNextButton() {
         btn.style.display = "block";
         if (q.isLastQuestion) {
             btn.textContent = t('quiz.examSubmit');
-            btn.onclick = () => {
+            btn.onclick = async () => {
                 const unanswered = q.shuffledQuestions.length - q.userAnswers.size;
                 const confirmMsg = unanswered > 0 ?
                     `Tau dar liko ${unanswered} neatsakytų klausimų. Ar tikrai norite pateikti?` :
                     t('quiz.examConfirm');
-                if (confirm(confirmMsg))
+                if (await confirmDialog({ title: t('quiz.examSubmit'), message: confirmMsg, confirmText: t('quiz.examSubmit') }))
                     showResults();
             };
         }
@@ -970,8 +971,8 @@ export function initializeQuiz(quizData) {
     if (backBtn) {
         if (isPremadeOrDemo) {
             backBtn.style.display = 'inline-flex';
-            backBtn.onclick = () => {
-                if (confirm(t('quiz.backConfirm'))) {
+            backBtn.onclick = async () => {
+                if (await confirmDialog({ title: t('dialog.leaveQuizTitle'), message: t('quiz.backConfirm'), confirmText: t('dialog.leave'), danger: true })) {
                     // Clear quiz state
                     setQuiz(null);
                     clearTimer();

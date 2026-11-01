@@ -44,7 +44,7 @@ export function generateQuizId() {
     c.getRandomValues(bytes);
     return `quiz_${Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")}`;
 }
-import { saveQuizToCloud } from "./api.js";
+import { saveQuizToCloud, fetchQuizDetails } from "./api.js";
 
 /**
  * 2026 Senior Concept: Pure Cloud Mode. Saves instantly to cloud. LocalStorage is deprecated for quizzes.
@@ -57,15 +57,10 @@ export async function saveQuizToStorage(quizData) {
     }
     return result;
 }
-// Load quiz strictly from the cloud
+// Load quiz strictly from the cloud (sends the login token so owners can open their private quizzes)
 export async function loadQuizFromStorage(quizId) {
     try {
-        const res = await fetch('/api/quizzes/' + quizId);
-        if (res.ok) {
-            const data = await res.json();
-            return data;
-        }
-        return null;
+        return await fetchQuizDetails(quizId);
     } catch (err) {
         console.error("Cloud fetch failed", err);
         return null;

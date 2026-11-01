@@ -1,14 +1,24 @@
 // Main entry point - imports and initializes all modules
-import { setupAdmin, toggleAdminMode, refreshAdminUI } from "./quiz-editor.js";
+import { setupAdmin, toggleAdminMode, refreshAdminUI, openEditor } from "./quiz-editor.js";
+import { confirmDialog } from "./dialog.js";
 import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
 import { setupDashboard, renderDashboard } from "./dashboard.js";
 import { loadQuiz } from "./storage.js";
-import { initLanguage, setLanguage, getLanguage, updatePageLanguage } from "./lang.js";
+import { initLanguage, setLanguage, getLanguage, updatePageLanguage, t } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
 import { syncCloudQuizzes } from "./sync.js";
+
+function confirmLeaveQuiz() {
+    return confirmDialog({
+        title: t("dialog.leaveQuizTitle"),
+        message: t("quiz.backConfirm"),
+        confirmText: t("dialog.leave"),
+        danger: true
+    });
+}
 
 /**
  * The main application bootstrap function.
@@ -118,7 +128,7 @@ async function initApp() {
         const onAdmin = () => toggleAdminMode();
         // 1. Setup Dashboard (needs onHome)
         setupDashboard({ onHome });
-        document.addEventListener("open-editor", () => { toggleAdminMode(); });
+        document.addEventListener("open-editor", (e) => { openEditor(e.detail?.quizId); });
         // 2. Setup Menu (needs onAdmin only)
         setupMenu({ onAdmin });
         // 3. Setup Admin (needs onHome)
@@ -133,7 +143,7 @@ async function initApp() {
         // Logo click logic
         const logo = document.getElementById('app-logo');
         if (logo) {
-            logo.addEventListener('click', () => {
+            logo.addEventListener('click', async () => {
                 const currentParams = new URLSearchParams(window.location.search);
                 const isTopics = currentParams.get("view") === "topics" || path.includes("/topics");
                 const isResults = !!document.getElementById("results-container");
@@ -150,7 +160,7 @@ async function initApp() {
                     if ((questionCounter || examNav || isQuizVisible) && !isResultVisible) {
                         // Double check we are not just on an empty container (e.g. before render)
                         // But usually if quizMain is visible and no results, we are in a quiz.
-                        if (confirm("Palikti testą?")) {
+                        if (await confirmLeaveQuiz()) {
                             window.location.href = "/";
                         }
                         return;
@@ -169,12 +179,12 @@ async function initApp() {
             // Global Back Button Logic (for the arrow in header)
             const quizBackBtn = document.getElementById("quiz-back-btn");
             if (quizBackBtn) {
-                quizBackBtn.addEventListener("click", () => {
+                quizBackBtn.addEventListener("click", async () => {
                     // Check if active quiz
                     const isResultVisible = !!document.getElementById("results-container");
                     // Back button usually only appears IN quiz, but let's be safe
                     if (!isResultVisible) {
-                        if (confirm("Palikti testą?")) {
+                        if (await confirmLeaveQuiz()) {
                             window.location.href = "/";
                         }
                     } else {

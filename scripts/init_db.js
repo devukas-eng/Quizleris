@@ -12,6 +12,7 @@ async function initDB() {
                 password_hash VARCHAR(255) NOT NULL,
                 role ENUM('teacher', 'admin', 'student') DEFAULT 'teacher',
                 subscription_tier ENUM('free', 'premium') DEFAULT 'free',
+                subscription_expires_at DATETIME NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);

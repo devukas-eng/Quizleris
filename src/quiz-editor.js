@@ -7,6 +7,11 @@ import { exportQuizForSharing } from "./admin-export.js";
 import { parseBulkImportText } from "./admin-import.js";
 import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
+import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
+
+// Private quizzes on the free plan are deleted after this many days (mirrors server PRIVATE_EXPIRY_DAYS)
+const FREE_PRIVATE_EXPIRY_DAYS = 30;
 
 // Function to unwrap latex
 const unwrapMath = (str) => (str || "").replace(/^\\\(/, "").replace(/\\\)$/, "");
@@ -66,8 +71,23 @@ let adminDraftBannerText = null;
 let adminDraftRestoreBtn = null;
 let adminDraftDismissBtn = null;
 
+// null = private quizzes never expire (premium/admin); refreshed from the server profile
+let privateExpiryDays = FREE_PRIVATE_EXPIRY_DAYS;
+
 let goHome = () => {
 };
+
+function updateVisibilityLabels() {
+  if (!adminQuizVisibility) return;
+  const privateOpt = adminQuizVisibility.querySelector('option[value="private"]');
+  const publicOpt = adminQuizVisibility.querySelector('option[value="public"]');
+  if (privateOpt) {
+    privateOpt.textContent = privateExpiryDays == null
+      ? t("admin.visPrivate")
+      : t("admin.visPrivateExpiry").replace("{days}", privateExpiryDays);
+  }
+  if (publicOpt) publicOpt.textContent = t("admin.visPublic");
+}
 function refreshAdminToggleVisibility() {
   if (!adminToggle) return;
   const params = new URLSearchParams(window.location.search);
@@ -175,6 +195,26 @@ function toggleAdminMode() {
     renderAdminForm();
   }
 }
+// Opens the editor (if closed) and optionally loads one of the user's saved quizzes into it.
+async function openEditor(quizId) {
+  if (!adminMode) toggleAdminMode();
+  if (!adminMode || !quizId) return;
+  const loadedQuiz = await loadQuizFromStorage(quizId);
+  if (!loadedQuiz) {
+    await alertDialog(t("profile.loadError"), quizId);
+    return;
+  }
+  adminQuiz = JSON.parse(JSON.stringify(loadedQuiz));
+  undoStack = [];
+  redoStack = [];
+  updateUndoRedoButtons();
+  if (adminDraftBanner) adminDraftBanner.style.display = "none";
+  renderAdminForm();
+  if (adminLocalSelector) {
+    adminLocalSelector.value = quizId;
+    toggleLocalDeleteButtonVisibility();
+  }
+}
 function renderAdminForm() {
   if (!adminQuiz) return;
   const focusState = captureFocusAndScroll();
@@ -198,7 +238,10 @@ function renderAdminForm() {
       }
   }
   
-  if (adminQuizVisibility) adminQuizVisibility.value = adminQuiz.visibility || "private";
+  if (adminQuizVisibility) {
+    updateVisibilityLabels();
+    adminQuizVisibility.value = adminQuiz.visibility || "private";
+  }
   if (!adminQuiz.timerConfig) {
     adminTimerMode.value = "question";
     adminTimerLimit.value = "30";
@@ -261,7 +304,7 @@ function renderAdminForm() {
           <div style="display: flex; gap: 12px; align-items: center;">
             <div style="display: flex; gap: 10px; align-items: center;">
               <label style="font-size: 0.9rem; margin:0;">${t("admin.qType")}</label>
-              <select class="admin-q-type-selector" data-qidx="${qIdx}" style="padding: 4px 8px; border-radius: 4px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); margin-top:0;">
+              <select class="admin-q-type-selector admin-select-compact" data-qidx="${qIdx}">
                 <option value="multiple-choice" ${q.type === "multiple-choice" || !q.type ? "selected" : ""}>${t("admin.typeMC")}</option>
                 <option value="numeric" ${q.type === "numeric" ? "selected" : ""}>${t("admin.typeNum")}</option>
                 <option value="fill-blank" ${q.type === "fill-blank" ? "selected" : ""}>${t("admin.typeBlank")}</option>
@@ -290,7 +333,7 @@ function renderAdminForm() {
 
         <label>
           ${t("admin.promptLabel")}
-          <math-field class="admin-question-prompt" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" style="width: 100%; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 8px; font-size: 1.1rem; background: var(--bg-input); color: var(--text);">${unwrapMath(q.prompt)}</math-field>
+          <math-field class="admin-question-prompt admin-math-input" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}">${unwrapMath(q.prompt)}</math-field>
         </label>
 
         
@@ -346,10 +389,21 @@ function renderAdminForm() {
     });
 
     // Remove Question
-    qDiv.querySelector(".admin-remove-question-btn")?.addEventListener("click", (e) => {
+    qDiv.querySelector(".admin-remove-question-btn")?.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (!adminQuiz) return;
-      if (!confirm(t("admin.confirmRemoveQuestion"))) return;
+      updateQuizFromDOM();
+      const question = adminQuiz.questions[qIdx];
+      const isBlank = !question?.prompt?.trim() && !question?.image && !(question?.choices || []).some(c => c.text?.trim() || c.image);
+      if (!isBlank) {
+        const ok = await confirmDialog({
+          title: t("admin.removeQuestionTitle"),
+          message: t("admin.removeQuestionBody").replace("{n}", qIdx + 1),
+          confirmText: t("dialog.delete"),
+          danger: true
+        });
+        if (!ok || !adminQuiz) return;
+      }
       saveStateForUndo();
       updateQuizFromDOM();
       adminQuiz.questions.splice(qIdx, 1);
@@ -537,10 +591,22 @@ function renderAdminForm() {
         });
         const choicesList = qDiv.querySelector(`.admin-choices-list`);
         choicesList.querySelectorAll(`.admin-remove-choice-btn`).forEach((btn) => {
-          btn.addEventListener("click", (e) => {
+          btn.addEventListener("click", async (e) => {
             if (!adminQuiz) return;
             const cIdx = parseInt(e.currentTarget.dataset.cidx);
-            if (!confirm(t("admin.confirmRemoveChoice"))) return;
+            updateQuizFromDOM();
+            const choice = adminQuiz.questions[qIdx].choices[cIdx];
+            // Empty choices are removed straight away: nothing to lose, and undo still works
+            if (choice && (choice.text?.trim() || choice.image)) {
+              const text = unwrapMath((choice.text || "").trim()) || "🖼";
+              const ok = await confirmDialog({
+                title: t("admin.removeChoiceTitle"),
+                message: t("admin.removeChoiceBody").replace("{text}", text.length > 60 ? text.slice(0, 57) + "…" : text),
+                confirmText: t("dialog.remove"),
+                danger: true
+              });
+              if (!ok || !adminQuiz) return;
+            }
             saveStateForUndo();
             updateQuizFromDOM();
             adminQuiz.questions[qIdx].choices.splice(cIdx, 1);
@@ -692,7 +758,7 @@ function renderQuestionConfig(q, qIdx) {
             <div class="admin-choice-item" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
                 <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin: 0;" />
                 <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                    <math-field class="admin-choice-text" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}" style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.2); border-radius: 4px; font-size: 1.3rem; background: var(--bg-input); color: var(--text);">${unwrapMath(choice.text)}</math-field>
+                    <math-field class="admin-choice-text admin-math-input" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}">${unwrapMath(choice.text)}</math-field>
                 </div>
                 ${choice.image ? `
                   <div style="position: relative; display: inline-block;">
@@ -713,14 +779,14 @@ function renderQuestionConfig(q, qIdx) {
         <div style="display: flex; gap: 15px; align-items: flex-end;">
           <div style="flex: 2;">
             <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">${t("admin.numAnswer")}</label>
-            <input type="number" class="admin-num-answer" data-qidx="${qIdx}" value="${q.correctAnswerNumber ?? ""}" style="width: 100%; padding: 8px;" />
+            <input type="number" class="admin-num-answer" data-qidx="${qIdx}" value="${escapeHtml(String(q.correctAnswerNumber ?? ""))}" />
           </div>
           <div style="flex: 1;">
             <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">${t("admin.numTolerance")}</label>
-            <input type="number" class="admin-num-tolerance" data-qidx="${qIdx}" value="${q.toleranceValue ?? 0}" style="width: 100%; padding: 8px;" />
+            <input type="number" class="admin-num-tolerance" data-qidx="${qIdx}" value="${escapeHtml(String(q.toleranceValue ?? 0))}" />
           </div>
           <div style="flex: 1;">
-            <select class="admin-num-tolerance-type" data-qidx="${qIdx}" style="width: 100%; padding: 8px; background: rgba(0,0,0,0.2); color:white;">
+            <select class="admin-num-tolerance-type" data-qidx="${qIdx}">
               <option value="absolute" ${q.toleranceType === "absolute" ? "selected" : ""}>${t("admin.tolAbs")}</option>
               <option value="percentage" ${q.toleranceType === "percentage" ? "selected" : ""}>${t("admin.tolPct")}</option>
             </select>
@@ -736,9 +802,9 @@ function renderQuestionConfig(q, qIdx) {
         </div>
         <div class="admin-blanks-list" data-qidx="${qIdx}" style="display: flex; flex-direction: column; gap: 12px;">
           ${Array.from({ length: blankCount }).map((_, bIdx) => `
-            <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 0.9rem; font-weight: bold; color: var(--accent); min-width: 90px;">Laukas ${bIdx + 1}:</span>
-              <input type="text" class="admin-blank-answer" data-qidx="${qIdx}" data-bidx="${bIdx}" value="${q.blankAnswers?.[bIdx] || ""}" style="flex:1; padding: 10px; background: rgba(0,0,0,0.2); color:white;" />
+            <div class="admin-blank-row">
+              <span class="admin-blank-label">Laukas ${bIdx + 1}:</span>
+              <input type="text" class="admin-blank-answer" data-qidx="${qIdx}" data-bidx="${bIdx}" value="${escapeHtml(q.blankAnswers?.[bIdx] || "")}" />
             </div>
           `).join("")}
           ${blankCount === 0 ? `<p style="color: #ff9800; font-size: 0.85rem;">! Nepamir\u0161kite klausime \u012Fra\u0161yti ___</p>` : ""}
@@ -766,7 +832,7 @@ function renderQuestionConfig(q, qIdx) {
             ${t("admin.longAnswer")}
           </label>
           <label style="display: block; margin-bottom: 5px; font-size: 0.9rem;">${t("admin.keywords")}</label>
-          <input type="text" class="admin-text-keywords" data-qidx="${qIdx}" value="${(q.expectedKeywords || []).join(", ")}" style="width: 100%; padding: 8px;" />
+          <input type="text" class="admin-text-keywords" data-qidx="${qIdx}" value="${escapeHtml((q.expectedKeywords || []).join(", "))}" />
           <button class="btn btn-sm btn-light" onclick="document.getElementById('shortcuts-panel').style.display='block'">View Shortcuts</button>
         </div>
       `;
@@ -845,12 +911,19 @@ async function saveAdminQuiz() {
   if (!adminQuiz) return;
   updateQuizFromDOM();
   if (adminQuiz.questions.length === 0) {
-    alert(t("admin.errorNoQuestions") || "Testas neturi klausimų.");
+    await alertDialog(t("admin.saveFailed"), t("admin.errorNoQuestions"));
     return;
   }
+  if (!getToken()) {
+    await alertDialog(t("admin.saveFailed"), t("admin.loginToSave"));
+    document.dispatchEvent(new window.CustomEvent("open-auth"));
+    return;
+  }
+  adminSaveBtn.disabled = true;
   const saveResult = await saveQuizToStorage(adminQuiz);
+  adminSaveBtn.disabled = false;
   if (saveResult && !saveResult.success) {
-      alert("Nepavyko išsaugoti: " + (saveResult.error || "Nežinoma klaida"));
+      await alertDialog(t("admin.saveFailed"), saveResult.error || "");
       return;
   }
   localStorage.removeItem("quiz_editor_draft");
@@ -874,7 +947,7 @@ async function saveAdminQuiz() {
       localStorage.setItem("quizleris_community_quizzes", JSON.stringify(community));
   }
 
-  if (shareCode.length > 8e3) alert("WARNING: Quiz data very large. URL might fail.");
+  if (shareCode.length > 8e3) await alertDialog("⚠️", "Quiz data is very large. The share URL might not work in every browser.");
   const base = window.location.origin + "/";
   const shareUrl = `${base}?quiz=${shareCode}`;
   const dashUrl = `${base}?dashboard=${escapeHtml(adminQuiz.id)}`;
@@ -885,45 +958,46 @@ async function saveAdminQuiz() {
       const bytes = saveResult.storage_bytes || 0;
       const kb = (bytes / 1024).toFixed(1);
       warningHtml = `
-      <div style="background: rgba(255, 152, 0, 0.1); border: 1px solid rgba(255, 152, 0, 0.3); padding: 10px; border-radius: 8px; margin-top: 15px;">
-          <strong style="color: #ff9800;">⚠️ Nemokamas planas</strong><br>
-          <span style="font-size: 0.9em; color: #eee;">Šis testas galios iki <strong>${expDate}</strong>.<br>Dydis: <strong>${kb} KB</strong>. Norėdami išlaikyti testus visam laikui be limito, įsigykite Premium planą.</span>
+      <div class="admin-notice warning">
+          <strong>⚠️ Nemokamas planas</strong>
+          <span>Šis testas galios iki <strong>${expDate}</strong>. Dydis: <strong>${kb} KB</strong>. Norėdami išlaikyti testus visam laikui be limito, įsigykite Premium planą.</span>
       </div>`;
   }
   
   adminShareCode.style.display = "block";
   adminShareCode.innerHTML = `
-        <div style="background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); padding: 15px; border-radius: 8px;">
-            <strong style="color: #4CAF50;">\u2713 ${t("admin.saveSuccess") || "Išsaugota sėkmingai!"}</strong><br><br>
-            <div style="margin-bottom: 10px;">
-                <label style="display: block; font-weight: bold;">Student URL:</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" readonly value="${escapeHtml(shareUrl)}" id="share-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
-                    <button id="copy-share-btn" class="btn btn-secondary">Copy</button>
-                </div>
-            </div>
-            <div style="margin-bottom: 10px;">
-                <label style="display: block; font-weight: bold;">Dashboard URL:</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" readonly value="${escapeHtml(dashUrl)}" id="dash-url-input" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1);" />
-                    <button id="copy-dash-btn" class="btn btn-secondary">Copy</button>
-                </div>
-            </div>
-            <div><label style="display: block; font-weight: bold;">Quiz ID:</label><code>${escapeHtml(adminQuiz.id)}</code></div>
+        <div class="admin-notice success">
+            <strong>\u2713 ${t("admin.saveSuccess") || "Išsaugota sėkmingai!"}</strong>
+            <label class="admin-share-row">
+                <span>Student URL:</span>
+                <span class="admin-share-field">
+                    <input type="text" readonly value="${escapeHtml(shareUrl)}" id="share-url-input" />
+                    <button id="copy-share-btn" class="btn btn-secondary">${t("admin.copy")}</button>
+                </span>
+            </label>
+            <label class="admin-share-row">
+                <span>Dashboard URL:</span>
+                <span class="admin-share-field">
+                    <input type="text" readonly value="${escapeHtml(dashUrl)}" id="dash-url-input" />
+                    <button id="copy-dash-btn" class="btn btn-secondary">${t("admin.copy")}</button>
+                </span>
+            </label>
+            <div class="admin-share-row"><span>Quiz ID:</span><code>${escapeHtml(adminQuiz.id)}</code></div>
             ${warningHtml}
         </div>`;
-  document.getElementById("copy-share-btn")?.addEventListener("click", () => {
-    const input = document.getElementById("share-url-input");
-    input.select();
-    navigator.clipboard.writeText(shareUrl);
-    alert("Copied!");
-  });
-  document.getElementById("copy-dash-btn")?.addEventListener("click", () => {
-    const input = document.getElementById("dash-url-input");
-    input.select();
-    navigator.clipboard.writeText(dashUrl);
-    alert("Copied!");
-  });
+  const wireCopy = (btnId, inputId, value) => {
+    const btn = document.getElementById(btnId);
+    btn?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      document.getElementById(inputId).select();
+      await navigator.clipboard.writeText(value);
+      const label = btn.textContent;
+      btn.textContent = "✓";
+      setTimeout(() => { btn.textContent = label; }, 1200);
+    });
+  };
+  wireCopy("copy-share-btn", "share-url-input", shareUrl);
+  wireCopy("copy-dash-btn", "dash-url-input", dashUrl);
 }
 
 function previewQuiz() {
@@ -981,13 +1055,19 @@ function setupAdminEventsInternal() {
           triggerAutoSave();
         }
       } catch {
-        alert("Import failed");
+        alertDialog(t("admin.importError"), t("admin.importInvalid"));
       }
     };
     reader.readAsText(file);
   });
-  adminCancelBtn.addEventListener("click", () => {
-    if (confirm(t("admin.confirmCancel"))) toggleAdminMode();
+  adminCancelBtn.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: t("admin.cancelTitle"),
+      message: t("admin.confirmCancel"),
+      confirmText: t("dialog.leave"),
+      danger: true
+    });
+    if (ok) toggleAdminMode();
   });
 
   // Bulk Import Events
@@ -1507,6 +1587,7 @@ function restoreDraft() {
     
     if (adminLocalSelector) {
       adminLocalSelector.value = adminQuiz.id || "";
+      if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
       toggleLocalDeleteButtonVisibility();
     }
     
@@ -1532,19 +1613,17 @@ async function populateLocalSelector() {
   adminLocalSelector.appendChild(defaultOpt);
   
   try {
-      const token = localStorage.getItem("quizleris_token");
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      
-      const res = await fetch('/api/quizzes', { headers });
-      if (res.ok) {
-          const quizzes = await res.json();
+      // Teachers can only edit their own quizzes, so list those (not every public quiz); admins can edit all
+      if (getToken()) {
+          const { user, quizzes: ownQuizzes, limits } = await fetchProfile();
+          privateExpiryDays = limits.private_expiry_days;
+          updateVisibilityLabels();
+          const quizzes = user.role === "admin" ? await fetchCloudQuizzes() : ownQuizzes;
           quizzes.forEach(q => {
               const opt = document.createElement("option");
               opt.value = q.id;
-              const displayTitle = q.title.length > 25 ? q.title.substring(0, 22) + "..." : q.title;
-              // We don't have question count in the summary API, so omit it
-              opt.textContent = `${displayTitle} (${q.visibility})`;
+              const displayTitle = q.title.length > 32 ? q.title.substring(0, 29) + "…" : q.title;
+              opt.textContent = `${displayTitle} · ${q.visibility === "public" ? t("profile.public") : t("profile.private")}`;
               adminLocalSelector.appendChild(opt);
           });
       }
@@ -1552,12 +1631,10 @@ async function populateLocalSelector() {
       console.error("Failed to load quizzes for dropdown", err);
   }
   
-  if (adminQuiz) {
-    adminLocalSelector.value = adminQuiz.id;
-  } else {
-    adminLocalSelector.value = "";
-  }
-  
+  // A new (unsaved) quiz has no entry; fall back to the placeholder instead of a blank select
+  adminLocalSelector.value = adminQuiz?.id || "";
+  if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
+
   toggleLocalDeleteButtonVisibility();
 }
 
@@ -1596,17 +1673,19 @@ async function handleLocalDeleteClick() {
   const selectedId = adminLocalSelector.value;
   if (!selectedId) return;
   
-  const confirmMsg = t("admin.deleteConfirm") || "Are you sure you want to delete this saved quiz from your device and the cloud?";
-  if (!confirm(confirmMsg)) return;
-  
-  try {
-      const token = localStorage.getItem("quizleris_token");
-      const headers = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      
-      await fetch('/api/quizzes/' + selectedId, { method: 'DELETE', headers });
-  } catch (err) {
-      console.error("Failed to delete quiz from cloud", err);
+  const selectedTitle = adminLocalSelector.selectedOptions[0]?.textContent || "";
+  const ok = await confirmDialog({
+    title: t("admin.deleteTitle"),
+    message: `„${selectedTitle}“ — ${t("admin.deleteConfirm")}`,
+    confirmText: t("dialog.delete"),
+    danger: true
+  });
+  if (!ok) return;
+
+  const result = await deleteQuizFromCloud(selectedId);
+  if (!result.success) {
+    await alertDialog(t("admin.saveFailed"), result.error);
+    return;
   }
   
   // Also clean local if it happens to be there
@@ -1630,6 +1709,7 @@ async function handleLocalDeleteClick() {
   await populateLocalSelector();
 }
 export {
+  openEditor,
   previewQuiz,
   refreshAdminToggleVisibility,
   refreshAdminUI,

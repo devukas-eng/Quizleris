@@ -43,7 +43,7 @@ app.use(helmet({
 }));
 app.use(cors({
     origin: IS_PROD
-        ? ['https://quizleris.lt', 'https://www.quizleris.lt', 'https://quizleris.hostingerapp.com']
+        ? ['https://spresk.eu', 'https://www.spresk.eu', 'https://quizleris.lt', 'https://www.quizleris.lt', 'https://quizleris.hostingerapp.com']
         : '*',
     optionsSuccessStatus: 200
 }));
@@ -75,23 +75,54 @@ function readToken(req) {
     return header && header.startsWith('Bearer ') ? header.slice(7) : null;
 }
 
-const authenticateToken = (req, res, next) => {
+// Role and plan are re-read from the database on every request, so changes made in the
+// database (promoting an admin, granting/expiring premium) apply without logging in again.
+async function loadFreshUser(claims) {
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [claims.id]);
+    const row = rows[0];
+    if (!row) return null;
+    return {
+        id: row.id,
+        username: row.username,
+        role: row.role,
+        subscription_tier: row.subscription_tier,
+        subscription_expires_at: row.subscription_expires_at || null
+    };
+}
+
+function verifyToken(token) {
+    return new Promise(resolve => {
+        jwt.verify(token, JWT_SECRET, (err, claims) => resolve(err ? null : claims));
+    });
+}
+
+const authenticateToken = async (req, res, next) => {
     const token = readToken(req);
     if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    const claims = await verifyToken(token);
+    if (!claims) return res.status(401).json({ error: 'Session expired. Please log in again.' });
+    try {
+        const user = await loadFreshUser(claims);
+        if (!user) return res.status(401).json({ error: 'Session expired. Please log in again.' });
         req.user = user;
         next();
-    });
+    } catch (error) {
+        next(error);
+    }
 };
 
-const optionalAuth = (req, res, next) => {
+const optionalAuth = async (req, res, next) => {
     const token = readToken(req);
     if (!token) return next();
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (!err) req.user = user;
+    const claims = await verifyToken(token);
+    if (!claims) return next();
+    try {
+        const user = await loadFreshUser(claims);
+        if (user) req.user = user;
         next();
-    });
+    } catch (error) {
+        next(error);
+    }
 };
 
 const requireAdmin = (req, res, next) => {
@@ -101,7 +132,16 @@ const requireAdmin = (req, res, next) => {
 
 const DUMMY_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 12);
 
-const isPremium = (user) => user.role === 'admin' || user.subscription_tier === 'premium';
+// --- PLAN LIMITS ---
+const FREE_QUIZ_LIMIT = 5;
+const PRIVATE_EXPIRY_DAYS = 30;
+
+// Premium with no expiry date never lapses; with a date, it lapses once that date passes.
+const hasActivePremium = (user) =>
+    user.subscription_tier === 'premium' &&
+    (!user.subscription_expires_at || new Date(user.subscription_expires_at) > new Date());
+
+const isPremium = (user) => user.role === 'admin' || hasActivePremium(user);
 
 // --- VALIDATION ---
 const USERNAME_RE = /^[A-Za-z0-9_.-]{3,50}$/;
@@ -180,6 +220,42 @@ app.get('/api/health', async (req, res) => {
     } catch (e) {
         console.error('[HEALTH] DB check failed:', e.code || e.message);
         res.status(503).json({ ok: false, db: false });
+    }
+});
+
+// --- PROFILE ---
+// Everything the dashboard needs: fresh account info, plan status, limits and the caller's own quizzes.
+app.get('/api/me', authenticateToken, async (req, res) => {
+    try {
+        const [userRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+        const row = userRows[0];
+        const [quizRows] = await pool.query(`
+            SELECT id, title, visibility, storage_bytes, expires_at, created_at, updated_at
+            FROM quizzes WHERE owner_id = ?
+            ORDER BY updated_at DESC
+        `, [req.user.id]);
+
+        const premium = isPremium(req.user);
+        res.json({
+            user: {
+                id: row.id,
+                username: row.username,
+                email: row.email,
+                role: row.role,
+                subscription_tier: row.subscription_tier,
+                subscription_expires_at: row.subscription_expires_at || null,
+                premium_active: hasActivePremium(req.user),
+                created_at: row.created_at
+            },
+            limits: {
+                max_quizzes: premium ? null : FREE_QUIZ_LIMIT,
+                private_expiry_days: premium ? null : PRIVATE_EXPIRY_DAYS
+            },
+            quizzes: quizRows
+        });
+    } catch (error) {
+        console.error('[ME]', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -295,17 +371,17 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.' });
         }
 
-        // Free tier: max 5 quizzes; private quizzes expire after 30 days
+        // Free tier: limited number of quizzes; private quizzes expire
         if (!isPremium(req.user) && existing.length === 0) {
             const [countRows] = await pool.query('SELECT COUNT(*) AS cnt FROM quizzes WHERE owner_id = ?', [req.user.id]);
-            if (countRows[0].cnt >= 5) {
-                return res.status(403).json({ error: 'Free tier is limited to 5 quizzes. Please upgrade to create more.' });
+            if (countRows[0].cnt >= FREE_QUIZ_LIMIT) {
+                return res.status(403).json({ error: `Free tier is limited to ${FREE_QUIZ_LIMIT} quizzes. Please upgrade to create more.` });
             }
         }
         let expiresAt = null;
         if (visibility === 'private' && !isPremium(req.user)) {
             expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + 30);
+            expiresAt.setDate(expiresAt.getDate() + PRIVATE_EXPIRY_DAYS);
         }
 
         const quizJsonStr = JSON.stringify(quizData);
@@ -328,7 +404,12 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             expiresAt
         ]);
 
-        res.json({ message: 'Quiz saved successfully', id: quizData.id });
+        res.json({
+            message: 'Quiz saved successfully',
+            id: quizData.id,
+            expires_at: expiresAt,
+            storage_bytes: Buffer.byteLength(quizJsonStr, 'utf8')
+        });
     } catch (error) {
         console.error('[SAVE QUIZ]', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -353,7 +434,42 @@ app.use((err, req, res, next) => {
     res.status(status).json({ error: status >= 500 ? 'Internal server error' : (err.type === 'entity.too.large' ? 'Payload too large' : 'Bad request') });
 });
 
+// --- SCHEMA UPKEEP ---
+// MySQL 8 lacks `ADD COLUMN IF NOT EXISTS` (MariaDB-only), so check information_schema first.
+async function addColumnIfMissing(table, column, definition) {
+    const [rows] = await pool.query(
+        `SELECT 1 FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+    );
+    if (rows.length > 0) return;
+    await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+    console.log(`[SCHEMA] added ${table}.${column}`);
+}
+
+async function ensureSchema() {
+    try {
+        await addColumnIfMissing('users', 'subscription_expires_at', 'DATETIME NULL DEFAULT NULL');
+    } catch (error) {
+        // Non-fatal: everything treats a missing column as "premium never expires"
+        console.error('[SCHEMA] could not update schema:', error.code || error.message);
+    }
+}
+
+// Expired private quizzes are promised to be deleted, not just hidden.
+async function purgeExpiredQuizzes() {
+    try {
+        const [result] = await pool.query('DELETE FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
+        if (result.affectedRows > 0) console.log(`[CLEANUP] deleted ${result.affectedRows} expired quiz(zes)`);
+    } catch (error) {
+        console.error('[CLEANUP] failed:', error.code || error.message);
+    }
+}
+
 if (process.env.NODE_ENV !== 'test') {
+    ensureSchema();
+    purgeExpiredQuizzes();
+    setInterval(purgeExpiredQuizzes, 60 * 60 * 1000).unref();
     app.listen(PORT, () => {
         console.log(`🚀 Quizleris Backend API running on port ${PORT}`);
     });

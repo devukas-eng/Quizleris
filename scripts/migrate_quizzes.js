@@ -21,6 +21,7 @@ async function migrate() {
     try {
         await addColumnIfMissing('quizzes', 'storage_bytes', 'INT DEFAULT 0');
         await addColumnIfMissing('quizzes', 'expires_at', 'TIMESTAMP NULL DEFAULT NULL');
+        await addColumnIfMissing('users', 'subscription_expires_at', 'DATETIME NULL DEFAULT NULL');
         console.log("Migrations complete.");
     } catch (err) {
         console.error("❌ Migration error:", err.message);

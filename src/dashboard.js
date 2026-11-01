@@ -1,6 +1,7 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { getResults, getHighScores, STORAGE_KEY_RESULTS } from "./storage.js";
 import { t } from "./lang.js";
+import { confirmDialog } from "./dialog.js";
 let dashboardView;
 let dashboardContent;
 let closeBtn;
@@ -14,8 +15,8 @@ export function setupDashboard(callbacks) {
         dashboardView.style.display = "none";
         callbacks.onHome();
     });
-    clearBtn.addEventListener("click", () => {
-        if (confirm("Are you sure you want to clear all history?")) {
+    clearBtn.addEventListener("click", async () => {
+        if (await confirmDialog({ title: t("dialog.confirm"), message: "Are you sure you want to clear all history?", confirmText: t("dialog.delete"), danger: true })) {
             localStorage.removeItem(STORAGE_KEY_RESULTS);
             renderDashboardList();
         }

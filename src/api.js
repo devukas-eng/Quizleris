@@ -60,6 +60,45 @@ export async function fetchAllUsers() {
     return data;
 }
 
+// Current user's profile, plan, limits and own quizzes (always fresh from the database).
+export async function fetchProfile() {
+    const token = getToken();
+    if (!token) throw new Error("Not logged in");
+    const res = await fetch(`${API_BASE}/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.status === 401) {
+        logout();
+        throw new Error("Session expired. Please log in again.");
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load profile");
+    // Keep the cached user in sync so role/plan changes show without logging in again
+    localStorage.setItem('quizleris_user', JSON.stringify({
+        id: data.user.id,
+        username: data.user.username,
+        role: data.user.role,
+        subscription_tier: data.user.subscription_tier
+    }));
+    return data;
+}
+
+export async function deleteQuizFromCloud(quizId) {
+    const token = getToken();
+    if (!token) return { success: false, error: "Not logged in" };
+    try {
+        const res = await fetch(`${API_BASE}/quizzes/${encodeURIComponent(quizId)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return res.ok ? { success: true } : { success: false, error: data.error || "Failed to delete" };
+    } catch (e) {
+        console.error("Cloud delete failed", e);
+        return { success: false, error: "Network error" };
+    }
+}
+
 export async function fetchCloudQuizzes() {
     const token = getToken();
     const headers = {};
