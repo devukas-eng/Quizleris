@@ -37,8 +37,9 @@ async function initDB() {
         console.log("Database initialization complete!");
     } catch (err) {
         console.error("❌ Error initializing database:", err);
+        process.exitCode = 1;
     } finally {
-        process.exit();
+        await pool.end();
     }
 }
 

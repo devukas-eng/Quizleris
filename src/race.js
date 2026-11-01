@@ -1,6 +1,6 @@
 
 
-import { playSound } from "./audio.js";
+import { playCorrect, playWrong, playLevelUp } from "./audio.js";
 import { addPlayerXP } from "./storage.js";
 
 let isAnimating = false;
@@ -121,7 +121,7 @@ function renderLobby() {
         if (p.isBot) {
             setTimeout(() => {
                 p.joined = true;
-                playSound('correct');
+                playCorrect();
                 updateLobbyUI();
             }, delay);
             delay += Math.random() * 1500 + 500;
@@ -178,7 +178,7 @@ function startBots() {
                 if (isWrong) {
                     p.hearts--;
                     if (p.hearts <= 0) {
-                        playSound('wrong'); // Play sound if someone gets eliminated?
+                        playWrong(); // Play sound if someone gets eliminated?
                     }
                 } else {
                     p.score++;
@@ -318,7 +318,7 @@ function handleAnswer(isCorrect, btn) {
     }
 
     if (isCorrect) {
-        playSound('correct');
+        playCorrect();
         user.score++;
         updateLeaderboardUI();
         
@@ -331,7 +331,7 @@ function handleAnswer(isCorrect, btn) {
             if (gameActive) loadNextQuestion();
         }, 500);
     } else {
-        playSound('wrong');
+        playWrong();
         user.hearts--;
         updateLeaderboardUI();
 
@@ -359,14 +359,14 @@ function endGame(winner) {
     raceIntervals.forEach(clearInterval);
     
     const userWon = winner.id === 'player';
-    playSound(userWon ? 'win' : 'wrong');
+    if (userWon) playLevelUp(); else playWrong();
 
     let xpMsg = '';
     if (userWon) {
         const xpEarned = 15; // fixed XP for winning a race
         const leveledUp = addPlayerXP(xpEarned);
         if (leveledUp) {
-            playSound('level-up');
+            playLevelUp();
             xpMsg = "<div style='color:#10b981; font-weight:800; font-size:1.5rem; margin-top: 15px;'>LEVEL UP! 🎉</div>";
         } else {
             xpMsg = `<div style='color:#818cf8; font-weight:700; margin-top: 15px;'>+${xpEarned} XP</div>`;

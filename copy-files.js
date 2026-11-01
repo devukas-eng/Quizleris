@@ -15,6 +15,7 @@ function copyFiles() {
     }
     fs.mkdirSync(distDir);
 
+    let copied = 0;
     // Read src directory
     const files = fs.readdirSync(srcDir);
 
@@ -26,12 +27,12 @@ function copyFiles() {
             const ext = path.extname(file).toLowerCase();
             if (extensionsToCopy.includes(ext) && !filesToExclude.includes(file)) {
                 fs.copyFileSync(fullPath, path.join(distDir, file));
-                console.log(`Copied ${file} to dist/`);
+                copied++;
             }
         }
     });
 
-    console.log('Build completed: all files copied to dist/');
+    console.log(`Build completed: ${copied} files copied to dist/`);
 }
 
 copyFiles();

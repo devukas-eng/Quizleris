@@ -1,5 +1,5 @@
-import { getCurrentUser, showAuthModal } from "./auth-ui.js";
-import { getAllUsers } from "./firebase-service.js";
+import { getCurrentUser, showAuthModal, logoutUser } from "./auth-ui.js";
+import { fetchAllUsers } from "./api.js";
 import { getAllQuizIds, loadQuizFromStorage } from "./storage.js";
 
 let dashboardModal = null;
@@ -10,6 +10,7 @@ export function initDashboardUI() {
             <div class="modal-content glass-card" style="max-width: 800px; width: 100%; height: 80vh; padding: 30px; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2 id="dashboard-title" style="margin: 0;">Dashboard</h2>
+                    <button id="dashboard-logout-btn" class="btn btn-secondary" style="margin-left: auto; margin-right: 10px;">Atsijungti</button>
                     <button id="dashboard-modal-close-btn" class="btn" style="background: none; border: none; font-size: 1.5rem;">&times;</button>
                 </div>
                 <div id="dashboard-body" style="flex: 1; overflow-y: auto;">
@@ -25,6 +26,11 @@ export function initDashboardUI() {
         dashboardModal.style.display = "none";
     });
 
+    document.getElementById("dashboard-logout-btn").addEventListener("click", () => {
+        logoutUser();
+        dashboardModal.style.display = "none";
+    });
+
     document.addEventListener("open-dashboard", async () => {
         const user = getCurrentUser();
         if (!user) {
@@ -34,18 +40,25 @@ export function initDashboardUI() {
         
         dashboardModal.style.display = "flex";
         const body = document.getElementById("dashboard-body");
-        document.getElementById("dashboard-title").textContent = user.role === "owner" ? "Savininko Skydelis" : "Mokytojo Skydelis";
+        document.getElementById("dashboard-title").textContent = user.role === "admin" ? "Administratoriaus Skydelis" : "Mokytojo Skydelis";
         
-        if (user.role === "owner") {
+        if (user.role === "admin") {
             body.innerHTML = "<p>Kraunama...</p>";
-            const users = await getAllUsers();
+            let users;
+            try {
+                users = await fetchAllUsers();
+            } catch (e) {
+                body.innerHTML = `<p>${escapeHtml(e.message)}</p>`;
+                return;
+            }
             let html = `<h3>Vartotojai</h3><table style="width: 100%; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid var(--border-color);"><th style="padding: 10px; text-align: left;">El. paštas</th><th>Rolė</th><th>Veiksmai</th></tr>`;
+                <tr style="border-bottom: 1px solid var(--border-color);"><th style="padding: 10px; text-align: left;">El. paštas</th><th>Vartotojas</th><th>Rolė</th><th>Planas</th></tr>`;
             users.forEach(u => {
                 html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <td style="padding: 10px;">${u.email}</td>
-                    <td style="text-align: center;">${u.role}</td>
-                    <td style="text-align: center;"><button class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px;">Keisti rolę</button></td>
+                    <td style="padding: 10px;">${escapeHtml(u.email)}</td>
+                    <td style="text-align: center;">${escapeHtml(u.username)}</td>
+                    <td style="text-align: center;">${escapeHtml(u.role)}</td>
+                    <td style="text-align: center;">${escapeHtml(u.subscription_tier)}</td>
                 </tr>`;
             });
             html += `</table>`;
@@ -69,8 +82,8 @@ export function initDashboardUI() {
                     html += `
                         <div class="glass-card" style="padding: 15px; display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <h4 style="margin: 0 0 5px 0;">${q.title || "Bevardis Testas"}</h4>
-                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">ID: ${q.id} | Limit: ${q.maxStudents || "None"}</div>
+                                <h4 style="margin: 0 0 5px 0;">${escapeHtml(q.title || "Bevardis Testas")}</h4>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">ID: ${escapeHtml(q.id)} | Limit: ${escapeHtml(q.maxStudents || "None")}</div>
                             </div>
                             <div style="display: flex; gap: 10px;">
                                 <button class="btn btn-secondary">Rezultatai</button>
@@ -93,4 +106,8 @@ export function initDashboardUI() {
             }
         }
     });
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }

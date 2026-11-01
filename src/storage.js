@@ -33,11 +33,16 @@ export const STORAGE_KEY_PREFIX = "quiz_";
 export const STORAGE_KEY_ALL_IDS = "quiz_all_ids";
 export const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
 /**
- * Generates a unique-enough ID for a quiz using the current timestamp.
- * NOTE: In a multi-user or high-concurrency environment, this should be replaced with a UUID.
+ * Generates a collision-resistant, non-guessable quiz ID (fits the server's VARCHAR(50) / [A-Za-z0-9_-] rule).
  */
 export function generateQuizId() {
-    return `quiz_${Date.now()}`;
+    const c = globalThis.crypto;
+    if (c && typeof c.randomUUID === "function") {
+        return `quiz_${c.randomUUID().replace(/-/g, "")}`;
+    }
+    const bytes = new Uint8Array(16);
+    c.getRandomValues(bytes);
+    return `quiz_${Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")}`;
 }
 import { saveQuizToCloud } from "./api.js";
 
@@ -156,9 +161,9 @@ export function getTopicBundles() {
                 { id: "alg_quad_i_8", prompt: "Using the quadratic formula, solve: \\(x^2 + 2x - 3 = 0\\)", choices: [{ id: "a", text: "\\(x = 1, -3\\)", isCorrect: true }, { id: "b", text: "\\(x = -1, 3\\)", isCorrect: false }, { id: "c", text: "\\(x = 2, -2\\)", isCorrect: false }, { id: "d", text: "\\(x = 3, -1\\)", isCorrect: false }] },
                 { id: "alg_quad_i_9", prompt: "What is the axis of symmetry of \\(y = x^2 - 4x + 3\\)?", choices: [{ id: "a", text: "\\(x = 2\\)", isCorrect: true }, { id: "b", text: "\\(x = -2\\)", isCorrect: false }, { id: "c", text: "\\(x = 4\\)", isCorrect: false }, { id: "d", text: "\\(x = 1\\)", isCorrect: false }] },
                 { id: "alg_quad_i_10", prompt: "Solve: \\(x^2 - 1 = 0\\)", choices: [{ id: "a", text: "\\(x = \\pm 1\\)", isCorrect: true }, { id: "b", text: "\\(x = 1\\)", isCorrect: false }, { id: "c", text: "\\(x = 0\\)", isCorrect: false }, { id: "d", text: "No solution", isCorrect: false }] },
-                { id: "alg_quad_i_11", prompt: "Solve: \\(x^2 + 3x + 2 = 0\\)", choices: [{ id: "a", text: "\\(x = -1, -2\\)", isCorrect: true }, { id: "b", text: "\\(x = 1, 2\\)", isCorrect: false }, { id: "c", text: "\\-3, -2\\", isCorrect: false }, { id: "d", text: "\\(2, 3\\)", isCorrect: false }] },
+                { id: "alg_quad_i_11", prompt: "Solve: \\(x^2 + 3x + 2 = 0\\)", choices: [{ id: "a", text: "\\(x = -1, -2\\)", isCorrect: true }, { id: "b", text: "\\(x = 1, 2\\)", isCorrect: false }, { id: "c", text: "\\(x = -3, -2\\)", isCorrect: false }, { id: "d", text: "\\(x = 2, 3\\)", isCorrect: false }] },
                 { id: "alg_quad_i_12", prompt: "For the quadratic \\(x^2 - 6x + 9\\), the discriminant is:", choices: [{ id: "a", text: "0", isCorrect: true }, { id: "b", text: "1", isCorrect: false }, { id: "c", text: "36", isCorrect: false }, { id: "d", text: "-1", isCorrect: false }] },
-                { id: "alg_quad_i_13", prompt: "Solve: \\(4x^2 - 25 = 0\\)", choices: [{ id: "a", text: "\\(x = \\pm \\frac{5}{2}\\)", isCorrect: true }, { id: "b", text: "2.5", isCorrect: true }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "25", isCorrect: false }] },
+                { id: "alg_quad_i_13", prompt: "Solve: \\(4x^2 - 25 = 0\\)", choices: [{ id: "a", text: "\\(x = \\pm \\frac{5}{2}\\)", isCorrect: true }, { id: "b", text: "\\(x = 2.5\\)", isCorrect: false }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "25", isCorrect: false }] },
                 { id: "alg_quad_i_14", prompt: "What are the roots of \\(y = (x-1)(x+4)\\)?", choices: [{ id: "a", text: "\\(x = 1, -4\\)", isCorrect: true }, { id: "b", text: "\\(x = -1, 4\\)", isCorrect: false }, { id: "c", text: "\\(x = 1, 4\\)", isCorrect: false }, { id: "d", text: "\\(x = -1, -4\\)", isCorrect: false }] },
                 { id: "alg_quad_i_15", prompt: "Solve: \\(x^2 - 10x + 25 = 0\\)", choices: [{ id: "a", text: "\\(x = 5\\)", isCorrect: true }, { id: "b", text: "\\(x = -5\\)", isCorrect: false }, { id: "c", text: "\\(x = \\pm 5\\)", isCorrect: false }, { id: "d", text: "10", isCorrect: false }] }
             ]

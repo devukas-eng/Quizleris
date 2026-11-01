@@ -1,0 +1,6 @@
+# Store text with LF in the repo regardless of OS (prevents whole-file CRLF diffs from Windows)
+* text=auto eol=lf
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary

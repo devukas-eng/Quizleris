@@ -48,5 +48,12 @@ export default [
             "no-unused-vars": "warn",
             "no-undef": "warn"
         }
+    },
+    {
+        files: ["server.js", "copy-files.js", "scripts/**/*.js", "src/backend/**/*.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: { require: "readonly", module: "writable", process: "readonly", __dirname: "readonly", Buffer: "readonly", console: "readonly" }
+        }
     }
 ];

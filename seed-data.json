@@ -181,7 +181,7 @@
       },
       {
         "id": "c3",
-        "prompt": "In how many ways can 5 people span in a line?",
+        "prompt": "In how many ways can 5 people stand in a line?",
         "choices": [
           {
             "id": "a",

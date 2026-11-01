@@ -133,12 +133,16 @@ function setupAdmin(callbacks) {
   setupQuizModeSegmentedControl();
   setupShuffleToggles();
   refreshAdminToggleVisibility();
+  document.addEventListener("quizleris-auth-changed", () => {
+    refreshAdminToggleVisibility();
+    if (adminMode && !isAdminAccessAllowed()) toggleAdminMode();
+  });
   setupAdminEventsInternal();
 }
 function toggleAdminMode() {
-  if (!isAdminAccessAllowed()) {
-    if (!promptAdminPassword()) return;
-    refreshAdminToggleVisibility();
+  if (!adminMode && !isAdminAccessAllowed()) {
+    promptAdminPassword();
+    return;
   }
   adminMode = !adminMode;
   adminPanel.style.display = adminMode ? "block" : "none";

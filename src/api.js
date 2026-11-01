@@ -21,7 +21,7 @@ export async function login(username, password) {
         body: JSON.stringify({ username, password })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail ? `${data.error}: ${data.detail}` : data.error);
+    if (!res.ok) throw new Error(data.error || "Login failed");
     
     setToken(data.token);
     localStorage.setItem('quizleris_user', JSON.stringify(data.user));
@@ -39,6 +39,27 @@ export async function register(username, email, password) {
     return data;
 }
 
+export function logout() {
+    setToken(null);
+    localStorage.removeItem('quizleris_user');
+}
+
+// Admin only: list registered users.
+export async function fetchAllUsers() {
+    const token = getToken();
+    if (!token) throw new Error("Not logged in");
+    const res = await fetch(`${API_BASE}/admin/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.status === 401) {
+        logout();
+        throw new Error("Session expired. Please log in again.");
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load users");
+    return data;
+}
+
 export async function fetchCloudQuizzes() {
     const token = getToken();
     const headers = {};
@@ -51,7 +72,9 @@ export async function fetchCloudQuizzes() {
 }
 
 export async function fetchQuizDetails(quizId) {
-    const res = await fetch(`${API_BASE}/quizzes/${quizId}`);
+    const token = getToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const res = await fetch(`${API_BASE}/quizzes/${encodeURIComponent(quizId)}`, { headers });
     if (!res.ok) return null;
     return await res.json();
 }

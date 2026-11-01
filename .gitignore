@@ -1,3 +1,26 @@
+# Dependencies
 node_modules/
-.idea/
+
+# Build output (regenerated from src/ on every server start)
 dist/
+
+# Secrets — never commit. Use .env.example as the template.
+.env
+.env.*
+!.env.example
+
+# Logs & runtime
+*.log
+npm-debug.log*
+logs/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test coverage
+coverage/

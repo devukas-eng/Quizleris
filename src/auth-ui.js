@@ -1,4 +1,4 @@
-import { login, register, getToken } from "./api.js";
+import { login, register, getToken, logout } from "./api.js";
 
 let authModal = null;
 let currentUser = null;
@@ -77,7 +77,7 @@ export function initAuthUI() {
             } else {
                 currentUser = await login(username, pass);
                 authModal.style.display = "none";
-                updateMenuAuthButton();
+                notifyAuthChanged();
             }
         } catch (e) {
             errorBox.style.color = "#ff4d4d"; // reset back to red error
@@ -92,7 +92,7 @@ export function initAuthUI() {
     // Check if already logged in via localStorage
     try {
         const token = getToken();
-        if (token) {
+        if (token && !isTokenExpired(token)) {
             const savedUser = localStorage.getItem('quizleris_user');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
@@ -101,7 +101,20 @@ export function initAuthUI() {
     } catch(e) {
         console.warn("Failed to parse user from localStorage", e);
     }
+    if (!currentUser) logout(); // drop stale/expired session data
+    document.addEventListener("open-auth", showAuthModal);
     updateMenuAuthButton();
+}
+
+function notifyAuthChanged() {
+    updateMenuAuthButton();
+    document.dispatchEvent(new window.CustomEvent("quizleris-auth-changed"));
+}
+
+export function logoutUser() {
+    logout();
+    currentUser = null;
+    notifyAuthChanged();
 }
 
 export function showAuthModal() {
@@ -117,7 +130,7 @@ function updateMenuAuthButton() {
     if (!btn) return;
     
     if (currentUser) {
-        btn.textContent = currentUser.role === "owner" ? "Owner Dashboard" : "Teacher Dashboard";
+        btn.textContent = currentUser.role === "admin" ? "Admin Dashboard" : "Teacher Dashboard";
         btn.onclick = () => {
             // Trigger Dashboard Open Event
             document.dispatchEvent(new window.CustomEvent("open-dashboard"));
@@ -125,5 +138,16 @@ function updateMenuAuthButton() {
     } else {
         btn.textContent = "Prisijungti";
         btn.onclick = showAuthModal;
+    }
+}
+
+// Reads the JWT exp claim client-side purely to avoid showing a logged-in UI for a dead session.
+// The server still verifies every token.
+function isTokenExpired(token) {
+    try {
+        const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+        return typeof payload.exp === "number" && payload.exp * 1000 <= Date.now();
+    } catch {
+        return true;
     }
 }
