@@ -180,6 +180,9 @@ function formatDashboardAnswer(r) {
     if (r.type === 'image-upload' && r.answer) {
         return `<br><img src="${escapeHtml(r.answer)}" style="max-height: 150px; margin-top: 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);" />`;
     }
+    if (r.answerText) {
+        return escapeHtml(r.answerText);
+    }
     if (Array.isArray(r.answer)) {
         return escapeHtml(r.answer.join(', '));
     }

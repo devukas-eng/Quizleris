@@ -66,7 +66,8 @@ function clearElement(el) {
  */
 export function renderQuestion(q) {
     const typeLabel = q.type === 'multiple-choice' ?
-        (q.allowMultipleAnswers ? t('quiz.mcSelectAll') : t('quiz.mcSelectOne')) : '';
+        (q.allowMultipleAnswers ? t('quiz.mcSelectAll') : t('quiz.mcSelectOne')) :
+        q.type === 'choice-other' ? t('quiz.chooseOrWrite') : '';
     clearElement(questionContainer);
     // Header
     const header = document.createElement("div");
@@ -123,6 +124,9 @@ export function renderAnswers(q) {
     switch (type) {
         case 'multiple-choice':
             renderMCQ(q);
+            break;
+        case 'choice-other':
+            renderChoiceOther(q);
             break;
         case 'numeric':
             renderNumeric(q);
@@ -231,6 +235,117 @@ function renderMCQ(q) {
             answersContainer.appendChild(submitBtn);
         }
     }
+}
+/**
+ * "Choose or write": the listed options plus a row where the student types their own answer.
+ * The answer is stored as { choice: id } or { other: text }.
+ */
+function renderChoiceOther(q) {
+    const isExam = quiz?.quiz.mode === 'exam';
+    const isAnswered = quiz?.hasAnswered && !isExam;
+    const current = quiz?.userAnswers.get(q.id) || null;
+    const ownSelected = !!current && current.other !== undefined;
+    const correctChoice = !q.otherIsCorrect ? q.choices?.find(c => c.isCorrect) : null;
+    const grading = isAnswered ? quiz.gradeQuestion(q, current) : null;
+
+    q.choices?.forEach((choice) => {
+        const btn = document.createElement("button");
+        btn.className = "answer-btn mc-btn";
+        btn.dataset.choiceId = choice.id;
+        const indicator = document.createElement("div");
+        indicator.className = "mc-indicator";
+        indicator.textContent = choice.id.toUpperCase();
+        btn.appendChild(indicator);
+        const content = document.createElement("div");
+        content.className = "mc-content";
+        if (choice.image) {
+            const img = document.createElement("img");
+            img.src = sanitizeImageUrl(choice.image);
+            img.style.maxHeight = "120px";
+            img.style.borderRadius = "4px";
+            content.appendChild(img);
+        }
+        const text = document.createElement("div");
+        text.className = "mc-text";
+        text.textContent = choice.text;
+        content.appendChild(text);
+        btn.appendChild(content);
+
+        const isSelected = current?.choice === choice.id;
+        // After answering only correct/incorrect is shown ("selected" styling would mask red)
+        if (isSelected && !isAnswered) btn.classList.add("selected");
+        if (!isAnswered) {
+            btn.onclick = () => {
+                if (isExam) {
+                    quiz.userAnswers.set(q.id, { choice: choice.id });
+                    renderAnswers(q);
+                    renderExamNavigation();
+                } else {
+                    onAnswer({ choice: choice.id });
+                }
+            };
+        } else {
+            if (correctChoice && correctChoice.id === choice.id) btn.classList.add("correct");
+            if (isSelected && !(correctChoice && correctChoice.id === choice.id)) btn.classList.add("incorrect");
+            btn.disabled = true;
+        }
+        answersContainer.appendChild(btn);
+    });
+
+    // Own answer row
+    const row = document.createElement("div");
+    row.className = "answer-btn own-answer-row";
+    if (ownSelected && !isAnswered) row.classList.add("selected");
+    const indicator = document.createElement("div");
+    indicator.className = "mc-indicator";
+    indicator.textContent = "✎";
+    row.appendChild(indicator);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "quiz-input own-answer-input";
+    input.placeholder = t('quiz.ownAnswerPlaceholder');
+    input.setAttribute("aria-label", t('quiz.ownAnswerPlaceholder'));
+    input.value = ownSelected ? current.other : "";
+    input.autocomplete = "off";
+    row.appendChild(input);
+
+    if (!isAnswered) {
+        const submit = document.createElement("button");
+        submit.className = "btn btn-primary own-answer-submit";
+        submit.textContent = t('quiz.submitAnswer');
+        submit.disabled = !input.value.trim();
+        const selectOwn = () => {
+            answersContainer.querySelectorAll(".answer-btn.selected").forEach(b => b.classList.remove("selected"));
+            row.classList.add("selected");
+        };
+        input.addEventListener("focus", selectOwn);
+        input.addEventListener("input", () => {
+            const value = input.value;
+            submit.disabled = !value.trim();
+            if (isExam) {
+                if (value.trim()) quiz.userAnswers.set(q.id, { other: value });
+                else quiz.userAnswers.delete(q.id);
+                renderExamNavigation();
+            }
+        });
+        if (!isExam) {
+            submit.onclick = () => { if (input.value.trim()) onAnswer({ other: input.value.trim() }); };
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && input.value.trim()) onAnswer({ other: input.value.trim() });
+            });
+            row.appendChild(submit);
+        }
+    } else {
+        input.disabled = true;
+        if (ownSelected) row.classList.add(grading?.isCorrect ? "correct" : "incorrect");
+        if (q.otherIsCorrect && !(ownSelected && grading?.isCorrect)) {
+            const expected = document.createElement("div");
+            expected.className = "own-answer-expected";
+            expected.textContent = `${t('quiz.correctAnswerIs')} ${(q.otherCorrectAnswers || []).join(" / ")}`;
+            row.appendChild(expected);
+        }
+    }
+    answersContainer.appendChild(row);
 }
 function toggleMCSelection(qId, choiceId, btn, multiple) {
     if (!quiz)
@@ -958,8 +1073,8 @@ function appendResultAnswer(r, parent) {
         parent.appendChild(img);
         return;
     }
-    const txt = Array.isArray(r.answer) ? r.answer.join(', ') : String(r.answer || t('quiz.noAnswer'));
-    parent.appendChild(document.createTextNode(txt));
+    const txt = r.answerText ?? (Array.isArray(r.answer) ? r.answer.join(', ') : String(r.answer ?? t('quiz.noAnswer')));
+    parent.appendChild(document.createTextNode(txt || t('quiz.noAnswer')));
 }
 export function initializeQuiz(quizData) {
     setQuiz(new QuizState(quizData));

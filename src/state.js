@@ -1,3 +1,39 @@
+// Typed answers are compared without formula markers, case or extra spaces;
+// numbers compare by value so "0,5", "0.5" and ".5" all match.
+function normalizeAnswer(value) {
+    return String(value ?? "").replace(/\\\(|\\\)|\\\[|\\\]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function toNumber(text) {
+    const v = text.replace(",", ".");
+    return /^[-+]?(\d+\.?\d*|\.\d+)$/.test(v) ? parseFloat(v) : NaN;
+}
+export function answersMatch(given, expected) {
+    const a = normalizeAnswer(given);
+    const b = normalizeAnswer(expected);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const x = toNumber(a);
+    const y = toNumber(b);
+    return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9;
+}
+
+// Readable form of an answer for result reviews (choice IDs become the option text)
+function describeAnswer(q, answer) {
+    if (answer === null || answer === undefined) return null;
+    const choiceText = (id) => {
+        const c = q.choices?.find(ch => ch.id === id);
+        return c ? (c.text || (c.image ? "🖼" : id)) : id;
+    };
+    switch (q.type || 'multiple-choice') {
+        case 'multiple-choice':
+            return (Array.isArray(answer) ? answer : [answer]).map(choiceText).join(', ');
+        case 'choice-other':
+            return answer.other !== undefined ? `✎ ${answer.other}` : choiceText(answer.choice);
+        default:
+            return null;
+    }
+}
+
 /**
  * Encapsulates the runtime state of a single quiz session.
  * Handles shuffling, question traversal, answer recording, and scoring logic.
@@ -147,6 +183,17 @@ export class QuizState {
             case 'true-false': {
                 return { isCorrect: (answer === 'true' || answer === true) === q.isTrue, pendingReview: false };
             }
+            case 'choice-other': {
+                // Answer is { choice: id } for a listed option or { other: text } for the student's own
+                if (answer.other !== undefined) {
+                    const accepted = q.otherIsCorrect
+                        ? (q.otherCorrectAnswers || [])
+                        : (q.choices || []).filter(c => c.isCorrect).map(c => c.text);
+                    return { isCorrect: accepted.some(a => answersMatch(answer.other, a)), pendingReview: false };
+                }
+                const correct = !q.otherIsCorrect && (q.choices || []).find(c => c.isCorrect);
+                return { isCorrect: !!correct && correct.id === answer.choice, pendingReview: false };
+            }
             case 'image-upload':
             case 'text':
                 // Keyword matching for auto-hinting (disabled/informational only).
@@ -208,6 +255,7 @@ export class QuizState {
                 questionPrompt: q.prompt,
                 type: q.type || 'multiple-choice',
                 answer: answer,
+                answerText: describeAnswer(q, answer),
                 isCorrect: grading.isCorrect,
                 pendingReview: grading.pendingReview,
                 points: pts,

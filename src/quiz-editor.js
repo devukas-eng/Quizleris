@@ -8,13 +8,12 @@ import { parseBulkImportText } from "./admin-import.js";
 import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
+import "./rich-input.js";
+import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
 
 // Private quizzes on the free plan are deleted after this many days (mirrors server PRIVATE_EXPIRY_DAYS)
 const FREE_PRIVATE_EXPIRY_DAYS = 30;
-
-// Function to unwrap latex
-const unwrapMath = (str) => (str || "").replace(/^\\\(/, "").replace(/\\\)$/, "");
 
 let adminMode = false;
 let adminQuiz = null;
@@ -277,7 +276,7 @@ function renderAdminForm() {
     qDiv.setAttribute("draggable", "true");
 
     if (isCollapsed) {
-      const shortType = getShortTypeLabel(q.type);
+      const shortType = getShortTypeLabel(q);
       qDiv.innerHTML = `
         <div class="collapsed-card-layout">
           <div class="drag-handle" title="${t('admin.dragToReorder') || 'Drag to reorder'}">⋮⋮</div>
@@ -302,17 +301,7 @@ function renderAdminForm() {
             <h3 style="margin:0;">${t("admin.question")} ${qIdx + 1}</h3>
           </div>
           <div style="display: flex; gap: 12px; align-items: center;">
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <label style="font-size: 0.9rem; margin:0;">${t("admin.qType")}</label>
-              <select class="admin-q-type-selector admin-select-compact" data-qidx="${qIdx}">
-                <option value="multiple-choice" ${q.type === "multiple-choice" || !q.type ? "selected" : ""}>${t("admin.typeMC")}</option>
-                <option value="numeric" ${q.type === "numeric" ? "selected" : ""}>${t("admin.typeNum")}</option>
-                <option value="fill-blank" ${q.type === "fill-blank" ? "selected" : ""}>${t("admin.typeBlank")}</option>
-                <option value="image-upload" ${q.type === "image-upload" ? "selected" : ""}>${t("admin.typeImage")}</option>
-                <option value="text" ${q.type === "text" ? "selected" : ""}>${t("admin.typeText")}</option>
-                <option value="true-false" ${q.type === "true-false" ? "selected" : ""}>${t("admin.typeTF")}</option>
-              </select>
-            </div>
+            ${typeTriggerHtml(q, qIdx)}
             <span class="card-collapse-toggle" data-qidx="${qIdx}" title="Collapse" style="font-size: 1.1rem; padding: 4px 8px;">▲</span>
           </div>
         </div>
@@ -331,10 +320,9 @@ function renderAdminForm() {
           `}
         </div>
 
-        <label>
-          ${t("admin.promptLabel")}
-          <math-field class="admin-question-prompt admin-math-input" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}">${unwrapMath(q.prompt)}</math-field>
-        </label>
+        <div class="admin-field-label">${t("admin.promptLabel")}</div>
+        <rich-input class="admin-question-prompt" multiline data-qidx="${qIdx}"
+          value="${escapeHtml(q.prompt || "")}" placeholder="${t("rich.promptPlaceholder")}"></rich-input>
 
         
         
@@ -448,31 +436,11 @@ function renderAdminForm() {
         } catch (e) { console.error(e); }
       }
 
-      // Q-Type Selector Change
-      const typeSelector = qDiv.querySelector(".admin-q-type-selector");
-      if (typeSelector) {
-        typeSelector.onchange = () => {
-          if (!adminQuiz) return;
-          saveStateForUndo();
-          updateQuizFromDOM();
-          const newType = typeSelector.value;
-          adminQuiz.questions[qIdx].type = newType;
-          if (newType === "multiple-choice") {
-            adminQuiz.questions[qIdx].choices = [{ id: "a", text: "", isCorrect: true }, { id: "b", text: "", isCorrect: false }];
-          } else if (newType === "numeric") {
-            adminQuiz.questions[qIdx].correctAnswerNumber = 0;
-          } else if (newType === "fill-blank") {
-            adminQuiz.questions[qIdx].blankAnswers = [];
-          }
-          renderAdminForm();
-        };
-      }
-
-      // Multiple choice checkboxes multiple correct toggle
-      qDiv.querySelector(".admin-mc-multiple")?.addEventListener("change", () => {
-        saveStateForUndo();
-        updateQuizFromDOM();
-        renderAdminForm();
+      // Question type wheel
+      const typeTrigger = qDiv.querySelector(".qtype-trigger");
+      typeTrigger?.addEventListener("click", () => {
+        if (!adminQuiz) return;
+        openTypeWheel(typeTrigger, kindOfQuestion(adminQuiz.questions[qIdx]), (kind) => applyQuestionKind(qIdx, kind));
       });
 
       // Basic inputs
@@ -556,18 +524,24 @@ function renderAdminForm() {
 
       // Insert blank helper
       qDiv.querySelector(".admin-insert-blank-btn")?.addEventListener("click", () => {
-        const promptEl = qDiv.querySelector(".admin-question-prompt");
-        const start = promptEl.selectionStart;
-        const end = promptEl.selectionEnd;
-        const text = promptEl.value;
-        promptEl.value = text.substring(0, start) + "___" + text.substring(end);
-        promptEl.focus();
-        promptEl.setSelectionRange(start + 3, start + 3);
-        promptEl.dispatchEvent(new Event("input", { bubbles: true }));
+        qDiv.querySelector(".admin-question-prompt")?.insertText("___");
       });
 
-      // Multiple choice choices click handlers
-      if (q.type === "multiple-choice" || !q.type) {
+      // "Choose or write": the student's own answer is the correct one
+      qDiv.querySelector(".admin-other-correct")?.addEventListener("change", () => {
+        if (!adminQuiz) return;
+        saveStateForUndo();
+        updateQuizFromDOM();
+        const question = adminQuiz.questions[qIdx];
+        question.otherIsCorrect = true;
+        question.choices?.forEach(c => { c.isCorrect = false; });
+        renderAdminForm();
+        setTimeout(() => adminQuestionsList.querySelectorAll(".admin-question-item")[qIdx]?.querySelector(".admin-other-answers")?.focus(), 50);
+      });
+      qDiv.querySelector(".admin-other-answers")?.addEventListener("input", () => updateQuizFromDOM());
+
+      // Choice list handlers (single, multiple and "choose or write")
+      if (q.type === "multiple-choice" || q.type === "choice-other" || !q.type) {
         qDiv.querySelector(`.admin-add-choice-btn`)?.addEventListener("click", () => {
           if (!adminQuiz) return;
           saveStateForUndo();
@@ -598,7 +572,7 @@ function renderAdminForm() {
             const choice = adminQuiz.questions[qIdx].choices[cIdx];
             // Empty choices are removed straight away: nothing to lose, and undo still works
             if (choice && (choice.text?.trim() || choice.image)) {
-              const text = unwrapMath((choice.text || "").trim()) || "🖼";
+              const text = plainPreview(choice.text) || "🖼";
               const ok = await confirmDialog({
                 title: t("admin.removeChoiceTitle"),
                 message: t("admin.removeChoiceBody").replace("{text}", text.length > 60 ? text.slice(0, 57) + "…" : text),
@@ -620,9 +594,11 @@ function renderAdminForm() {
             updateQuizFromDOM();
             const target = e.target;
             const idx = parseInt(target.dataset.cidx);
-            const allowMultiple = adminQuiz.questions[qIdx].allowMultipleAnswers;
+            const question = adminQuiz.questions[qIdx];
+            const allowMultiple = question.type === "multiple-choice" && question.allowMultipleAnswers;
             if (!allowMultiple) {
-              adminQuiz.questions[qIdx].choices.forEach((c, cIdx) => c.isCorrect = idx === cIdx);
+              question.choices.forEach((c, cIdx) => c.isCorrect = idx === cIdx);
+              question.otherIsCorrect = false;
               renderAdminForm();
             } else {
               adminQuiz.questions[qIdx].choices[idx].isCorrect = target.checked;
@@ -742,38 +718,130 @@ function renderAdminForm() {
   
   restoreFocusAndScroll(focusState);
 }
+// Answer options with a correct-answer marker (radio for one correct, checkbox for several)
+function renderChoiceList(q, qIdx, multiple) {
+  return `
+    <div class="admin-choices-list" data-qidx="${qIdx}">
+      ${(q.choices || []).map((choice, cIdx) => `
+        <div class="admin-choice-item">
+            <input type="${multiple ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}"
+              aria-label="${t("admin.markCorrect")}" title="${t("admin.markCorrect")}" />
+            <rich-input class="admin-choice-text" data-qidx="${qIdx}" data-cidx="${cIdx}"
+              value="${escapeHtml(choice.text || "")}" placeholder="${t("rich.choicePlaceholder")} ${String.fromCharCode(65 + cIdx)}"></rich-input>
+            ${choice.image ? `
+              <div style="position: relative; display: inline-block;">
+                <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
+                <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">✕</button>
+              </div>
+            ` : `
+              <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}">\u{1F4F7}</button>
+            `}
+            <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}">✕</button>
+        </div>
+      `).join("")}
+    </div>
+    <button class="admin-add-choice-btn btn" data-qidx="${qIdx}">+ ${t("admin.addChoice")}</button>
+  `;
+}
+
+// Shown in dialogs: the text without the \( \) formula markers
+function plainPreview(text) {
+  const plain = String(text || "").replace(/\\\(|\\\)|\\\[|\\\]/g, "").replace(/\s+/g, " ").trim();
+  return plain.length > 60 ? plain.slice(0, 57) + "…" : plain;
+}
+
+// Applies a kind picked on the type wheel, keeping whatever content still fits the new kind.
+function applyQuestionKind(qIdx, kind) {
+  if (!adminQuiz) return;
+  saveStateForUndo();
+  updateQuizFromDOM();
+  const q = adminQuiz.questions[qIdx];
+  if (!q) return;
+
+  const ensureChoices = (count) => {
+    if (!Array.isArray(q.choices)) q.choices = [];
+    while (q.choices.length < count) {
+      q.choices.push({ id: String.fromCharCode(97 + q.choices.length), text: "", isCorrect: false });
+    }
+  };
+  // Single-answer kinds keep at most one marked option
+  const keepOneCorrect = () => {
+    let found = false;
+    q.choices.forEach(c => {
+      if (c.isCorrect && !found) found = true;
+      else c.isCorrect = false;
+    });
+    if (!found && !q.otherIsCorrect && q.choices[0]) q.choices[0].isCorrect = true;
+  };
+
+  switch (kind) {
+    case "single":
+      q.type = "multiple-choice";
+      q.allowMultipleAnswers = false;
+      q.otherIsCorrect = false;
+      ensureChoices(2);
+      keepOneCorrect();
+      break;
+    case "multi":
+      q.type = "multiple-choice";
+      q.allowMultipleAnswers = true;
+      q.otherIsCorrect = false;
+      ensureChoices(2);
+      if (!q.choices.some(c => c.isCorrect)) q.choices[0].isCorrect = true;
+      break;
+    case "choice-other":
+      q.type = "choice-other";
+      q.allowMultipleAnswers = false;
+      q.otherIsCorrect = !!q.otherIsCorrect;
+      q.otherCorrectAnswers = q.otherCorrectAnswers || [];
+      ensureChoices(3);
+      keepOneCorrect();
+      break;
+    case "numeric":
+      q.type = "numeric";
+      if (q.toleranceValue === undefined || isNaN(q.toleranceValue)) q.toleranceValue = 0;
+      break;
+    case "fill-blank":
+      q.type = "fill-blank";
+      q.blankAnswers = q.blankAnswers || [];
+      break;
+    case "true-false":
+      q.type = "true-false";
+      if (q.isTrue !== true && q.isTrue !== false) q.isTrue = true;
+      break;
+    default:
+      q.type = kind; // "text", "image-upload"
+  }
+  renderAdminForm();
+  adminQuestionsList.querySelector(`.qtype-trigger[data-qidx="${qIdx}"]`)?.focus();
+}
+
 function renderQuestionConfig(q, qIdx) {
   const type = q.type || "multiple-choice";
   switch (type) {
     case "multiple-choice":
+      return renderChoiceList(q, qIdx, !!q.allowMultipleAnswers);
+    case "choice-other": {
+      const accepted = (q.otherCorrectAnswers || []).join("; ");
       return `
-        <div style="margin-bottom: 10px;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem;">
-            <input type="checkbox" class="admin-mc-multiple" data-qidx="${qIdx}" ${q.allowMultipleAnswers ? "checked" : ""} />
-            ${t("admin.mcMultiple")}
-          </label>
+        ${renderChoiceList(q, qIdx, false)}
+        <div class="admin-other-row ${q.otherIsCorrect ? "is-correct" : ""}">
+          <input type="radio" name="correct_${qIdx}" class="admin-other-correct" data-qidx="${qIdx}" ${q.otherIsCorrect ? "checked" : ""}
+            aria-label="${t("admin.otherTitle")}" />
+          <div class="admin-other-body">
+            <div class="admin-other-title">\u270e ${t("admin.otherTitle")}</div>
+            <div class="admin-other-hint">${t("admin.otherHint")}</div>
+            ${q.otherIsCorrect ? `
+              <label class="admin-other-answers-label">
+                <span>${t("admin.otherAnswersLabel")}</span>
+                <input type="text" class="admin-other-answers" data-qidx="${qIdx}" value="${escapeHtml(accepted)}"
+                  placeholder="${t("admin.otherAnswersPlaceholder")}" />
+              </label>
+            ` : ""}
+          </div>
         </div>
-        <div class="admin-choices-list" data-qidx="${qIdx}">
-          ${(q.choices || []).map((choice, cIdx) => `
-            <div class="admin-choice-item" style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                <input type="${q.allowMultipleAnswers ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}" style="margin: 0;" />
-                <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                    <math-field class="admin-choice-text admin-math-input" smart-mode math-virtual-keyboard-policy="manual" data-qidx="${qIdx}" data-cidx="${cIdx}">${unwrapMath(choice.text)}</math-field>
-                </div>
-                ${choice.image ? `
-                  <div style="position: relative; display: inline-block;">
-                    <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
-                    <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">\u2715</button>
-                  </div>
-                ` : `
-                  <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}" style="margin: 0;">\u{1F4F7}</button>
-                `}
-                <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}" style="margin: 0;">\u2715</button>
-            </div>
-          `).join("")}
-        </div>
-        <button class="admin-add-choice-btn btn" data-qidx="${qIdx}">+ ${t("admin.addChoice")}</button>
       `;
+    }
     case "numeric":
       return `
         <div style="display: flex; gap: 15px; align-items: flex-end;">
@@ -864,21 +932,19 @@ function updateQuizFromDOM() {
     const qIdx = parseInt(promptArea.dataset.qidx);
     const q = adminQuiz.questions[qIdx];
     if (!q) return;
-    const val = promptArea.value.trim();
-    q.prompt = val ? "\\(" + val + "\\)" : "";
-    const typeSelector = qDiv.querySelector(".admin-q-type-selector");
-    if (typeSelector) q.type = typeSelector.value;
+    // Rich inputs already hold text with \( … \) formulas, the format the player renders
+    q.prompt = promptArea.value.trim();
+    if (!q.type) q.type = "multiple-choice";
     switch (q.type) {
-      case "multiple-choice": {
-        const multToggle = qDiv.querySelector(".admin-mc-multiple");
-        if (multToggle) q.allowMultipleAnswers = multToggle.checked;
+      case "multiple-choice":
+      case "choice-other": {
         qDiv.querySelectorAll(".admin-choice-text").forEach((input) => {
           const idx = parseInt(input.dataset.cidx);
-          if (q.choices?.[idx]) {
-            const v = input.value.trim();
-            q.choices[idx].text = v ? "\\(" + v + "\\)" : "";
-          }
+          if (q.choices?.[idx]) q.choices[idx].text = input.value.trim();
         });
+        const otherInput = qDiv.querySelector(".admin-other-answers");
+        // Semicolons separate answers, so decimal commas like 0,5 stay intact
+        if (otherInput) q.otherCorrectAnswers = otherInput.value.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
         break;
       }
       case "numeric":
@@ -1016,7 +1082,13 @@ function setupAdminEventsInternal() {
   adminAddQuestionBtn.addEventListener("click", () => {
     if (!adminQuiz) adminQuiz = { id: generateQuizId(), title: "New Quiz", questions: [] };
     updateQuizFromDOM();
-    adminQuiz.questions.push({ id: `q${adminQuiz.questions.length + 1}`, prompt: "", choices: [{ id: "a", text: "", isCorrect: true }, { id: "b", text: "", isCorrect: false }] });
+    // Unique ID: answers are keyed by question ID, so "q<n>" could collide after a deletion
+    adminQuiz.questions.push({
+      id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: "multiple-choice",
+      prompt: "",
+      choices: [{ id: "a", text: "", isCorrect: true }, { id: "b", text: "", isCorrect: false }]
+    });
     renderAdminForm();
     
     setTimeout(() => {
@@ -1119,7 +1191,7 @@ function setupAdminEventsInternal() {
   if (adminPanel) {
     adminPanel.addEventListener("focusin", (e) => {
       const target = e.target;
-      if (target && target.matches("input, textarea, select, math-field")) {
+      if (target && target.matches("input, textarea, select, math-field, .rich-input-editor")) {
         saveStateForUndo();
       }
     }, { capture: true });
@@ -1289,7 +1361,7 @@ function validateQuestion(q) {
     errors.push("empty_prompt");
   }
   const type = q.type || "multiple-choice";
-  if (type === "multiple-choice") {
+  if (type === "multiple-choice" || type === "choice-other") {
     const choices = q.choices || [];
     if (choices.length < 2) {
       errors.push("min_choices");
@@ -1297,7 +1369,7 @@ function validateQuestion(q) {
     let correctCount = 0;
     let emptyChoice = false;
     choices.forEach(c => {
-      if (!c.text || !c.text.trim()) {
+      if ((!c.text || !c.text.trim()) && !c.image) {
         emptyChoice = true;
       }
       if (c.isCorrect) {
@@ -1307,7 +1379,9 @@ function validateQuestion(q) {
     if (emptyChoice) {
       errors.push("empty_choice_text");
     }
-    if (correctCount === 0) {
+    if (type === "choice-other" && q.otherIsCorrect) {
+      if (!(q.otherCorrectAnswers || []).length) errors.push("no_other_answers");
+    } else if (correctCount === 0) {
       errors.push("no_correct_choice");
     }
   } else if (type === "numeric") {
@@ -1346,16 +1420,8 @@ function validateQuestion(q) {
 }
 
 
-function getShortTypeLabel(type) {
-  switch (type) {
-    case "multiple-choice": return "MC";
-    case "numeric": return "NUM";
-    case "fill-blank": return "BLNK";
-    case "true-false": return "TF";
-    case "text": return "TXT";
-    case "image-upload": return "IMG";
-    default: return "MC";
-  }
+function getShortTypeLabel(q) {
+  return getKind(kindOfQuestion(q)).short;
 }
 
 function flashCard(card) {

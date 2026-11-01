@@ -1,5 +1,6 @@
 export function captureFocusAndScroll() {
-  const active = document.activeElement;
+  // Inside a <rich-input> the focused node is its inner editor; track the host element instead
+  const active = document.activeElement?.closest?.("rich-input") || document.activeElement;
   const state = {
     scrollX: window.scrollX,
     scrollY: window.scrollY,

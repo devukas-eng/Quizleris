@@ -3839,6 +3839,7 @@ math-virtual-keyboard::part(action-toolbar) {
 
 .admin-question-item h3 {
     font-size: 1.05rem;
+    white-space: nowrap;
 }
 
 .admin-question-item label:has(> .admin-q-type-selector),
@@ -4420,4 +4421,566 @@ math-virtual-keyboard::part(action-toolbar) {
     .dash-quiz { flex-wrap: wrap; }
     .dash-quiz-actions { width: 100%; justify-content: flex-end; }
     .admin-select-compact { min-width: 0; max-width: 100%; }
+}
+
+/* ==========================================================================
+   Rich input: plain text with formula chips (question prompts, options)
+   ========================================================================== */
+.admin-field-label {
+    margin: 4px 0 6px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+rich-input {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--control-height);
+    padding: 3px 4px 3px 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: var(--input-bg);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+rich-input:hover {
+    border-color: var(--control-border-hover);
+}
+
+rich-input:focus-within,
+rich-input.formula-open {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.rich-input-editor {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0;
+    outline: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    cursor: text;
+}
+
+rich-input[multiline] .rich-input-editor {
+    min-height: 3.1em;
+}
+
+.rich-input-editor:empty::before {
+    content: attr(data-placeholder);
+    color: #9E9E9E;
+    pointer-events: none;
+}
+
+.rich-input-math-btn {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    margin-top: 1px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rich-input-math-btn:hover,
+.rich-input-math-btn:focus-visible,
+rich-input.formula-open .rich-input-math-btn {
+    outline: none;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.rich-math {
+    display: inline-block;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 0 2px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    border-radius: 6px;
+    background: var(--accent-soft);
+    line-height: 1.6;
+    vertical-align: baseline;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s ease;
+}
+
+.rich-math:hover {
+    border-color: var(--accent);
+}
+
+.admin-choice-item rich-input {
+    flex: 1;
+}
+
+/* Formula popover (MathLive) */
+.rich-formula-popover {
+    position: absolute;
+    z-index: 11000;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.rich-formula-popover.open {
+    display: flex;
+    animation: formulaPop 0.14s ease-out;
+}
+
+@keyframes formulaPop {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+
+.rich-formula-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rich-formula-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.rich-formula-hint {
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.rich-formula-field {
+    display: block;
+    width: 100%;
+    min-height: 54px;
+    padding: 8px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 1.3rem;
+}
+
+.rich-formula-field:focus,
+.rich-formula-field:focus-within {
+    /* MathLive's own outline would clash with the theme's focus ring */
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.rich-formula-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.rich-formula-actions .rich-formula-remove {
+    margin-right: auto;
+    color: var(--danger-strong);
+}
+
+.rich-formula-actions [hidden] {
+    display: none;
+}
+
+/* Prompts keep the line breaks typed in the editor */
+.prompt {
+    white-space: pre-line;
+}
+
+/* ==========================================================================
+   Question type: trigger + radial wheel
+   ========================================================================== */
+.qtype-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 4px 10px 4px 5px;
+    border: 1px solid var(--control-border);
+    border-radius: 999px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qtype-trigger:hover {
+    border-color: var(--accent);
+}
+
+.qtype-trigger:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.qtype-trigger-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.qtype-trigger-icon svg {
+    width: 17px;
+    height: 17px;
+}
+
+.qtype-trigger-chevron {
+    display: flex;
+    color: var(--muted);
+}
+
+.qtype-trigger-chevron svg {
+    width: 15px;
+    height: 15px;
+}
+
+.qtype-wheel-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    background: rgba(15, 23, 42, 0.16);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: wheelFade 0.18s ease;
+    transition: opacity 0.18s ease;
+}
+
+.qtype-wheel-overlay.closing {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@keyframes wheelFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.qtype-wheel {
+    position: fixed;
+    width: var(--size);
+    height: var(--size);
+}
+
+.qtype-wheel-disc {
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at center, var(--surface-solid) 0 34%, transparent 34.5%),
+        radial-gradient(circle at center, color-mix(in srgb, var(--accent) 6%, var(--surface-solid)) 0 100%);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+    opacity: 0;
+    transform: scale(0.6) rotate(-30deg);
+    transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.2s ease;
+}
+
+.qtype-wheel.open .qtype-wheel-disc {
+    opacity: 1;
+    transform: none;
+}
+
+.qtype-wheel-item {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin: -26px 0 0 -26px;
+    padding: 0;
+    border: 1px solid var(--control-border);
+    border-radius: 50%;
+    background: var(--input-bg);
+    background-color: var(--surface-solid);
+    color: var(--text);
+    cursor: pointer;
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3);
+    transition:
+        transform 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25) calc(var(--i) * 24ms),
+        opacity 0.2s ease calc(var(--i) * 24ms),
+        background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qtype-wheel.open .qtype-wheel-item {
+    opacity: 1;
+    transform: translate(var(--x), var(--y)) scale(1);
+}
+
+/* Once the fly-out is done, hovering reacts without the stagger delay */
+.qtype-wheel.settled .qtype-wheel-item {
+    transition-delay: 0s;
+}
+
+.qtype-wheel-item.hover,
+.qtype-wheel-item:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.qtype-wheel.open .qtype-wheel-item.hover,
+.qtype-wheel.open .qtype-wheel-item:focus-visible {
+    transform: translate(var(--x), var(--y)) scale(1.14);
+}
+
+.qtype-wheel-item.current {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    color: #fff;
+}
+
+.qtype-wheel-item.current.hover,
+.qtype-wheel-item.current:focus-visible {
+    color: #fff;
+}
+
+.qtype-wheel-item.picked {
+    animation: wheelPick 0.22s ease;
+}
+
+@keyframes wheelPick {
+    50% { box-shadow: 0 0 0 10px var(--accent-soft); }
+}
+
+.qtype-wheel-hub {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: calc(var(--size) * 0.44);
+    text-align: center;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+    transition: opacity 0.25s ease 0.1s, transform 0.25s ease 0.1s;
+    pointer-events: none;
+}
+
+.qtype-wheel.open .qtype-wheel-hub {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+}
+
+.qtype-hub-label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.qtype-hub-desc {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 0.7rem;
+    line-height: 1.3;
+}
+
+.qtype-wheel-hint {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateX(-50%);
+    transition: opacity 0.2s ease 0.25s;
+}
+
+.qtype-wheel.open .qtype-wheel-hint {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .qtype-wheel-hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qtype-wheel-overlay,
+    .qtype-wheel-disc,
+    .qtype-wheel-item,
+    .qtype-wheel-hub,
+    .qtype-wheel-hint {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+@media (max-width: 560px) {
+    .qtype-trigger-label { display: none; }
+
+    /* Phones: the editor is nested in four padded boxes, so trim them to give fields room */
+    body.admin-mode-active #app-root { padding: 12px; }
+    .admin-panel { padding: 12px; }
+    .admin-question-item { padding: 12px; }
+    .admin-choice-item { gap: 6px; }
+    .admin-choice-item .btn-icon,
+    .admin-choice-add-image {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+    }
+    rich-input { padding-left: 10px; }
+    .rich-input-math-btn { width: 28px; }
+}
+
+/* ==========================================================================
+   "Choose or write" question
+   ========================================================================== */
+.admin-other-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1.5px dashed var(--control-border);
+    border-radius: var(--control-radius);
+}
+
+.admin-other-row.is-correct {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: var(--accent-soft);
+}
+
+.admin-other-row input[type="radio"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    position: relative;
+    width: 20px;
+    height: 20px;
+    margin: 2px 0 0;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.admin-other-row input[type="radio"]:checked {
+    border-color: var(--accent);
+}
+
+.admin-other-row input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translate(-50%, -50%);
+}
+
+.admin-other-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.admin-other-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.admin-other-hint {
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.admin-form .admin-other-answers-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0 0;
+}
+
+/* Player: own-answer row spans the whole answer grid */
+.own-answer-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: text;
+}
+
+.own-answer-row:hover {
+    transform: none;
+}
+
+.own-answer-row.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.own-answer-input {
+    flex: 1;
+    min-width: 160px;
+    padding: 10px 12px;
+    font-size: 1rem;
+}
+
+.own-answer-submit {
+    flex-shrink: 0;
+}
+
+/* Disabled buttons had no styling, so they looked clickable */
+.btn:disabled,
+.btn:disabled:hover {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    animation: none;
+}
+
+.own-answer-expected {
+    flex-basis: 100%;
+    color: var(--success);
+    font-size: 0.9rem;
+    font-weight: 600;
 }

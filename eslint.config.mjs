@@ -41,7 +41,10 @@ export default [
                 prompt: "readonly",
                 location: "readonly",
                 renderMathInElement: "readonly",
-                HTMLInputElement: "readonly"
+                HTMLInputElement: "readonly",
+                HTMLElement: "readonly",
+                Node: "readonly",
+                customElements: "readonly"
             }
         },
         rules: {
