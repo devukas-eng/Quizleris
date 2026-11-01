@@ -29,7 +29,12 @@ const pool = require('./src/backend/db.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
-require('./copy-files.js');
+// A failed rebuild must not stop the API: the previous dist/ is still servable.
+try {
+    require('./copy-files.js');
+} catch (error) {
+    console.error('[BUILD] could not rebuild dist/:', error.code || error.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;

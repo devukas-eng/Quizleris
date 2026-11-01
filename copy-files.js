@@ -8,27 +8,50 @@ const distDir = path.join(__dirname, 'dist');
 const extensionsToCopy = ['.html', '.css', '.js', '.ico', '.png', '.jpg', '.jpeg', '.svg'];
 const filesToExclude = ['copy-files.js', 'package.json', 'package-lock.json', 'vercel.json', 'tsconfig.json'];
 
-function copyFiles() {
-    // Recreate dist directory
-    if (fs.existsSync(distDir)) {
-        fs.rmSync(distDir, { recursive: true, force: true });
+// Safe to run from several processes at once (the host may run `npm run build` while the
+// server's boot-time rebuild runs): files are overwritten in place instead of deleting and
+// recreating dist/, which raced with ENOTEMPTY when two runs overlapped.
+function replaceFile(tmp, dest) {
+    try {
+        fs.renameSync(tmp, dest);
+    } catch (error) {
+        // Windows refuses to rename over a file that a parallel run is replacing at the same
+        // moment. That run writes identical content, so dropping ours is fine.
+        fs.rmSync(tmp, { force: true });
+        if (!fs.existsSync(dest)) throw error;
     }
-    fs.mkdirSync(distDir);
+}
 
+function copyFiles() {
+    fs.mkdirSync(distDir, { recursive: true });
+
+    const wanted = new Set();
     let copied = 0;
-    // Read src directory
-    const files = fs.readdirSync(srcDir);
-
-    files.forEach(file => {
+    fs.readdirSync(srcDir).forEach(file => {
         const fullPath = path.join(srcDir, file);
-        const stat = fs.statSync(fullPath);
+        if (!fs.statSync(fullPath).isFile()) return;
+        const ext = path.extname(file).toLowerCase();
+        if (!extensionsToCopy.includes(ext) || filesToExclude.includes(file)) return;
 
-        if (stat.isFile()) {
-            const ext = path.extname(file).toLowerCase();
-            if (extensionsToCopy.includes(ext) && !filesToExclude.includes(file)) {
-                fs.copyFileSync(fullPath, path.join(distDir, file));
-                copied++;
-            }
+        wanted.add(file);
+        // Write to a unique temp name, then rename: readers never see a half-written file
+        const tmp = path.join(distDir, `.${file}.${process.pid}.tmp`);
+        fs.copyFileSync(fullPath, tmp);
+        replaceFile(tmp, path.join(distDir, file));
+        copied++;
+    });
+
+    // Remove files that no longer exist in src/ (another run may have removed them already),
+    // plus temp files left behind by a crashed run. Fresh temp files belong to a parallel run.
+    const now = Date.now();
+    fs.readdirSync(distDir).forEach(file => {
+        if (wanted.has(file)) return;
+        const fullPath = path.join(distDir, file);
+        try {
+            if (file.endsWith('.tmp') && now - fs.statSync(fullPath).mtimeMs < 60 * 1000) return;
+            fs.rmSync(fullPath, { recursive: true, force: true });
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
         }
     });
 
