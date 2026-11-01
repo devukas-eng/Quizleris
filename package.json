@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "db:init": "node scripts/init_db.js",
     "db:migrate": "node scripts/migrate_quizzes.js",
+    "db:seed": "node scripts/seed_premade.js",
     "lint": "eslint src server.js scripts",
     "test:smoke": "node scripts/smoke-test.js"
   },

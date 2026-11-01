@@ -103,17 +103,6 @@
             data-i18n="admin.backToMenu">Back to Menu</button>
       </div>
       <div class="admin-form">
-          <!-- Unsaved Draft Recovery Banner -->
-          <div id="admin-draft-banner" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); padding: 12px 18px; border-radius: 12px; margin-bottom: 20px; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap;">
-            <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b;">
-              <span>⚠️</span>
-              <span style="font-size: 0.9rem; font-weight: 500;" id="admin-draft-banner-text">Unsaved draft detected! Would you like to restore it?</span>
-            </div>
-            <div style="display: flex; gap: 10px;">
-              <button id="admin-draft-restore-btn" class="btn btn-primary" style="background: #f59e0b; color: black; border: none; font-size: 0.85rem; padding: 6px 14px;">Restore</button>
-              <button id="admin-draft-dismiss-btn" class="btn" style="font-size: 0.85rem; padding: 6px 14px;">Dismiss</button>
-            </div>
-          </div>
           <label>
             <span data-i18n="admin.quizTitle">Quiz Title:</span>
             <input type="text" id="admin-quiz-title" class="input-field"
@@ -208,7 +197,7 @@
             <button id="admin-export" class="btn btn-secondary" data-i18n="admin.exportJson">Export JSON</button>
             <button id="admin-import-btn" class="btn btn-secondary" data-i18n="admin.importJson">Import JSON</button>
             <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
-            <button id="admin-cancel" class="btn" data-i18n="admin.cancel">Cancel</button>
+            <button id="admin-new-quiz" class="btn" data-i18n="admin.newQuizBtn">+ New quiz</button>
           </div>
           <div id="admin-share-code" class="admin-share" style="display: none;"></div>
         </div>

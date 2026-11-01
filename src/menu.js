@@ -59,14 +59,7 @@ export function renderStartMenu() {
                 <input id="hero-pin-input" type="text" placeholder="${t('menu.pinPlaceholder')}" autocomplete="off" spellcheck="false" />
                 <button class="pin-go-btn" id="hero-pin-go">${t('menu.pinGo')}</button>
             </div>
-
-            <div class="hero-divider">${t('menu.divider')}</div>
-
-            <!-- Discover button -->
-            <button class="discover-btn" id="hero-discover-btn">
-                <span>🔍</span>
-                <span>${t('menu.discover')}</span>
-            </button>
+            <p class="hero-pin-hint">${t('menu.pinHint')}</p>
         </div>
     `;
 
@@ -87,16 +80,6 @@ export function renderStartMenu() {
         };
         pinGoBtn.addEventListener('click', doStart);
         pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
-    }
-
-    // Wire Discover button
-    const discoverBtn = document.getElementById('hero-discover-btn');
-    if (discoverBtn) {
-        discoverBtn.addEventListener('click', () => {
-            isStudentMenuOpen = true;
-            window.history.pushState({}, '', '/topics');
-            renderTopicsPage();
-        });
     }
 
 

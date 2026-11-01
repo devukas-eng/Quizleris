@@ -5,7 +5,6 @@ import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
 import { setupDashboard, renderDashboard } from "./dashboard.js";
 import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage, t } from "./lang.js";
-import { renderTopicsPage } from "./topics.js";
 import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
@@ -212,10 +211,9 @@ async function initApp() {
             const quizData = await loadQuiz();
             renderStudentJoin(quizData);
         }
-        else if (viewParam === "topics" || path === "/topics" || path.endsWith("/topics")) {
-            renderTopicsPage();
-        }
         else {
+            // The premade-topics page is hidden (quizzes are played by ID); old /topics links land here
+            if (viewParam === "topics" || path.endsWith("/topics")) window.history.replaceState({}, "", "/");
             renderStartMenu();
         }
         // 5. Update page language
@@ -243,8 +241,6 @@ async function initApp() {
                 renderDashboard(currentDash);
             } else if (currentQuiz) {
                 renderStudentJoin(await loadQuiz());
-            } else if (window.location.pathname.includes('/topics')) {
-                renderTopicsPage();
             } else {
                 renderStartMenu();
             }

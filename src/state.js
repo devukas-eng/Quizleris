@@ -17,21 +17,33 @@ export function answersMatch(given, expected) {
     return !isNaN(x) && !isNaN(y) && Math.abs(x - y) < 1e-9;
 }
 
+// Answer slots of a choice question: plain options, or "write"/"number" slots the student types into
+export const isTypedSlot = (choice) => choice?.kind === 'write' || choice?.kind === 'number';
+
+export function typedSlotMatches(choice, value) {
+    if (choice.kind === 'number') {
+        const given = toNumber(normalizeAnswer(value));
+        return !isNaN(given) && typeof choice.number === 'number' && !isNaN(choice.number) &&
+            Math.abs(given - choice.number) <= (choice.tolerance || 0) + 1e-9;
+    }
+    return (choice.accepted || []).some(a => answersMatch(value, a));
+}
+
+// Questions with typed slots store { selected: [ids], typed: { id: text } }; others keep id / [ids]
+const isSlotAnswer = (answer) => !!answer && typeof answer === 'object' && Array.isArray(answer.selected);
+
 // Readable form of an answer for result reviews (choice IDs become the option text)
 function describeAnswer(q, answer) {
     if (answer === null || answer === undefined) return null;
-    const choiceText = (id) => {
+    if ((q.type || 'multiple-choice') !== 'multiple-choice') return null;
+    const describe = (id) => {
         const c = q.choices?.find(ch => ch.id === id);
-        return c ? (c.text || (c.image ? "🖼" : id)) : id;
+        if (!c) return id;
+        if (isTypedSlot(c)) return `✎ ${isSlotAnswer(answer) ? (answer.typed?.[id] ?? '') : ''}`;
+        return c.text || (c.image ? "🖼" : id);
     };
-    switch (q.type || 'multiple-choice') {
-        case 'multiple-choice':
-            return (Array.isArray(answer) ? answer : [answer]).map(choiceText).join(', ');
-        case 'choice-other':
-            return answer.other !== undefined ? `✎ ${answer.other}` : choiceText(answer.choice);
-        default:
-            return null;
-    }
+    const ids = isSlotAnswer(answer) ? answer.selected : (Array.isArray(answer) ? answer : [answer]);
+    return ids.map(describe).join(', ');
 }
 
 /**
@@ -62,7 +74,10 @@ export class QuizState {
         if (quiz.shuffleConfig?.answers) {
             this.shuffledQuestions.forEach(q => {
                 if (q.choices && q.choices.length > 0) {
-                    this.shuffleArray(q.choices);
+                    // Write-in / number slots stay after the options ("or type your own" reads last)
+                    const options = q.choices.filter(c => !isTypedSlot(c));
+                    this.shuffleArray(options);
+                    q.choices = [...options, ...q.choices.filter(isTypedSlot)];
                     // Reassign IDs after shuffling to keep A, B, C, D in order
                     q.choices.forEach((c, idx) => {
                         c.id = String.fromCharCode(97 + idx); // 'a', 'b', 'c', 'd'...
@@ -151,12 +166,16 @@ export class QuizState {
         const type = q.type || 'multiple-choice';
         switch (type) {
             case 'multiple-choice': {
-                const selectedIds = Array.isArray(answer) ? answer : [answer];
+                const selectedIds = isSlotAnswer(answer) ? answer.selected : (Array.isArray(answer) ? answer : [answer]);
                 const correctIds = q.choices?.filter(c => c.isCorrect).map(c => c.id) || [];
                 // Selection must match exactly: all correct ones and no incorrect ones
-                const isCorrect = selectedIds.length === correctIds.length &&
+                const sameSelection = selectedIds.length === correctIds.length &&
                     selectedIds.every(id => correctIds.includes(id));
-                return { isCorrect, pendingReview: false };
+                // ...and every selected write-in / number slot must hold an accepted answer
+                const typedOk = (q.choices || [])
+                    .filter(c => isTypedSlot(c) && selectedIds.includes(c.id))
+                    .every(c => typedSlotMatches(c, isSlotAnswer(answer) ? answer.typed?.[c.id] : undefined));
+                return { isCorrect: sameSelection && typedOk, pendingReview: false };
             }
             case 'numeric': {
                 const val = parseFloat(answer);
@@ -182,17 +201,6 @@ export class QuizState {
             }
             case 'true-false': {
                 return { isCorrect: (answer === 'true' || answer === true) === q.isTrue, pendingReview: false };
-            }
-            case 'choice-other': {
-                // Answer is { choice: id } for a listed option or { other: text } for the student's own
-                if (answer.other !== undefined) {
-                    const accepted = q.otherIsCorrect
-                        ? (q.otherCorrectAnswers || [])
-                        : (q.choices || []).filter(c => c.isCorrect).map(c => c.text);
-                    return { isCorrect: accepted.some(a => answersMatch(answer.other, a)), pendingReview: false };
-                }
-                const correct = !q.otherIsCorrect && (q.choices || []).find(c => c.isCorrect);
-                return { isCorrect: !!correct && correct.id === answer.choice, pendingReview: false };
             }
             case 'image-upload':
             case 'text':

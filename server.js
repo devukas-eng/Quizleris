@@ -26,6 +26,7 @@ for (const key of ['DB_USER', 'DB_PASS', 'DB_NAME']) {
 }
 
 const pool = require('./src/backend/db.js');
+const { seedPremadeQuizzes } = require('./src/backend/premade.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -458,6 +459,12 @@ async function ensureSchema() {
     } catch (error) {
         // Non-fatal: everything treats a missing column as "premium never expires"
         console.error('[SCHEMA] could not update schema:', error.code || error.message);
+    }
+    try {
+        const added = await seedPremadeQuizzes(pool);
+        if (added > 0) console.log(`[SEED] added ${added} premade quiz(zes)`);
+    } catch (error) {
+        console.error('[SEED] could not seed premade quizzes:', error.code || error.message);
     }
 }
 

@@ -3931,7 +3931,7 @@ math-virtual-keyboard::part(action-toolbar) {
     border-top: 1px solid var(--border-color);
 }
 
-.admin-actions #admin-cancel {
+.admin-actions #admin-new-quiz {
     margin-left: auto;
 }
 
@@ -4864,77 +4864,56 @@ rich-input.formula-open .rich-input-math-btn {
 }
 
 /* ==========================================================================
-   "Choose or write" question
+   Answer slots: per-answer kind (option / write-in / number)
    ========================================================================== */
-.admin-other-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-top: 12px;
-    padding: 12px 14px;
-    border: 1.5px dashed var(--control-border);
-    border-radius: var(--control-radius);
-}
-
-.admin-other-row.is-correct {
-    border-style: solid;
-    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-    background: var(--accent-soft);
-}
-
-.admin-other-row input[type="radio"] {
-    appearance: none;
-    -webkit-appearance: none;
+.answer-kind-trigger {
     flex-shrink: 0;
-    position: relative;
-    width: 20px;
-    height: 20px;
-    margin: 2px 0 0;
-    border: 2px solid rgba(0, 0, 0, 0.2);
-    border-radius: 50%;
-    cursor: pointer;
-}
-
-.admin-other-row input[type="radio"]:checked {
-    border-color: var(--accent);
-}
-
-.admin-other-row input[type="radio"]:checked::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    transform: translate(-50%, -50%);
-}
-
-.admin-other-body {
     display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--control-border);
+    border-radius: 50%;
+    background: var(--input-bg);
+    color: var(--accent);
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.answer-kind-trigger svg {
+    width: 17px;
+    height: 17px;
+}
+
+.answer-kind-trigger:hover {
+    border-color: var(--accent);
+    transform: scale(1.06);
+}
+
+.answer-kind-trigger:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+/* Typed slots get a dashed frame so they read as "the student fills this in" */
+.admin-choice-item.kind-write .admin-choice-accepted,
+.admin-choice-item.kind-number .admin-choice-number,
+.admin-choice-item.kind-number .admin-choice-tolerance {
+    border-style: dashed;
+}
+
+.admin-choice-item .admin-choice-accepted,
+.admin-choice-item .admin-choice-number {
     flex: 1;
-    flex-direction: column;
-    gap: 4px;
     min-width: 0;
 }
 
-.admin-other-title {
-    font-size: 0.92rem;
-    font-weight: 600;
-}
-
-.admin-other-hint {
-    color: var(--muted);
-    font-size: 0.8rem;
-    line-height: 1.4;
-}
-
-.admin-form .admin-other-answers-label {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin: 8px 0 0;
+.admin-choice-item .admin-choice-tolerance {
+    flex: 0 0 88px;
+    width: 88px;
 }
 
 /* Player: own-answer row spans the whole answer grid */
@@ -4966,6 +4945,13 @@ rich-input.formula-open .rich-input-math-btn {
 
 .own-answer-submit {
     flex-shrink: 0;
+}
+
+.hero-pin-hint {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
 }
 
 /* Disabled buttons had no styling, so they looked clickable */

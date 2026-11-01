@@ -15,10 +15,6 @@ export const QUESTION_KINDS = [
         icon: svg('<rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.6 7.1l1.3 1.3 2-2.4"/><path d="M12.5 7h8"/><rect x="3" y="14" width="6" height="6" rx="1.5"/><path d="M4.6 17.1l1.3 1.3 2-2.4"/><path d="M12.5 17h8"/>')
     },
     {
-        key: "choice-other", label: "qtype.choiceOther", desc: "qtype.choiceOtherDesc", short: "✓✎",
-        icon: svg('<circle cx="6" cy="5.5" r="2.2"/><path d="M11 5.5h9"/><circle cx="6" cy="12" r="2.2"/><path d="M11 12h9"/><path d="M3.5 20.5l.7-2.6 3.6-3.6 1.9 1.9-3.6 3.6z"/><path d="M12 19.5h8" stroke-dasharray="2 2.5"/>')
-    },
-    {
         key: "true-false", label: "qtype.trueFalse", desc: "qtype.trueFalseDesc", short: "T/F",
         icon: svg('<path d="M3 12.5l3 3 5.5-6.5"/><path d="M15 9l6 6M21 9l-6 6"/>')
     },
@@ -39,6 +35,35 @@ export const QUESTION_KINDS = [
         icon: svg('<rect x="3" y="7" width="18" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3.4"/><path d="M8.5 7l1.6-2.5h3.8L15.5 7"/>')
     }
 ];
+
+// What a single answer slot of a choice question is. Students pick a slot; "write" and
+// "number" slots also take what they type, which is checked against the teacher's answer.
+export const ANSWER_KINDS = [
+    {
+        key: "option", label: "akind.option", desc: "akind.optionDesc",
+        icon: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/>')
+    },
+    {
+        key: "write", label: "akind.write", desc: "akind.writeDesc",
+        icon: svg('<path d="M4 20l1.2-4.2L15.5 5.5a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L8.2 18.8z"/><path d="M13.5 7.5l3 3"/>')
+    },
+    {
+        key: "number", label: "akind.number", desc: "akind.numberDesc",
+        icon: svg('<path d="M9.5 4L7.5 20M16.5 4l-2 16M4.5 9h15.5M4 15h15.5"/>')
+    }
+];
+
+export function kindOfChoice(choice) {
+    return ANSWER_KINDS.some(k => k.key === choice?.kind) ? choice.kind : "option";
+}
+
+/** HTML for the small per-answer button that shows the slot kind and opens the wheel. */
+export function answerKindTriggerHtml(choice, qIdx, cIdx) {
+    const kind = ANSWER_KINDS.find(k => k.key === kindOfChoice(choice));
+    const label = `${t("akind.title")}: ${t(kind.label)}`;
+    return `<button type="button" class="answer-kind-trigger" data-qidx="${qIdx}" data-cidx="${cIdx}"
+        aria-haspopup="dialog" aria-label="${label}" title="${label}">${kind.icon}</button>`;
+}
 
 const CHEVRON = svg('<path d="M7 10l5 5 5-5"/>');
 
@@ -73,12 +98,16 @@ let openWheel = null;
  * @param {HTMLElement} trigger
  * @param {string} currentKey
  * @param {(key: string) => void} onSelect
+ * @param {{ kinds?: typeof QUESTION_KINDS, title?: string }} [options] defaults to question types
  */
-export function openTypeWheel(trigger, currentKey, onSelect) {
+export function openTypeWheel(trigger, currentKey, onSelect, options = {}) {
     closeTypeWheel(false);
 
-    const count = QUESTION_KINDS.length;
-    const radius = window.innerWidth < 420 ? 88 : 100;
+    const kinds = options.kinds || QUESTION_KINDS;
+    const title = options.title || t("qtype.title");
+    const getKind = (key) => kinds.find(k => k.key === key) || kinds[0];
+    const count = kinds.length;
+    const radius = count <= 4 ? 76 : (window.innerWidth < 420 ? 88 : 100);
     const size = radius * 2 + 64;
 
     const overlay = document.createElement("div");
@@ -86,10 +115,10 @@ export function openTypeWheel(trigger, currentKey, onSelect) {
     const wheel = document.createElement("div");
     wheel.className = "qtype-wheel";
     wheel.setAttribute("role", "dialog");
-    wheel.setAttribute("aria-label", t("qtype.title"));
+    wheel.setAttribute("aria-label", title);
     wheel.style.setProperty("--size", `${size}px`);
 
-    const items = QUESTION_KINDS.map((kind, i) => {
+    const items = kinds.map((kind, i) => {
         const angle = (-90 + (360 / count) * i) * (Math.PI / 180);
         const x = Math.round(Math.cos(angle) * radius);
         const y = Math.round(Math.sin(angle) * radius);
@@ -197,7 +226,7 @@ export function openTypeWheel(trigger, currentKey, onSelect) {
 
     requestAnimationFrame(() => {
         wheel.classList.add("open");
-        focusIndex(Math.max(0, QUESTION_KINDS.findIndex(k => k.key === currentKey)));
+        focusIndex(Math.max(0, kinds.findIndex(k => k.key === currentKey)));
         setTimeout(() => wheel.classList.add("settled"), 450);
     });
 }

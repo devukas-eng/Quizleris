@@ -1,4 +1,4 @@
-import { QuizState, quiz, setQuiz } from "./state.js";
+import { QuizState, quiz, setQuiz, isTypedSlot, typedSlotMatches } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
@@ -65,9 +65,10 @@ function clearElement(el) {
  * Also triggers KaTeX rendering for LaTeX math.
  */
 export function renderQuestion(q) {
-    const typeLabel = q.type === 'multiple-choice' ?
-        (q.allowMultipleAnswers ? t('quiz.mcSelectAll') : t('quiz.mcSelectOne')) :
-        q.type === 'choice-other' ? t('quiz.chooseOrWrite') : '';
+    const hasTypedSlot = (q.choices || []).some(isTypedSlot);
+    const typeLabel = (q.type || 'multiple-choice') !== 'multiple-choice' ? '' :
+        q.allowMultipleAnswers ? t('quiz.mcSelectAll') :
+        hasTypedSlot ? t('quiz.chooseOrWrite') : t('quiz.mcSelectOne');
     clearElement(questionContainer);
     // Header
     const header = document.createElement("div");
@@ -123,10 +124,8 @@ export function renderAnswers(q) {
     answersContainer.className = "answers-container " + type;
     switch (type) {
         case 'multiple-choice':
-            renderMCQ(q);
-            break;
-        case 'choice-other':
-            renderChoiceOther(q);
+            if ((q.choices || []).some(isTypedSlot)) renderSlotChoices(q);
+            else renderMCQ(q);
             break;
         case 'numeric':
             renderNumeric(q);
@@ -237,116 +236,131 @@ function renderMCQ(q) {
     }
 }
 /**
- * "Choose or write": the listed options plus a row where the student types their own answer.
- * The answer is stored as { choice: id } or { other: text }.
+ * Choice questions whose answers mix plain options with write-in / number slots.
+ * The answer is { selected: [ids], typed: { id: text } }; a typed slot counts as picked once
+ * the student focuses it (single answer) or types something (multiple answers).
  */
-function renderChoiceOther(q) {
+function renderSlotChoices(q) {
+    const multiple = !!q.allowMultipleAnswers;
     const isExam = quiz?.quiz.mode === 'exam';
     const isAnswered = quiz?.hasAnswered && !isExam;
-    const current = quiz?.userAnswers.get(q.id) || null;
-    const ownSelected = !!current && current.other !== undefined;
-    const correctChoice = !q.otherIsCorrect ? q.choices?.find(c => c.isCorrect) : null;
-    const grading = isAnswered ? quiz.gradeQuestion(q, current) : null;
+    const stored = quiz?.userAnswers.get(q.id);
+    const state = stored && Array.isArray(stored.selected)
+        ? { selected: [...stored.selected], typed: { ...(stored.typed || {}) } }
+        : { selected: [], typed: {} };
 
-    q.choices?.forEach((choice) => {
-        const btn = document.createElement("button");
-        btn.className = "answer-btn mc-btn";
-        btn.dataset.choiceId = choice.id;
+    const rows = [];
+    let submitBtn = null;
+    const refresh = () => {
+        rows.forEach(({ el, id }) => el.classList.toggle("selected", state.selected.includes(id)));
+        const ready = state.selected.length > 0 &&
+            state.selected.every(id => !isTypedSlot(q.choices.find(c => c.id === id)) || (state.typed[id] || "").trim());
+        if (submitBtn) submitBtn.disabled = !ready;
+        if (isExam) {
+            if (state.selected.length) quiz.userAnswers.set(q.id, { selected: [...state.selected], typed: { ...state.typed } });
+            else quiz.userAnswers.delete(q.id);
+            renderExamNavigation();
+        }
+    };
+    const select = (id, on = true) => {
+        if (!multiple) state.selected = on ? [id] : state.selected.filter(x => x !== id);
+        else if (on && !state.selected.includes(id)) state.selected.push(id);
+        else if (!on) state.selected = state.selected.filter(x => x !== id);
+    };
+    const submit = () => onAnswer({ selected: [...state.selected], typed: { ...state.typed } });
+
+    (q.choices || []).forEach((choice) => {
+        const typed = isTypedSlot(choice);
+        const el = document.createElement(typed ? "div" : "button");
+        el.className = `answer-btn mc-btn${typed ? " own-answer-row" : ""}${multiple ? " checkbox-style" : ""}`;
+        el.dataset.choiceId = choice.id;
         const indicator = document.createElement("div");
         indicator.className = "mc-indicator";
-        indicator.textContent = choice.id.toUpperCase();
-        btn.appendChild(indicator);
-        const content = document.createElement("div");
-        content.className = "mc-content";
-        if (choice.image) {
-            const img = document.createElement("img");
-            img.src = sanitizeImageUrl(choice.image);
-            img.style.maxHeight = "120px";
-            img.style.borderRadius = "4px";
-            content.appendChild(img);
-        }
-        const text = document.createElement("div");
-        text.className = "mc-text";
-        text.textContent = choice.text;
-        content.appendChild(text);
-        btn.appendChild(content);
+        indicator.textContent = multiple ? "" : choice.id.toUpperCase();
+        el.appendChild(indicator);
 
-        const isSelected = current?.choice === choice.id;
-        // After answering only correct/incorrect is shown ("selected" styling would mask red)
-        if (isSelected && !isAnswered) btn.classList.add("selected");
-        if (!isAnswered) {
-            btn.onclick = () => {
-                if (isExam) {
-                    quiz.userAnswers.set(q.id, { choice: choice.id });
-                    renderAnswers(q);
-                    renderExamNavigation();
-                } else {
-                    onAnswer({ choice: choice.id });
+        if (typed) {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "quiz-input own-answer-input";
+            input.placeholder = choice.kind === "number" ? t('quiz.typeNumber') : t('quiz.typeAnswer');
+            if (choice.kind === "number") input.inputMode = "decimal";
+            input.setAttribute("aria-label", input.placeholder);
+            input.autocomplete = "off";
+            input.value = state.typed[choice.id] || "";
+            el.appendChild(input);
+            if (!isAnswered) {
+                input.addEventListener("focus", () => { if (!multiple) { select(choice.id); refresh(); } });
+                input.addEventListener("input", () => {
+                    state.typed[choice.id] = input.value;
+                    select(choice.id, multiple ? !!input.value.trim() : true);
+                    refresh();
+                });
+                input.addEventListener("keydown", (e) => {
+                    if (e.key === "Enter" && !isExam && submitBtn && !submitBtn.disabled) submit();
+                });
+            } else {
+                input.disabled = true;
+                const picked = (stored?.selected || []).includes(choice.id);
+                const slotOk = picked && choice.isCorrect && typedSlotMatches(choice, stored?.typed?.[choice.id]);
+                if (picked) el.classList.add(slotOk ? "correct" : "incorrect");
+                if (choice.isCorrect && !slotOk) {
+                    const expected = document.createElement("div");
+                    expected.className = "own-answer-expected";
+                    const answerText = choice.kind === "number"
+                        ? `${choice.number}${choice.tolerance ? ` ± ${choice.tolerance}` : ""}`
+                        : (choice.accepted || []).join(" / ");
+                    expected.textContent = `${t('quiz.correctAnswerIs')} ${answerText}`;
+                    el.appendChild(expected);
                 }
-            };
+            }
         } else {
-            if (correctChoice && correctChoice.id === choice.id) btn.classList.add("correct");
-            if (isSelected && !(correctChoice && correctChoice.id === choice.id)) btn.classList.add("incorrect");
-            btn.disabled = true;
+            const content = document.createElement("div");
+            content.className = "mc-content";
+            if (choice.image) {
+                const img = document.createElement("img");
+                img.src = sanitizeImageUrl(choice.image);
+                img.style.maxHeight = "120px";
+                img.style.borderRadius = "4px";
+                content.appendChild(img);
+            }
+            const text = document.createElement("div");
+            text.className = "mc-text";
+            text.textContent = choice.text;
+            content.appendChild(text);
+            el.appendChild(content);
+            if (!isAnswered) {
+                el.onclick = () => {
+                    // Practice + single answer: picking an option answers right away, as with plain questions
+                    if (!multiple && !isExam) {
+                        select(choice.id);
+                        submit();
+                        return;
+                    }
+                    select(choice.id, multiple ? !state.selected.includes(choice.id) : true);
+                    refresh();
+                };
+            } else {
+                const picked = (stored?.selected || []).includes(choice.id);
+                if (choice.isCorrect) el.classList.add("correct");
+                if (picked && !choice.isCorrect) el.classList.add("incorrect");
+                el.disabled = true;
+            }
         }
-        answersContainer.appendChild(btn);
+        rows.push({ el, id: choice.id });
+        answersContainer.appendChild(el);
     });
 
-    // Own answer row
-    const row = document.createElement("div");
-    row.className = "answer-btn own-answer-row";
-    if (ownSelected && !isAnswered) row.classList.add("selected");
-    const indicator = document.createElement("div");
-    indicator.className = "mc-indicator";
-    indicator.textContent = "✎";
-    row.appendChild(indicator);
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "quiz-input own-answer-input";
-    input.placeholder = t('quiz.ownAnswerPlaceholder');
-    input.setAttribute("aria-label", t('quiz.ownAnswerPlaceholder'));
-    input.value = ownSelected ? current.other : "";
-    input.autocomplete = "off";
-    row.appendChild(input);
-
-    if (!isAnswered) {
-        const submit = document.createElement("button");
-        submit.className = "btn btn-primary own-answer-submit";
-        submit.textContent = t('quiz.submitAnswer');
-        submit.disabled = !input.value.trim();
-        const selectOwn = () => {
-            answersContainer.querySelectorAll(".answer-btn.selected").forEach(b => b.classList.remove("selected"));
-            row.classList.add("selected");
-        };
-        input.addEventListener("focus", selectOwn);
-        input.addEventListener("input", () => {
-            const value = input.value;
-            submit.disabled = !value.trim();
-            if (isExam) {
-                if (value.trim()) quiz.userAnswers.set(q.id, { other: value });
-                else quiz.userAnswers.delete(q.id);
-                renderExamNavigation();
-            }
-        });
-        if (!isExam) {
-            submit.onclick = () => { if (input.value.trim()) onAnswer({ other: input.value.trim() }); };
-            input.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" && input.value.trim()) onAnswer({ other: input.value.trim() });
-            });
-            row.appendChild(submit);
-        }
-    } else {
-        input.disabled = true;
-        if (ownSelected) row.classList.add(grading?.isCorrect ? "correct" : "incorrect");
-        if (q.otherIsCorrect && !(ownSelected && grading?.isCorrect)) {
-            const expected = document.createElement("div");
-            expected.className = "own-answer-expected";
-            expected.textContent = `${t('quiz.correctAnswerIs')} ${(q.otherCorrectAnswers || []).join(" / ")}`;
-            row.appendChild(expected);
-        }
+    if (!isAnswered && !isExam) {
+        submitBtn = document.createElement("button");
+        submitBtn.className = "btn btn-primary submit-mc-btn own-answer-submit";
+        submitBtn.textContent = t('quiz.submitAnswer');
+        submitBtn.onclick = submit;
+        answersContainer.appendChild(submitBtn);
     }
-    answersContainer.appendChild(row);
+    if (!isAnswered) refresh();
 }
+
 function toggleMCSelection(qId, choiceId, btn, multiple) {
     if (!quiz)
         return;

@@ -9,7 +9,7 @@ import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import "./rich-input.js";
-import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind } from "./type-wheel.js";
+import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind, ANSWER_KINDS, answerKindTriggerHtml, kindOfChoice } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
 
 // Private quizzes on the free plan are deleted after this many days (mirrors server PRIVATE_EXPIRY_DAYS)
@@ -30,7 +30,7 @@ let adminPreviewBtn;
 let adminExportBtn;
 let adminImportBtn;
 let adminImportInput;
-let adminCancelBtn;
+let adminNewQuizBtn;
 let adminShareCode;
 let adminTimerMode;
 let adminTimerLimit;
@@ -65,10 +65,6 @@ let adminUndoBtn = null;
 let adminRedoBtn = null;
 let adminLocalSelector = null;
 let adminLocalDeleteBtn = null;
-let adminDraftBanner = null;
-let adminDraftBannerText = null;
-let adminDraftRestoreBtn = null;
-let adminDraftDismissBtn = null;
 
 // null = private quizzes never expire (premium/admin); refreshed from the server profile
 let privateExpiryDays = FREE_PRIVATE_EXPIRY_DAYS;
@@ -116,7 +112,7 @@ function setupAdmin(callbacks) {
   adminExportBtn = getRequiredElement("admin-export");
   adminImportBtn = getRequiredElement("admin-import-btn");
   adminImportInput = getRequiredElement("admin-import-input");
-  adminCancelBtn = getRequiredElement("admin-cancel");
+  adminNewQuizBtn = getRequiredElement("admin-new-quiz");
   adminShareCode = getRequiredElement("admin-share-code");
   adminTimerMode = getRequiredElement("admin-timer-mode");
   adminTimerLimit = getRequiredElement("admin-timer-limit");
@@ -143,10 +139,7 @@ function setupAdmin(callbacks) {
   adminRedoBtn = getRequiredElement("admin-redo-btn");
   adminLocalSelector = getRequiredElement("admin-local-selector");
   adminLocalDeleteBtn = getRequiredElement("admin-local-delete-btn");
-  adminDraftBanner = getRequiredElement("admin-draft-banner");
-  adminDraftBannerText = getRequiredElement("admin-draft-banner-text");
-  adminDraftRestoreBtn = getRequiredElement("admin-draft-restore-btn");
-  adminDraftDismissBtn = getRequiredElement("admin-draft-dismiss-btn");
+  window.addEventListener("pagehide", flushDraft);
 
   setupSegmentedControl();
   setupQuizModeSegmentedControl();
@@ -177,27 +170,41 @@ function toggleAdminMode() {
   
   adminToggle.textContent = adminMode ? t("admin.playerMode") : t("admin.adminMode");
   if (adminMode) {
-    if (quiz) {
-      adminQuiz = { ...quiz.quiz };
+    // The editor always resumes the one working draft; a quiz being played is opened instead
+    // only when the draft has nothing unsaved.
+    const draft = readDraft();
+    if (quiz && !draft?.dirty) {
+      adminQuiz = JSON.parse(JSON.stringify(quiz.quiz));
+      writeDraft(false, true);
+    } else if (draft) {
+      adminQuiz = draft.quiz;
     } else {
-      adminQuiz = {
-        id: generateQuizId(),
-        title: t("admin.newQuiz"),
-        questions: []
-      };
+      adminQuiz = blankQuiz();
+      writeDraft(false, false);
     }
     undoStack = [];
     redoStack = [];
     updateUndoRedoButtons();
     populateLocalSelector();
-    checkAndPromptDraft();
     renderAdminForm();
+    updateDraftStatusBadge(draftBadgeStatus());
+  } else {
+    flushDraft();
   }
 }
 // Opens the editor (if closed) and optionally loads one of the user's saved quizzes into it.
 async function openEditor(quizId) {
+  const draft = readDraft();
+  // Same quiz with unsaved edits in the draft: keep the edits instead of reloading the saved copy
+  if (quizId && draft?.dirty && draft.quiz.id === quizId) quizId = null;
+  if (quizId && !(await confirmReplaceDraft(quizId))) quizId = null;
   if (!adminMode) toggleAdminMode();
   if (!adminMode || !quizId) return;
+  await loadIntoEditor(quizId);
+}
+
+// Replaces the working draft with a saved quiz from the cloud
+async function loadIntoEditor(quizId) {
   const loadedQuiz = await loadQuizFromStorage(quizId);
   if (!loadedQuiz) {
     await alertDialog(t("profile.loadError"), quizId);
@@ -207,12 +214,82 @@ async function openEditor(quizId) {
   undoStack = [];
   redoStack = [];
   updateUndoRedoButtons();
-  if (adminDraftBanner) adminDraftBanner.style.display = "none";
+  if (adminShareCode) adminShareCode.style.display = "none";
+  writeDraft(false, true);
+  updateDraftStatusBadge("cloud");
   renderAdminForm();
   if (adminLocalSelector) {
     adminLocalSelector.value = quizId;
     toggleLocalDeleteButtonVisibility();
   }
+}
+
+// --- Working draft ---
+// One draft per device, saved on every change and resumed whenever the editor opens.
+// "dirty" means it has changes that are not saved to the cloud yet.
+const DRAFT_KEY = "quiz_editor_draft";
+
+function readDraft() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (!parsed) return null;
+    if (parsed.quiz && Array.isArray(parsed.quiz.questions)) return parsed;
+    // Older format stored the bare quiz object
+    return Array.isArray(parsed.questions) ? { quiz: parsed, dirty: true } : null;
+  } catch {
+    return null;
+  }
+}
+
+// inCloud: this quiz exists in the cloud (loaded from or saved to it); kept across autosaves
+function writeDraft(dirty, inCloud) {
+  if (!adminQuiz) return;
+  if (inCloud === undefined) {
+    const prev = readDraft();
+    inCloud = !!prev?.inCloud && prev.quiz.id === adminQuiz.id;
+  }
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ quiz: adminQuiz, dirty, inCloud }));
+  } catch (e) {
+    console.error("Error saving draft:", e);
+  }
+}
+
+function draftBadgeStatus() {
+  const draft = readDraft();
+  return draft && !draft.dirty && draft.inCloud ? "cloud" : "saved";
+}
+
+// Saves a pending debounced autosave right away (closing the editor, leaving the page)
+function flushDraft() {
+  if (!autoSaveTimer) return;
+  clearTimeout(autoSaveTimer);
+  autosaveNow();
+}
+
+function blankQuiz() {
+  return { id: generateQuizId(), title: t("admin.newQuiz"), questions: [] };
+}
+
+function draftHasContent(q) {
+  const defaultTitles = [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
+  if (q.title && q.title.trim() && !defaultTitles.includes(q.title.trim())) return true;
+  return (q.questions || []).some(question =>
+    question.prompt?.trim() || question.image ||
+    (question.choices || []).some(c => c.text?.trim() || c.image));
+}
+
+// Asks before unsaved work in the draft is replaced by another (or a new) quiz
+async function confirmReplaceDraft(nextId) {
+  flushDraft();
+  const draft = readDraft();
+  if (!draft || !draft.dirty || draft.quiz.id === nextId || !draftHasContent(draft.quiz)) return true;
+  return confirmDialog({
+    title: t("admin.replaceDraftTitle"),
+    message: t("admin.replaceDraftBody").replace("{title}", draft.quiz.title || "—"),
+    confirmText: t("admin.replaceDraftConfirm"),
+    danger: true
+  });
 }
 function renderAdminForm() {
   if (!adminQuiz) return;
@@ -527,21 +604,22 @@ function renderAdminForm() {
         qDiv.querySelector(".admin-question-prompt")?.insertText("___");
       });
 
-      // "Choose or write": the student's own answer is the correct one
-      qDiv.querySelector(".admin-other-correct")?.addEventListener("change", () => {
-        if (!adminQuiz) return;
-        saveStateForUndo();
-        updateQuizFromDOM();
-        const question = adminQuiz.questions[qIdx];
-        question.otherIsCorrect = true;
-        question.choices?.forEach(c => { c.isCorrect = false; });
-        renderAdminForm();
-        setTimeout(() => adminQuestionsList.querySelectorAll(".admin-question-item")[qIdx]?.querySelector(".admin-other-answers")?.focus(), 50);
+      // Per-answer kind wheel (option / write-in / number) and the typed-answer fields
+      qDiv.querySelectorAll(".answer-kind-trigger").forEach((trigger) => {
+        trigger.addEventListener("click", () => {
+          const cIdx = parseInt(trigger.dataset.cidx);
+          const choice = adminQuiz?.questions[qIdx]?.choices?.[cIdx];
+          if (!choice) return;
+          openTypeWheel(trigger, kindOfChoice(choice), (kind) => applyChoiceKind(qIdx, cIdx, kind),
+            { kinds: ANSWER_KINDS, title: t("akind.title") });
+        });
       });
-      qDiv.querySelector(".admin-other-answers")?.addEventListener("input", () => updateQuizFromDOM());
+      qDiv.querySelectorAll(".admin-choice-accepted, .admin-choice-number, .admin-choice-tolerance").forEach((input) => {
+        input.addEventListener("input", () => updateQuizFromDOM());
+      });
 
-      // Choice list handlers (single, multiple and "choose or write")
-      if (q.type === "multiple-choice" || q.type === "choice-other" || !q.type) {
+      // Choice list handlers (single and multiple answers)
+      if (q.type === "multiple-choice" || !q.type) {
         qDiv.querySelector(`.admin-add-choice-btn`)?.addEventListener("click", () => {
           if (!adminQuiz) return;
           saveStateForUndo();
@@ -571,8 +649,12 @@ function renderAdminForm() {
             updateQuizFromDOM();
             const choice = adminQuiz.questions[qIdx].choices[cIdx];
             // Empty choices are removed straight away: nothing to lose, and undo still works
-            if (choice && (choice.text?.trim() || choice.image)) {
-              const text = plainPreview(choice.text) || "🖼";
+            const choiceKind = kindOfChoice(choice);
+            const preview = choiceKind === "write" ? (choice?.accepted || []).join("; ")
+              : choiceKind === "number" ? String(choice?.number ?? "")
+              : plainPreview(choice?.text);
+            if (choice && (preview || choice.image)) {
+              const text = preview || "🖼";
               const ok = await confirmDialog({
                 title: t("admin.removeChoiceTitle"),
                 message: t("admin.removeChoiceBody").replace("{text}", text.length > 60 ? text.slice(0, 57) + "…" : text),
@@ -598,7 +680,6 @@ function renderAdminForm() {
             const allowMultiple = question.type === "multiple-choice" && question.allowMultipleAnswers;
             if (!allowMultiple) {
               question.choices.forEach((c, cIdx) => c.isCorrect = idx === cIdx);
-              question.otherIsCorrect = false;
               renderAdminForm();
             } else {
               adminQuiz.questions[qIdx].choices[idx].isCorrect = target.checked;
@@ -723,25 +804,67 @@ function renderChoiceList(q, qIdx, multiple) {
   return `
     <div class="admin-choices-list" data-qidx="${qIdx}">
       ${(q.choices || []).map((choice, cIdx) => `
-        <div class="admin-choice-item">
+        <div class="admin-choice-item kind-${kindOfChoice(choice)}" data-cidx="${cIdx}">
             <input type="${multiple ? "checkbox" : "radio"}" name="correct_${qIdx}" ${choice.isCorrect ? "checked" : ""} data-cidx="${cIdx}"
               aria-label="${t("admin.markCorrect")}" title="${t("admin.markCorrect")}" />
-            <rich-input class="admin-choice-text" data-qidx="${qIdx}" data-cidx="${cIdx}"
-              value="${escapeHtml(choice.text || "")}" placeholder="${t("rich.choicePlaceholder")} ${String.fromCharCode(65 + cIdx)}"></rich-input>
-            ${choice.image ? `
-              <div style="position: relative; display: inline-block;">
-                <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
-                <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">✕</button>
-              </div>
-            ` : `
-              <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}">\u{1F4F7}</button>
-            `}
+            ${answerKindTriggerHtml(choice, qIdx, cIdx)}
+            ${renderChoiceBody(choice, qIdx, cIdx)}
             <button class="admin-remove-choice-btn btn btn-danger btn-icon" aria-label="Remove Choice" data-cidx="${cIdx}">✕</button>
         </div>
       `).join("")}
     </div>
     <button class="admin-add-choice-btn btn" data-qidx="${qIdx}">+ ${t("admin.addChoice")}</button>
   `;
+}
+
+// The editable part of one answer slot, by kind
+function renderChoiceBody(choice, qIdx, cIdx) {
+  const kind = kindOfChoice(choice);
+  if (kind === "write") {
+    return `
+      <input type="text" class="admin-choice-accepted" data-qidx="${qIdx}" data-cidx="${cIdx}"
+        value="${escapeHtml((choice.accepted || []).join("; "))}" placeholder="${t("akind.writePlaceholder")}"
+        aria-label="${t("admin.otherAnswersLabel")}" />
+    `;
+  }
+  if (kind === "number") {
+    return `
+      <input type="number" step="any" class="admin-choice-number" data-qidx="${qIdx}" data-cidx="${cIdx}"
+        value="${escapeHtml(String(choice.number ?? ""))}" placeholder="${t("akind.numberPlaceholder")}" aria-label="${t("akind.numberPlaceholder")}" />
+      <input type="number" step="any" min="0" class="admin-choice-tolerance" data-qidx="${qIdx}" data-cidx="${cIdx}"
+        value="${escapeHtml(String(choice.tolerance ?? ""))}" placeholder="± 0" title="${t("akind.tolerance")}" aria-label="${t("akind.tolerance")}" />
+    `;
+  }
+  return `
+    <rich-input class="admin-choice-text" data-qidx="${qIdx}" data-cidx="${cIdx}"
+      value="${escapeHtml(choice.text || "")}" placeholder="${t("rich.choicePlaceholder")} ${String.fromCharCode(65 + cIdx)}"></rich-input>
+    ${choice.image ? `
+      <div style="position: relative; display: inline-block;">
+        <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
+        <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">✕</button>
+      </div>
+    ` : `
+      <button class="admin-choice-add-image btn btn-light btn-icon" data-cidx="${cIdx}" title="${t("admin.addImage")}" aria-label="${t("admin.addImage")}">\u{1F4F7}</button>
+    `}
+  `;
+}
+
+// Changes what one answer slot is (picked on the per-answer wheel)
+function applyChoiceKind(qIdx, cIdx, kind) {
+  if (!adminQuiz) return;
+  saveStateForUndo();
+  updateQuizFromDOM();
+  const choice = adminQuiz.questions[qIdx]?.choices?.[cIdx];
+  if (!choice) return;
+  if (kind === "option") delete choice.kind;
+  else choice.kind = kind;
+  if (kind === "write" && !Array.isArray(choice.accepted)) {
+    // Start from the option's text so nothing typed is lost
+    const plain = plainPreview(choice.text);
+    choice.accepted = plain ? [plain] : [];
+  }
+  renderAdminForm();
+  adminQuestionsList.querySelector(`.answer-kind-trigger[data-qidx="${qIdx}"][data-cidx="${cIdx}"]`)?.focus();
 }
 
 // Shown in dialogs: the text without the \( \) formula markers
@@ -771,31 +894,21 @@ function applyQuestionKind(qIdx, kind) {
       if (c.isCorrect && !found) found = true;
       else c.isCorrect = false;
     });
-    if (!found && !q.otherIsCorrect && q.choices[0]) q.choices[0].isCorrect = true;
+    if (!found && q.choices[0]) q.choices[0].isCorrect = true;
   };
 
   switch (kind) {
     case "single":
       q.type = "multiple-choice";
       q.allowMultipleAnswers = false;
-      q.otherIsCorrect = false;
       ensureChoices(2);
       keepOneCorrect();
       break;
     case "multi":
       q.type = "multiple-choice";
       q.allowMultipleAnswers = true;
-      q.otherIsCorrect = false;
       ensureChoices(2);
       if (!q.choices.some(c => c.isCorrect)) q.choices[0].isCorrect = true;
-      break;
-    case "choice-other":
-      q.type = "choice-other";
-      q.allowMultipleAnswers = false;
-      q.otherIsCorrect = !!q.otherIsCorrect;
-      q.otherCorrectAnswers = q.otherCorrectAnswers || [];
-      ensureChoices(3);
-      keepOneCorrect();
       break;
     case "numeric":
       q.type = "numeric";
@@ -821,27 +934,6 @@ function renderQuestionConfig(q, qIdx) {
   switch (type) {
     case "multiple-choice":
       return renderChoiceList(q, qIdx, !!q.allowMultipleAnswers);
-    case "choice-other": {
-      const accepted = (q.otherCorrectAnswers || []).join("; ");
-      return `
-        ${renderChoiceList(q, qIdx, false)}
-        <div class="admin-other-row ${q.otherIsCorrect ? "is-correct" : ""}">
-          <input type="radio" name="correct_${qIdx}" class="admin-other-correct" data-qidx="${qIdx}" ${q.otherIsCorrect ? "checked" : ""}
-            aria-label="${t("admin.otherTitle")}" />
-          <div class="admin-other-body">
-            <div class="admin-other-title">\u270e ${t("admin.otherTitle")}</div>
-            <div class="admin-other-hint">${t("admin.otherHint")}</div>
-            ${q.otherIsCorrect ? `
-              <label class="admin-other-answers-label">
-                <span>${t("admin.otherAnswersLabel")}</span>
-                <input type="text" class="admin-other-answers" data-qidx="${qIdx}" value="${escapeHtml(accepted)}"
-                  placeholder="${t("admin.otherAnswersPlaceholder")}" />
-              </label>
-            ` : ""}
-          </div>
-        </div>
-      `;
-    }
     case "numeric":
       return `
         <div style="display: flex; gap: 15px; align-items: flex-end;">
@@ -936,15 +1028,24 @@ function updateQuizFromDOM() {
     q.prompt = promptArea.value.trim();
     if (!q.type) q.type = "multiple-choice";
     switch (q.type) {
-      case "multiple-choice":
-      case "choice-other": {
-        qDiv.querySelectorAll(".admin-choice-text").forEach((input) => {
-          const idx = parseInt(input.dataset.cidx);
-          if (q.choices?.[idx]) q.choices[idx].text = input.value.trim();
+      case "multiple-choice": {
+        qDiv.querySelectorAll(".admin-choice-item[data-cidx]").forEach((row) => {
+          const choice = q.choices?.[parseInt(row.dataset.cidx)];
+          if (!choice) return;
+          const kind = kindOfChoice(choice);
+          if (kind === "write") {
+            // Semicolons separate answers, so decimal commas like 0,5 stay intact
+            const accepted = row.querySelector(".admin-choice-accepted")?.value || "";
+            choice.accepted = accepted.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
+          } else if (kind === "number") {
+            choice.number = parseFloat(String(row.querySelector(".admin-choice-number")?.value ?? "").replace(",", "."));
+            const tol = parseFloat(String(row.querySelector(".admin-choice-tolerance")?.value ?? "").replace(",", "."));
+            choice.tolerance = isNaN(tol) ? 0 : Math.abs(tol);
+          } else {
+            const input = row.querySelector(".admin-choice-text");
+            if (input) choice.text = input.value.trim();
+          }
         });
-        const otherInput = qDiv.querySelector(".admin-other-answers");
-        // Semicolons separate answers, so decimal commas like 0,5 stay intact
-        if (otherInput) q.otherCorrectAnswers = otherInput.value.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
         break;
       }
       case "numeric":
@@ -992,8 +1093,11 @@ async function saveAdminQuiz() {
       await alertDialog(t("admin.saveFailed"), saveResult.error || "");
       return;
   }
-  localStorage.removeItem("quiz_editor_draft");
-  if (adminDraftBanner) adminDraftBanner.style.display = "none";
+  // The draft stays as the working copy; it now matches the cloud
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = null;
+  writeDraft(false, true);
+  updateDraftStatusBadge("cloud");
   populateLocalSelector();
   const { shareCode, registry } = exportQuizForSharing(adminQuiz);
   saveImageRegistry(adminQuiz.id, registry);
@@ -1132,14 +1236,24 @@ function setupAdminEventsInternal() {
     };
     reader.readAsText(file);
   });
-  adminCancelBtn.addEventListener("click", async () => {
-    const ok = await confirmDialog({
-      title: t("admin.cancelTitle"),
-      message: t("admin.confirmCancel"),
-      confirmText: t("dialog.leave"),
-      danger: true
-    });
-    if (ok) toggleAdminMode();
+  // Start a fresh quiz (the draft is always saved, so closing the editor loses nothing)
+  adminNewQuizBtn.addEventListener("click", async () => {
+    updateQuizFromDOM();
+    if (!(await confirmReplaceDraft(null))) return;
+    adminQuiz = blankQuiz();
+    undoStack = [];
+    redoStack = [];
+    updateUndoRedoButtons();
+    adminShareCode.style.display = "none";
+    writeDraft(false, false);
+    updateDraftStatusBadge("saved");
+    renderAdminForm();
+    if (adminLocalSelector) {
+      adminLocalSelector.value = "";
+      toggleLocalDeleteButtonVisibility();
+    }
+    adminQuizTitle.focus();
+    adminQuizTitle.select();
   });
 
   // Bulk Import Events
@@ -1180,10 +1294,6 @@ function setupAdminEventsInternal() {
   if (adminLocalSelector) adminLocalSelector.addEventListener("change", handleLocalSelectorChange);
   if (adminLocalDeleteBtn) adminLocalDeleteBtn.addEventListener("click", handleLocalDeleteClick);
 
-  // Wire up Draft Banner Action Buttons
-  if (adminDraftRestoreBtn) adminDraftRestoreBtn.addEventListener("click", restoreDraft);
-  if (adminDraftDismissBtn) adminDraftDismissBtn.addEventListener("click", dismissDraft);
-
   // Global keyboard listener for shortcuts (Z / Y)
   window.addEventListener("keydown", handleEditorKeyboardShortcuts);
 
@@ -1209,7 +1319,7 @@ function setupAdminEventsInternal() {
         id === "admin-redo-btn" || 
         id === "admin-preview" || 
         id === "admin-export" || 
-        id === "admin-cancel" || 
+        id === "admin-new-quiz" ||
         id === "admin-btn-back" || 
         id === "admin-bulk-import-btn" || 
         id === "bulk-import-close-btn" || 
@@ -1361,27 +1471,23 @@ function validateQuestion(q) {
     errors.push("empty_prompt");
   }
   const type = q.type || "multiple-choice";
-  if (type === "multiple-choice" || type === "choice-other") {
+  if (type === "multiple-choice") {
     const choices = q.choices || [];
-    if (choices.length < 2) {
+    const hasTypedSlot = choices.some(c => kindOfChoice(c) !== "option");
+    // A lone write-in/number slot is a valid question; plain options need at least two
+    if (choices.length < (hasTypedSlot ? 1 : 2)) {
       errors.push("min_choices");
     }
     let correctCount = 0;
-    let emptyChoice = false;
     choices.forEach(c => {
-      if ((!c.text || !c.text.trim()) && !c.image) {
-        emptyChoice = true;
-      }
-      if (c.isCorrect) {
-        correctCount++;
-      }
+      const kind = kindOfChoice(c);
+      if (kind === "option" && (!c.text || !c.text.trim()) && !c.image) errors.push("empty_choice_text");
+      // A typed slot marked correct needs something to compare the student's answer with
+      if (c.isCorrect && kind === "write" && !(c.accepted || []).length) errors.push("no_accepted_answers");
+      if (c.isCorrect && kind === "number" && (c.number === undefined || c.number === null || isNaN(c.number))) errors.push("invalid_numeric");
+      if (c.isCorrect) correctCount++;
     });
-    if (emptyChoice) {
-      errors.push("empty_choice_text");
-    }
-    if (type === "choice-other" && q.otherIsCorrect) {
-      if (!(q.otherCorrectAnswers || []).length) errors.push("no_other_answers");
-    } else if (correctCount === 0) {
+    if (correctCount === 0) {
       errors.push("no_correct_choice");
     }
   } else if (type === "numeric") {
@@ -1543,14 +1649,16 @@ function triggerAutoSave() {
     clearTimeout(autoSaveTimer);
   }
   
-  autoSaveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem("quiz_editor_draft", JSON.stringify(adminQuiz));
-      updateDraftStatusBadge("saved");
-    } catch (e) {
-      console.error("Error auto-saving draft:", e);
-    }
-  }, 1000);
+  autoSaveTimer = setTimeout(autosaveNow, 600);
+}
+
+// Writes the draft; it only becomes "unsaved" when the content actually changed
+function autosaveNow() {
+  autoSaveTimer = null;
+  const prev = readDraft();
+  const changed = !prev || JSON.stringify(prev.quiz) !== JSON.stringify(adminQuiz);
+  writeDraft(!!prev?.dirty || changed);
+  updateDraftStatusBadge(draftBadgeStatus());
 }
 
 function updateDraftStatusBadge(status) {
@@ -1568,104 +1676,17 @@ function updateDraftStatusBadge(status) {
       dotSpan.style.background = "#f59e0b";
       dotSpan.style.boxShadow = "0 0 8px #f59e0b";
     }
-  } else if (status === "saved") {
+  } else if (status === "saved" || status === "cloud") {
     adminDraftStatus.style.background = "rgba(16, 185, 129, 0.15)";
     adminDraftStatus.style.borderColor = "rgba(16, 185, 129, 0.3)";
     adminDraftStatus.style.color = "#10b981";
-    if (textSpan) textSpan.textContent = t("admin.draftSaved") || "Draft Saved";
+    // "saved": kept on this device, not yet saved to the cloud; "cloud": matches the saved quiz
+    if (textSpan) textSpan.textContent = status === "cloud" ? t("admin.savedToCloud") : t("admin.draftSaved");
     if (dotSpan) {
       dotSpan.style.background = "#10b981";
       dotSpan.style.boxShadow = "0 0 8px #10b981";
     }
   }
-}
-
-function checkAndPromptDraft() {
-  const draftStr = localStorage.getItem("quiz_editor_draft");
-  if (!draftStr) {
-    if (adminDraftBanner) adminDraftBanner.style.display = "none";
-    return;
-  }
-  
-  try {
-    const draft = JSON.parse(draftStr);
-    
-    // Check if the draft is effectively just a blank default quiz
-    let isDraftEmpty = true;
-    if (draft) {
-      const defaultTitle1 = t("admin.newQuiz") || "New Quiz";
-      const titleChanged = draft.title && draft.title.trim() !== "" && draft.title !== defaultTitle1 && draft.title !== "New Quiz" && draft.title !== "Naujas testas";
-      const descChanged = draft.description && draft.description.trim() !== "";
-      
-      let hasContent = false;
-      if (draft.questions && draft.questions.length > 0) {
-        hasContent = draft.questions.some(q => {
-          if (q.prompt && q.prompt.trim() !== "") return true;
-          if (q.image && q.image.trim() !== "") return true;
-          if (q.choices && q.choices.some(c => (c.text && c.text.trim() !== "") || (c.image && c.image.trim() !== ""))) return true;
-          return false;
-        });
-      }
-      
-      if (titleChanged || descChanged || hasContent) {
-        isDraftEmpty = false;
-      }
-    }
-    
-    if (!draft || isDraftEmpty) {
-      if (adminDraftBanner) adminDraftBanner.style.display = "none";
-      return;
-    }
-    
-    // Ignore ID differences when comparing draft to current quiz
-    const currentQuizCopy = adminQuiz ? { ...adminQuiz, id: "" } : null;
-    const draftCopy = { ...draft, id: "" };
-    
-    if (JSON.stringify(currentQuizCopy) !== JSON.stringify(draftCopy)) {
-      if (adminDraftBanner) {
-        adminDraftBanner.style.display = "flex";
-        if (adminDraftBannerText) {
-          adminDraftBannerText.textContent = t("admin.draftDetected") || "Unsaved draft detected! Would you like to restore it?";
-        }
-        
-        const restoreBtn = document.getElementById("admin-draft-restore-btn");
-        const dismissBtn = document.getElementById("admin-draft-dismiss-btn");
-        if (restoreBtn) restoreBtn.textContent = t("admin.restore") || "Restore";
-        if (dismissBtn) dismissBtn.textContent = t("admin.dismiss") || "Dismiss";
-      }
-    } else {
-      if (adminDraftBanner) adminDraftBanner.style.display = "none";
-    }
-  } catch (e) {
-    console.error("Error reading draft:", e);
-    if (adminDraftBanner) adminDraftBanner.style.display = "none";
-  }
-}
-
-function restoreDraft() {
-  const draftStr = localStorage.getItem("quiz_editor_draft");
-  if (!draftStr) return;
-  try {
-    saveStateForUndo();
-    adminQuiz = JSON.parse(draftStr);
-    renderAdminForm();
-    if (adminDraftBanner) adminDraftBanner.style.display = "none";
-    
-    if (adminLocalSelector) {
-      adminLocalSelector.value = adminQuiz.id || "";
-      if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
-      toggleLocalDeleteButtonVisibility();
-    }
-    
-    updateDraftStatusBadge("saved");
-  } catch {
-    alert("Failed to restore draft.");
-  }
-}
-
-function dismissDraft() {
-  localStorage.removeItem("quiz_editor_draft");
-  if (adminDraftBanner) adminDraftBanner.style.display = "none";
 }
 
 async function populateLocalSelector() {
@@ -1721,17 +1742,14 @@ async function handleLocalSelectorChange() {
     return;
   }
   
-  const loadedQuiz = await loadQuizFromStorage(selectedId);
-  if (loadedQuiz) {
-    saveStateForUndo();
-    adminQuiz = JSON.parse(JSON.stringify(loadedQuiz));
-    renderAdminForm();
+  if (selectedId === adminQuiz?.id) return;
+  if (!(await confirmReplaceDraft(selectedId))) {
+    adminLocalSelector.value = adminQuiz?.id || "";
+    if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
     toggleLocalDeleteButtonVisibility();
-    
-    if (adminDraftBanner) adminDraftBanner.style.display = "none";
-    
-    triggerAutoSave();
+    return;
   }
+  await loadIntoEditor(selectedId);
 }
 
 async function handleLocalDeleteClick() {
@@ -1759,16 +1777,14 @@ async function handleLocalDeleteClick() {
   localStorage.removeItem("quiz-images_" + selectedId);
   
   if (adminQuiz && adminQuiz.id === selectedId) {
-    adminQuiz = {
-      id: generateQuizId(),
-      title: t("admin.newQuiz") || "New Quiz",
-      questions: []
-    };
+    adminQuiz = blankQuiz();
     undoStack = [];
     redoStack = [];
     updateUndoRedoButtons();
-    localStorage.removeItem("quiz_editor_draft");
-    if (adminDraftBanner) adminDraftBanner.style.display = "none";
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+    writeDraft(false, false);
+    updateDraftStatusBadge("saved");
     renderAdminForm();
   }
   
