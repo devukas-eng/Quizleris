@@ -1219,9 +1219,9 @@ function setupFileMenu() {
         adminQuiz.printLayout = layout;
         triggerAutoSave();
       },
-      onExport: async (quizToPrint) => {
+      onExport: async (quizToPrint, options) => {
         try {
-          await exportQuizToDocx(quizToPrint);
+          await exportQuizToDocx(quizToPrint, options);
         } catch (err) {
           console.error("Word export failed", err);
           await alertDialog(t("docx.exportFailed"), err.message || "");

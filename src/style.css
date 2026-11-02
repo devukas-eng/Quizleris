@@ -5111,7 +5111,7 @@ body.pp-open {
     flex-shrink: 0;
     width: 794px;
     height: 1123px;
-    padding: 67px 73px;
+    padding: var(--pp-my, 67px) var(--pp-mx, 73px);
     background: #fff;
     box-shadow: 0 6px 24px rgba(15, 23, 42, 0.25);
 }
@@ -5174,9 +5174,133 @@ body.pp-open {
     padding-bottom: 8px;
 }
 
-.pp-q-img,
-.pp-choice-img {
+/* Images: click to show the corner handles, drag a corner to resize */
+.pp-img {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    line-height: 0;
+    cursor: pointer;
+}
+
+.pp-img img {
     display: block;
+    max-width: none;
+}
+
+.pp-img:hover {
+    outline: 1px dashed #1B9B7E;
+    outline-offset: 2px;
+}
+
+.pp-img.selected {
+    outline: 2px solid #1B9B7E;
+    outline-offset: 2px;
+}
+
+.pp-corner {
+    --pp-corner: calc(12px * var(--pp-inv, 1));
+    position: absolute;
+    z-index: 3;
+    display: none;
+    width: var(--pp-corner);
+    height: var(--pp-corner);
+    border: calc(2px * var(--pp-inv, 1)) solid #1B9B7E;
+    border-radius: 3px;
+    background: #fff;
+    box-sizing: border-box;
+    touch-action: none;
+}
+
+.pp-img:hover .pp-corner,
+.pp-img.selected .pp-corner {
+    display: block;
+}
+
+.pp-corner-nw { left: calc(var(--pp-corner) / -2); top: calc(var(--pp-corner) / -2); cursor: nwse-resize; }
+.pp-corner-ne { right: calc(var(--pp-corner) / -2); top: calc(var(--pp-corner) / -2); cursor: nesw-resize; }
+.pp-corner-sw { left: calc(var(--pp-corner) / -2); bottom: calc(var(--pp-corner) / -2); cursor: nesw-resize; }
+.pp-corner-se { right: calc(var(--pp-corner) / -2); bottom: calc(var(--pp-corner) / -2); cursor: nwse-resize; }
+
+/* Phones/tablets: corners only on the tapped image, and a little larger */
+@media (hover: none) {
+    .pp-img:hover .pp-corner { display: none; }
+    .pp-img.selected .pp-corner { display: block; }
+    .pp-corner { --pp-corner: calc(20px * var(--pp-inv, 1)); }
+}
+
+.pp-size-badge {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    z-index: 3;
+    display: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(17, 24, 39, 0.85);
+    color: #fff;
+    font: 600 12px/1.2 "Segoe UI", Arial, sans-serif;
+    white-space: nowrap;
+    transform: translateX(-50%) scale(var(--pp-inv, 1));
+    transform-origin: bottom center;
+    pointer-events: none;
+}
+
+.pp-img.resizing .pp-size-badge {
+    display: block;
+}
+
+.pp-img.resizing {
+    cursor: nwse-resize;
+}
+
+/* "Save paper" shrank this image so its question fits the page */
+.pp-img[data-fit-label]::before {
+    content: "↘ " attr(data-fit-label);
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    z-index: 2;
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: rgba(27, 155, 126, 0.9);
+    color: #fff;
+    font: 600 11px/1.3 "Segoe UI", Arial, sans-serif;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    pointer-events: none;
+}
+
+.pp-q:hover .pp-img[data-fit-label]::before,
+.pp-q.selected .pp-img[data-fit-label]::before {
+    opacity: 1;
+}
+
+/* Blank writing space after a question: shown faintly here, empty on paper */
+.pp-space {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px dashed transparent;
+    border-radius: 6px;
+    color: transparent;
+    font: 12px "Segoe UI", Arial, sans-serif;
+}
+
+.pp-q:hover .pp-space,
+.pp-q.selected .pp-space {
+    border-color: #cbd5e1;
+    background: repeating-linear-gradient(-45deg, transparent 0 8px, rgba(148, 163, 184, 0.08) 8px 16px);
+    color: #94a3b8;
+}
+
+/* Dropping a question onto a page puts it at the end of that page */
+.pp-page.drop-end {
+    outline: 3px dashed #1B9B7E;
+    outline-offset: -8px;
 }
 
 .pp-choices.cols-2 {
@@ -5396,9 +5520,13 @@ body.pp-open {
     border-left: 1px solid #e5e7eb;
 }
 
+/* Sits in the top margin so it does not push the question down (Word has no such label) */
 .pp-break-label {
-    margin: 0 0 10px;
-    padding-bottom: 4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -22px;
+    padding-bottom: 3px;
     border-bottom: 1px dashed #9ca3af;
     color: #6b7280;
     font: 11px "Segoe UI", Arial, sans-serif;

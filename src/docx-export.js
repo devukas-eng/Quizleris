@@ -1,10 +1,12 @@
 import { t } from "./lang.js";
 import { parseRichValue } from "./rich-input.js";
 import { isTypedSlot } from "./state.js";
-import { resolvePrintLayout, fitImage, IMAGE_SIZES, CHOICE_IMAGE, CONTENT_WIDTH, normalizeImageSrc, naturalSize } from "./print-layout.js";
+import { resolvePrintLayout, imageSizeFor, normalizeImageSrc, naturalSize, SPACE_HEIGHTS, INDENT, TWIPS_PER_PX } from "./print-layout.js";
 
 // Word export: a printable sheet for students, optionally followed by an answer key.
-// Order, image sizes, page breaks and option columns come from the quiz's print layout.
+// Order, image sizes, page breaks, writing space, margins and option columns come from the
+// quiz's print layout; image sizes shown in the print preview (including ones it shrank to
+// save paper) can be passed in so the file matches the preview exactly.
 // The docx library (~1.3 MB) is loaded only when someone actually exports.
 const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.11.0/dist/index.iife.js";
 let docxLoading = null;
@@ -278,15 +280,18 @@ async function wordImageData(url, natural) {
     return { type: transparent ? "png" : "jpg", data: base64ToBytes(out.split(",")[1]) };
 }
 
-async function imageRun(d, src, box) {
+// One image at the size the preview showed it, or else the size the layout gives it
+async function imageRun(d, ctx, item, key, src) {
     const url = normalizeImageSrc(src);
     if (!url) return null;
     const natural = await naturalSize(url);
-    const size = fitImage(natural, box);
+    if (!natural) return null;
+    const shown = ctx.imageSizes?.get(`${item.id}|${key}`);
+    const size = shown || imageSizeFor(item, key, natural, ctx.geometry);
     if (!size) return null;
     try {
         const { type, data } = await wordImageData(url, natural);
-        return new d.ImageRun({ type, data, transformation: size });
+        return new d.ImageRun({ type, data, transformation: { width: size.width, height: size.height } });
     } catch {
         return null;
     }
@@ -304,9 +309,9 @@ const writingLine = (d) => ({ para: {
 const hint = (d, text) => new d.TextRun({ text: `  ${text}`, italics: true, color: "777777", size: 20 });
 
 // Options of a choice question: one per line, or a borderless two-column table
-async function choiceBlocks(d, q, columns) {
+async function choiceBlocks(d, ctx, item) {
+    const { q, columns } = item;
     const marker = q.allowMultipleAnswers ? "☐" : "○";
-    const box = CHOICE_IMAGE[columns] || CHOICE_IMAGE[1];
     const cells = [];
     const choices = q.choices || [];
     for (let i = 0; i < choices.length; i++) {
@@ -316,7 +321,7 @@ async function choiceBlocks(d, q, columns) {
             runs.push(new d.TextRun({ text: columns === 2 ? "____________________" : "______________________________" }));
         } else {
             runs.push(...richRuns(d, c.text || ""));
-            const img = await imageRun(d, c.image, box);
+            const img = await imageRun(d, ctx, item, c.id, c.image);
             if (img) runs.push(new d.TextRun({ text: "", break: c.text ? 1 : undefined }), img);
         }
         cells.push(runs);
@@ -324,7 +329,7 @@ async function choiceBlocks(d, q, columns) {
     if (columns !== 2) {
         return cells.map(runs => ({ para: { indent: { left: 360 }, spacing: { after: 80 }, children: runs } }));
     }
-    const half = Math.round((CONTENT_WIDTH - 24) * 15 / 2); // px -> twips, per column
+    const half = Math.round((ctx.geometry.contentWidth - INDENT) * TWIPS_PER_PX / 2); // per column
     const none = { style: d.BorderStyle.NONE, size: 0, color: "FFFFFF" };
     const rows = [];
     for (let i = 0; i < cells.length; i += 2) {
@@ -346,8 +351,8 @@ async function choiceBlocks(d, q, columns) {
     }) }];
 }
 
-async function questionBlocks(d, item) {
-    const { q, number, image, pageBreak, columns } = item;
+async function questionBlocks(d, ctx, item) {
+    const { q, number, pageBreak, space } = item;
     const out = []; // { para: options } | { block: Table }
     const type = q.type || "multiple-choice";
     const typedSlots = (q.choices || []).some(isTypedSlot);
@@ -357,12 +362,12 @@ async function questionBlocks(d, item) {
     else if (type === "multiple-choice" && typedSlots) promptRuns.push(hint(d, t("docx.chooseOrWrite")));
     out.push({ para: { spacing: { before: pageBreak ? 0 : 360, after: 120 }, pageBreakBefore: pageBreak, children: promptRuns } });
 
-    const qImage = await imageRun(d, q.image, IMAGE_SIZES[image]);
+    const qImage = await imageRun(d, ctx, item, "q", q.image);
     if (qImage) out.push({ para: { indent: { left: 360 }, spacing: { after: 120 }, children: [qImage] } });
 
     switch (type) {
         case "multiple-choice":
-            out.push(...await choiceBlocks(d, q, columns));
+            out.push(...await choiceBlocks(d, ctx, item));
             break;
         case "true-false":
             out.push({ para: { indent: { left: 360 }, children: [new d.TextRun({ text: `☐  ${t("docx.true")}          ☐  ${t("docx.false")}` })] } });
@@ -379,6 +384,10 @@ async function questionBlocks(d, item) {
             break;
         default:
             break;
+    }
+    // Blank writing space of an exact height ("to the end of the page" is a page break before the next question)
+    if (SPACE_HEIGHTS[space]) {
+        out.push({ para: { spacing: { before: 0, after: 0, line: SPACE_HEIGHTS[space] * TWIPS_PER_PX, lineRule: d.LineRuleType.EXACT }, children: [] } });
     }
     // Keep each question together: Word then moves it to the next page instead of splitting it
     return out.map((spec, i) => spec.block || new d.Paragraph({ ...spec.para, keepNext: i < out.length - 1 }));
@@ -429,11 +438,15 @@ function safeFileName(title, withAnswers) {
 
 /**
  * Builds and downloads a .docx of the quiz using its print layout (order, image sizes,
- * page breaks, option columns, header line and answer key).
+ * page breaks, writing space, margins, option columns, header line and answer key).
+ * @param {{ imageSizes?: Map<string, {width:number,height:number}> }} [options]
+ *        sizes the print preview showed, keyed "questionId|imageKey"
  */
-export async function exportQuizToDocx(quiz) {
+export async function exportQuizToDocx(quiz, { imageSizes } = {}) {
     const d = await loadDocx();
     const layout = resolvePrintLayout(quiz);
+    const ctx = { geometry: layout.geometry, imageSizes };
+    const margin = { x: layout.geometry.marginX * TWIPS_PER_PX, y: layout.geometry.marginY * TWIPS_PER_PX };
     const children = [
         new d.Paragraph({ heading: d.HeadingLevel.TITLE, spacing: { after: 200 }, children: [new d.TextRun({ text: quiz.title || "" })] })
     ];
@@ -444,7 +457,7 @@ export async function exportQuizToDocx(quiz) {
         }));
     }
     for (const item of layout.items) {
-        children.push(...await questionBlocks(d, item));
+        children.push(...await questionBlocks(d, ctx, item));
     }
     if (layout.answerKey) {
         children.push(new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, pageBreakBefore: true, spacing: { after: 200 }, children: [new d.TextRun({ text: `${t("docx.answers")}: ${quiz.title || ""}` })] }));
@@ -455,7 +468,7 @@ export async function exportQuizToDocx(quiz) {
         creator: "spresk.eu",
         title: quiz.title || "",
         styles: { default: { document: { run: { font: "Calibri", size: 24 } } } },
-        sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } } }, children }]
+        sections: [{ properties: { page: { margin: { top: margin.y, bottom: margin.y, left: margin.x, right: margin.x } } }, children }]
     });
     const blob = await d.Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
