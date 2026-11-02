@@ -1,7 +1,8 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { getResults, getHighScores, STORAGE_KEY_RESULTS } from "./storage.js";
-import { t } from "./lang.js";
+import { t, getLanguage } from "./lang.js";
 import { confirmDialog } from "./dialog.js";
+import { getToken, fetchAttempts, fetchAttempt, deleteAttempt } from "./api.js";
 let dashboardView;
 let dashboardContent;
 let closeBtn;
@@ -22,10 +23,132 @@ export function setupDashboard(callbacks) {
         }
     });
 }
-export function renderDashboard(quizId) {
+export async function renderDashboard(quizId) {
     dashboardView.style.display = "block";
+    // The quiz's owner sees every student's attempt from the server; anyone else, this device's history
+    if (quizId && getToken()) {
+        dashboardContent.innerHTML = `<p class="no-results">${t("profile.loading")}</p>`;
+        const res = await fetchAttempts(quizId);
+        if (res.ok) {
+            renderServerAttempts(res.data);
+            return;
+        }
+    }
+    clearBtn.style.display = "";
     renderDashboardList(quizId);
 }
+
+// --- Server results (the quiz's owner) ---
+
+const percentOf = (a) => (a.max_score ? Math.round((a.score / a.max_score) * 100) : 0);
+const scoreClass = (pct) => (pct >= 80 ? "good" : pct < 50 ? "bad" : "avg");
+const formatDuration = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`);
+
+function renderServerAttempts({ quiz, attempts }) {
+    clearBtn.style.display = "none"; // clears this device's history, not the class's results
+    dashboardContent.innerHTML = `
+        <div class="att-head">
+            <h2 class="att-title">${escapeHtml(quiz.title || quiz.id)} <span class="att-code">${escapeHtml(quiz.id)}</span></h2>
+            <div class="att-stats"></div>
+            <div class="att-tools">
+                <input type="search" class="att-search" placeholder="${escapeHtml(t("results.search"))}" aria-label="${escapeHtml(t("results.search"))}">
+                <button type="button" class="btn btn-secondary att-refresh">↻ ${t("results.refresh")}</button>
+            </div>
+        </div>
+        <div class="att-body"></div>
+    `;
+    let list = attempts;
+    const search = dashboardContent.querySelector(".att-search");
+    const body = dashboardContent.querySelector(".att-body");
+
+    const renderStats = () => {
+        const pcts = list.map(percentOf);
+        const names = new Set(list.map(a => (a.student_name || "").toLowerCase()));
+        const stat = (label, value) => `<div class="att-stat"><span>${label}</span><strong>${value}</strong></div>`;
+        dashboardContent.querySelector(".att-stats").innerHTML = list.length
+            ? stat(t("results.attempts"), list.length) + stat(t("results.students"), names.size) +
+              stat(t("results.average"), `${Math.round(pcts.reduce((s, p) => s + p, 0) / pcts.length)}%`) +
+              stat(t("results.best"), `${Math.max(...pcts)}%`)
+            : "";
+    };
+    const renderRows = () => {
+        const term = search.value.trim().toLowerCase();
+        const shown = term ? list.filter(a => (a.student_name || t("results.anonymous")).toLowerCase().includes(term)) : list;
+        if (!list.length) {
+            body.innerHTML = `<p class="no-results">${t("results.empty")}</p>`;
+            return;
+        }
+        if (!shown.length) {
+            body.innerHTML = `<p class="no-results">${t("results.noMatch")}</p>`;
+            return;
+        }
+        body.innerHTML = `
+            <div class="att-table-wrap"><table class="dashboard-table att-table">
+                <thead><tr>
+                    <th>${t("dashboard.date")}</th><th>${t("dashboard.name")}</th><th>${t("dashboard.score")}</th>
+                    <th>${t("results.time")}</th><th><span class="sr-only">${t("dashboard.actions")}</span></th>
+                </tr></thead>
+                <tbody>${shown.map(a => {
+                    const pct = percentOf(a);
+                    return `<tr data-attempt="${a.id}">
+                        <td>${escapeHtml(new Date(a.created_at).toLocaleString(getLanguage() === "lt" ? "lt-LT" : "en-GB", { dateStyle: "medium", timeStyle: "short" }))}</td>
+                        <td>${escapeHtml(a.student_name || t("results.anonymous"))}</td>
+                        <td class="score-${scoreClass(pct)}">${a.score}/${a.max_score} (${pct}%)</td>
+                        <td>${formatDuration(a.duration_seconds || 0)}</td>
+                        <td class="att-actions">
+                            <button type="button" class="btn btn-secondary btn-compact" data-att="details">${t("dashboard.details")}</button>
+                            <button type="button" class="btn btn-secondary btn-icon btn-compact" data-att="delete" title="${t("dialog.delete")}" aria-label="${t("dialog.delete")}">🗑</button>
+                        </td>
+                    </tr>`;
+                }).join("")}</tbody>
+            </table></div>`;
+    };
+    const refresh = async () => {
+        const res = await fetchAttempts(quiz.id);
+        if (!res.ok) return;
+        list = res.data.attempts;
+        renderStats();
+        renderRows();
+    };
+
+    search.addEventListener("input", renderRows);
+    dashboardContent.querySelector(".att-refresh").addEventListener("click", refresh);
+    body.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-att]");
+        if (!btn) return;
+        const id = btn.closest("tr").dataset.attempt;
+        const attempt = list.find(a => String(a.id) === id);
+        if (btn.dataset.att === "details") {
+            const res = await fetchAttempt(quiz.id, id);
+            if (!res.ok) return;
+            const a = res.data.attempt;
+            showResultDetails({
+                name: a.student_name || t("results.anonymous"),
+                quizTitle: quiz.title,
+                date: a.created_at,
+                correctCount: a.score,
+                maxScore: a.max_score,
+                details: Array.isArray(a.details) ? a.details : []
+            });
+            return;
+        }
+        const ok = await confirmDialog({
+            title: t("results.deleteTitle"),
+            message: t("results.deleteBody").replace("{name}", attempt?.student_name || t("results.anonymous")),
+            confirmText: t("dialog.delete"),
+            danger: true
+        });
+        if (!ok) return;
+        const res = await deleteAttempt(quiz.id, id);
+        if (!res.ok) return;
+        list = list.filter(a => String(a.id) !== id);
+        renderStats();
+        renderRows();
+    });
+    renderStats();
+    renderRows();
+}
+
 function renderDashboardList(quizId) {
     const allResults = getResults();
     const results = quizId ? allResults.filter(r => r.quizId === quizId) : allResults;
@@ -132,7 +255,7 @@ function showResultDetails(result) {
             <button id="close-detail-btn" class="btn btn-secondary">${t('dashboard.closeDetails')}</button>
         </div>
         <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.quiz')}: <strong>${escapeHtml(result.quizTitle || result.quizId)}</strong></p>
-        <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.date')}: <strong>${new Date(result.date).toLocaleString()}</strong></p>
+        <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.date')}: <strong>${new Date(result.date).toLocaleString(getLanguage() === "lt" ? "lt-LT" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</strong></p>
         <p style="font-size: 1.1rem; margin-bottom: 24px;">${t('dashboard.score')}: <strong class="text-success">${(result.correctCount !== undefined ? result.correctCount : (result.score > result.maxScore ? Math.round((result.percentage || 0) / 100 * result.maxScore) : result.score))} / ${result.maxScore}</strong></p>
         
         <div class="results-review" style="max-height: 50vh; overflow-y: auto; margin-top: 24px; padding-right: 10px;">
@@ -182,6 +305,9 @@ function formatDashboardAnswer(r) {
     }
     if (r.answerText) {
         return escapeHtml(r.answerText);
+    }
+    if (r.type === 'true-false' && (r.answer === true || r.answer === false || r.answer === 'true' || r.answer === 'false')) {
+        return escapeHtml(String(r.answer) === 'true' ? t('docx.true') : t('docx.false'));
     }
     if (Array.isArray(r.answer)) {
         return escapeHtml(r.answer.join(', '));

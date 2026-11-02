@@ -387,6 +387,7 @@ function getLegalContent(type, lang) {
                 <ul>
                     <li><strong>Techninė ir naudojimo informacija:</strong> Renkame anoniminius analitikos duomenis, tokius kaip jūsų naršyklės tipas, įrenginio operacinė sistema, pasirinkta kalba, temos nustatymai, ir sąveika su testais.</li>
                     <li><strong>Naudotojo pateikti duomenys:</strong> Duomenys, kuriuos savanoriškai įvedate, pavyzdžiui, slapyvardžiai, testų atsakymai bei sukurto turinio informacija.</li>
+                    <li><strong>Testų rezultatai:</strong> Baigus mokytojo testą, įvestas vardas, rezultatas, sugaištas laikas ir atsakymai išsaugomi, kad juos matytų tik to testo autorius. Jie ištrinami kartu su testu, o mokytojas gali ištrinti ir atskirą bandymą.</li>
                 </ul>
                 
                 <p><strong>3. Kaip naudojame jūsų duomenis?</strong></p>
@@ -405,6 +406,7 @@ function getLegalContent(type, lang) {
                 <ul>
                     <li><strong>Technical and Usage Information:</strong> We collect anonymous analytics data such as your browser type, device OS, language preferences, theme settings, and interactions with our quizzes.</li>
                     <li><strong>User-Provided Data:</strong> Any information you voluntarily enter into the platform, including nicknames, quiz answers, and custom quiz content.</li>
+                    <li><strong>Quiz results:</strong> When you finish a teacher's quiz, the name you entered, your score, time taken and answers are stored so that only that quiz's author can see them. They are deleted together with the quiz, and the teacher can delete a single attempt.</li>
                 </ul>
                 
                 <p><strong>3. How We Use Your Data</strong></p>

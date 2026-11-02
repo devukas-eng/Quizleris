@@ -99,6 +99,44 @@ export async function deleteQuizFromCloud(quizId) {
     }
 }
 
+// --- Students' attempts ---
+
+/** Sends a finished attempt to the quiz's teacher; failures are only logged (the local copy stays). */
+export async function submitAttempt(quizId, attempt) {
+    try {
+        const res = await fetch(`${API_BASE}/quizzes/${encodeURIComponent(quizId)}/attempts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(attempt),
+            keepalive: JSON.stringify(attempt).length < 60000 // still delivered if the tab closes right away
+        });
+        return res.ok;
+    } catch (e) {
+        console.warn("Could not send the result", e);
+        return false;
+    }
+}
+
+async function attemptsRequest(path, options = {}) {
+    const token = getToken();
+    if (!token) return { ok: false, status: 401 };
+    try {
+        const res = await fetch(`${API_BASE}/quizzes/${path}`, { ...options, headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok, status: res.status, data };
+    } catch {
+        return { ok: false, status: 0 };
+    }
+}
+
+/** A quiz's attempts for its owner: { ok, status, data: { quiz, attempts } }. */
+export const fetchAttempts = (quizId, search = "") =>
+    attemptsRequest(`${encodeURIComponent(quizId)}/attempts${search ? `?q=${encodeURIComponent(search)}` : ""}`);
+export const fetchAttempt = (quizId, attemptId) =>
+    attemptsRequest(`${encodeURIComponent(quizId)}/attempts/${encodeURIComponent(attemptId)}`);
+export const deleteAttempt = (quizId, attemptId) =>
+    attemptsRequest(`${encodeURIComponent(quizId)}/attempts/${encodeURIComponent(attemptId)}`, { method: 'DELETE' });
+
 export async function fetchCloudQuizzes() {
     const token = getToken();
     const headers = {};

@@ -2,6 +2,7 @@ import { QuizState, quiz, setQuiz, isTypedSlot, typedSlotMatches } from "./state
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
+import { submitAttempt } from "./api.js";
 import { renderStartMenu } from "./menu.js";
 import { t } from "./lang.js";
 import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
@@ -464,8 +465,8 @@ function renderTrueFalse(q) {
     const isAnswered = quiz?.hasAnswered && quiz.quiz.mode !== 'exam';
     const currentAnswer = quiz?.userAnswers.get(q.id);
     const options = [
-        { val: true, text: "TRUE", color: "#4CAF50" },
-        { val: false, text: "FALSE", color: "#f44336" }
+        { val: true, text: t("docx.true"), color: "#4CAF50" },
+        { val: false, text: t("docx.false"), color: "#f44336" }
     ];
     options.forEach(opt => {
         const btn = document.createElement("button");
@@ -876,6 +877,17 @@ export function showResults() {
         mode: quiz.quiz.mode || 'practice',
         details: results.questionResults
     });
+    // The teacher sees the attempt in the quiz's results (not for the teacher's own preview)
+    if (!isPreview && quiz.quiz.id) {
+        submitAttempt(quiz.quiz.id, {
+            name: localStorage.getItem("current_student_name") || "",
+            score: results.correctCount,
+            maxScore: results.total,
+            durationSeconds: Math.round(timeSpentSec),
+            mode: quiz.quiz.mode || 'practice',
+            details: results.questionResults
+        });
+    }
     // Clean UI
     questionContainer.style.display = "none";
     answersContainer.style.display = "none";

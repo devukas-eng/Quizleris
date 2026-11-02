@@ -977,11 +977,11 @@ function renderQuestionConfig(q, qIdx) {
         <div style="display: flex; gap: 20px; margin-top: 10px;">
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
             <input type="radio" name="tf_${qIdx}" value="true" ${q.isTrue === true ? "checked" : ""} />
-            <span style="color: #4CAF50; font-weight: bold;">TRUE</span>
+            <span style="color: #4CAF50; font-weight: bold;">${t("docx.true")}</span>
           </label>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
             <input type="radio" name="tf_${qIdx}" value="false" ${q.isTrue === false ? "checked" : ""} />
-            <span style="color: #f44336; font-weight: bold;">FALSE</span>
+            <span style="color: #f44336; font-weight: bold;">${t("docx.false")}</span>
           </label>
         </div>
       `;

@@ -200,6 +200,7 @@ function quizzesSection(quizzes) {
                         </div>
                     </div>
                     <div class="dash-quiz-actions">
+                        <a class="btn btn-secondary dash-results" href="/?dashboard=${encodeURIComponent(q.id)}">📊 ${t("results.open")}${q.attempts ? ` <span class="dash-count">${q.attempts}</span>` : ""}</a>
                         <button class="btn btn-secondary" data-edit-quiz="${escapeHtml(q.id)}">${t("profile.edit")}</button>
                         <button class="btn btn-secondary btn-icon dash-delete" data-delete-quiz="${escapeHtml(q.id)}" data-title="${escapeHtml(q.title || "")}" title="${t("profile.delete")}" aria-label="${t("profile.delete")}">🗑</button>
                     </div>

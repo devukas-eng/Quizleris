@@ -35,6 +35,23 @@ async function initDB() {
         `);
         console.log("✅ Quizzes table created or already exists.");
 
+        // Students' finished attempts, one row each, found by quiz code (the server also creates this on start)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS quiz_attempts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                quiz_id VARCHAR(50) NOT NULL,
+                student_name VARCHAR(80) NULL,
+                score INT NOT NULL DEFAULT 0,
+                max_score INT NOT NULL DEFAULT 0,
+                duration_seconds INT NOT NULL DEFAULT 0,
+                mode VARCHAR(20) NULL,
+                details JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX quiz_attempts_quiz_time (quiz_id, created_at)
+            )
+        `);
+        console.log("✅ Quiz attempts table created or already exists.");
+
         console.log("Database initialization complete!");
     } catch (err) {
         console.error("❌ Error initializing database:", err);

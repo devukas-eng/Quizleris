@@ -87,6 +87,15 @@ const quizLookupLimiter = rateLimit({
     message: { error: 'Too many wrong quiz codes. Please wait a few minutes.' }
 });
 
+// Finished attempts sent by students (a whole class behind one school IP finishes at once)
+const attemptLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many results sent. Please wait a few minutes.' }
+});
+
 // --- AUTH HELPERS ---
 function readToken(req) {
     const header = req.headers['authorization'];
@@ -185,6 +194,31 @@ async function resolveAlias(id) {
     const [rows] = await pool.query('SELECT new_id FROM quiz_id_aliases WHERE old_id = ?', [id]);
     return rows[0]?.new_id || null;
 }
+
+/** The stored quiz for a code (any letter case), ID or old alias, or null. */
+async function findQuiz(rawId, columns = 'id, owner_id, title, visibility, expires_at') {
+    const raw = String(rawId || '').trim();
+    if (!QUIZ_ID_RE.test(raw)) return null;
+    const key = CODE_RE.test(raw.toUpperCase()) ? raw.toUpperCase() : raw;
+    const select = `SELECT ${columns} FROM quizzes WHERE id = ?`;
+    let [rows] = await pool.query(select, [key]);
+    if (!rows[0] && key !== raw) [rows] = await pool.query(select, [raw]);
+    if (!rows[0]) {
+        const target = await resolveAlias(raw);
+        if (target) [rows] = await pool.query(select, [target]);
+    }
+    return rows[0] || null;
+}
+
+// Students' finished attempts: one row per attempt, found by quiz code (indexed with the time).
+// Students have no accounts, so the name they typed is kept on the attempt; the per-question
+// answers stay together in one JSON field so listing a class stays light.
+let attemptsReady = false;
+const MAX_ATTEMPT_BYTES = 3 * 1024 * 1024; // answers may include a photo of a solution
+const toInt = (value, min, max, fallback = 0) => {
+    const n = Math.round(Number(value));
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
 const VISIBILITIES = new Set(['public', 'private']);
 
 // --- AUTH ROUTES ---
@@ -272,6 +306,15 @@ app.get('/api/me', authenticateToken, async (req, res) => {
             FROM quizzes WHERE owner_id = ?
             ORDER BY updated_at DESC
         `, [req.user.id]);
+        // How many finished attempts each quiz has
+        if (attemptsReady && quizRows.length) {
+            const [counts] = await pool.query(
+                'SELECT quiz_id, COUNT(*) AS attempts FROM quiz_attempts WHERE quiz_id IN (?) GROUP BY quiz_id',
+                [quizRows.map(q => q.id)]
+            );
+            const byQuiz = new Map(counts.map(c => [c.quiz_id, Number(c.attempts)]));
+            quizRows.forEach(q => { q.attempts = byQuiz.get(q.id) || 0; });
+        }
 
         const premium = isPremium(req.user);
         res.json({
@@ -388,6 +431,7 @@ app.delete('/api/quizzes/:id', authenticateToken, async (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
+        await deleteOrphanAttempts(); // its students' attempts go with it
         res.json({ message: 'Quiz deleted successfully' });
     } catch (error) {
         console.error('[DELETE QUIZ]', error);
@@ -474,6 +518,118 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
     }
 });
 
+// --- ATTEMPTS (students' results) ---
+
+// A student finished a quiz: store the attempt for the quiz's owner. No login needed.
+app.post('/api/quizzes/:id/attempts', attemptLimiter, async (req, res) => {
+    try {
+        if (!attemptsReady) return res.status(503).json({ error: 'Results storage is not available' });
+        const quiz = await findQuiz(req.params.id);
+        if (!quiz || (quiz.expires_at && new Date(quiz.expires_at) <= new Date())) {
+            return res.status(404).json({ error: 'Quiz not found' });
+        }
+        if (quiz.owner_id === null) return res.status(204).end(); // premade quizzes have no teacher to see results
+
+        const body = req.body || {};
+        const details = Array.isArray(body.details) ? body.details.slice(0, 500) : [];
+        const detailsJson = JSON.stringify(details);
+        if (Buffer.byteLength(detailsJson, 'utf8') > MAX_ATTEMPT_BYTES) {
+            return res.status(413).json({ error: 'Result is too large' });
+        }
+        const maxScore = toInt(body.maxScore, 0, 1000);
+        const name = String(body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
+        const [result] = await pool.query(`
+            INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score, duration_seconds, mode, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+            quiz.id,
+            name,
+            toInt(body.score, 0, maxScore),
+            maxScore,
+            toInt(body.durationSeconds, 0, 7 * 24 * 3600),
+            String(body.mode || '').slice(0, 20) || null,
+            detailsJson
+        ]);
+        res.status(201).json({ id: result.insertId });
+    } catch (error) {
+        console.error('[SAVE ATTEMPT]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Only the quiz's owner (or an admin) may see or remove its attempts
+async function ownQuizForAttempts(req, res) {
+    if (!attemptsReady) {
+        res.status(503).json({ error: 'Results storage is not available' });
+        return null;
+    }
+    const quiz = await findQuiz(req.params.id);
+    if (!quiz || (req.user.role !== 'admin' && quiz.owner_id !== req.user.id)) {
+        res.status(404).json({ error: 'Quiz not found' });
+        return null;
+    }
+    return quiz;
+}
+
+// All attempts of a quiz, newest first; ?q= filters by student name
+app.get('/api/quizzes/:id/attempts', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await ownQuizForAttempts(req, res);
+        if (!quiz) return;
+        const search = String(req.query.q || '').trim().slice(0, 80);
+        const params = [quiz.id];
+        let where = 'quiz_id = ?';
+        if (search) {
+            where += ' AND student_name LIKE ?';
+            params.push(`%${search.replace(/[\\%_]/g, ch => `\\${ch}`)}%`);
+        }
+        const [rows] = await pool.query(`
+            SELECT id, student_name, score, max_score, duration_seconds, mode, created_at
+            FROM quiz_attempts WHERE ${where}
+            ORDER BY created_at DESC, id DESC LIMIT 2000
+        `, params);
+        res.json({ quiz: { id: quiz.id, title: quiz.title }, attempts: rows });
+    } catch (error) {
+        console.error('[LIST ATTEMPTS]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// One attempt with its per-question answers
+app.get('/api/quizzes/:id/attempts/:attemptId', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await ownQuizForAttempts(req, res);
+        if (!quiz) return;
+        const [rows] = await pool.query(
+            'SELECT id, student_name, score, max_score, duration_seconds, mode, details, created_at FROM quiz_attempts WHERE id = ? AND quiz_id = ?',
+            [toInt(req.params.attemptId, 0, Number.MAX_SAFE_INTEGER), quiz.id]
+        );
+        if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+        const attempt = rows[0];
+        if (typeof attempt.details === 'string') attempt.details = JSON.parse(attempt.details);
+        res.json({ quiz: { id: quiz.id, title: quiz.title }, attempt });
+    } catch (error) {
+        console.error('[GET ATTEMPT]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.delete('/api/quizzes/:id/attempts/:attemptId', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await ownQuizForAttempts(req, res);
+        if (!quiz) return;
+        const [result] = await pool.query(
+            'DELETE FROM quiz_attempts WHERE id = ? AND quiz_id = ?',
+            [toInt(req.params.attemptId, 0, Number.MAX_SAFE_INTEGER), quiz.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Attempt not found' });
+        res.json({ message: 'Attempt deleted' });
+    } catch (error) {
+        console.error('[DELETE ATTEMPT]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Unknown API routes return JSON 404 instead of the SPA HTML
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -532,6 +688,7 @@ async function convertLongIds() {
                     'UPDATE quizzes SET id = ?, quiz_data = ?, updated_at = updated_at WHERE id = ?',
                     [code, JSON.stringify({ ...data, id: code }), row.id]
                 );
+                if (attemptsReady) await pool.query('UPDATE quiz_attempts SET quiz_id = ? WHERE quiz_id = ?', [code, row.id]);
                 converted++;
                 break;
             } catch (error) {
@@ -556,10 +713,40 @@ async function ensureSchema() {
         console.error('[SEED] could not seed premade quizzes:', error.code || error.message);
     }
     try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS quiz_attempts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                quiz_id VARCHAR(50) NOT NULL,
+                student_name VARCHAR(80) NULL,
+                score INT NOT NULL DEFAULT 0,
+                max_score INT NOT NULL DEFAULT 0,
+                duration_seconds INT NOT NULL DEFAULT 0,
+                mode VARCHAR(20) NULL,
+                details JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX quiz_attempts_quiz_time (quiz_id, created_at)
+            )
+        `);
+        attemptsReady = true;
+    } catch (error) {
+        // Non-fatal: quizzes work, results just stay on the students' devices
+        console.error('[SCHEMA] could not create the results table:', error.code || error.message);
+    }
+    try {
         await convertLongIds();
     } catch (error) {
         // Non-fatal: old long IDs keep working as they are
         console.error('[SCHEMA] could not convert old quiz IDs:', error.code || error.message);
+    }
+}
+
+// Attempts whose quiz is gone (deleted or expired) are deleted with it
+async function deleteOrphanAttempts() {
+    if (!attemptsReady) return;
+    try {
+        await pool.query('DELETE a FROM quiz_attempts a LEFT JOIN quizzes q ON q.id = a.quiz_id WHERE q.id IS NULL');
+    } catch (error) {
+        console.error('[CLEANUP] attempts:', error.code || error.message);
     }
 }
 
@@ -568,6 +755,7 @@ async function purgeExpiredQuizzes() {
     try {
         const [result] = await pool.query('DELETE FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
         if (result.affectedRows > 0) console.log(`[CLEANUP] deleted ${result.affectedRows} expired quiz(zes)`);
+        await deleteOrphanAttempts();
     } catch (error) {
         console.error('[CLEANUP] failed:', error.code || error.message);
     }
