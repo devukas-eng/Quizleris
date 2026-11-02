@@ -3929,6 +3929,27 @@ math-virtual-keyboard::part(action-toolbar) {
     margin-top: 20px;
     padding-top: 16px;
     border-top: 1px solid var(--border-color);
+    container-type: inline-size;
+}
+
+.admin-actions .label-short {
+    display: none;
+}
+
+/* Just too narrow for one row: short labels and tighter buttons keep it on one line
+   instead of "New quiz" dropping alone onto a second row. Narrower still, it wraps. */
+@container (min-width: 450px) and (max-width: 540px) {
+    .admin-actions .label-long {
+        display: none;
+    }
+
+    .admin-actions .label-short {
+        display: inline;
+    }
+
+    .admin-actions .btn:not(.admin-print-btn) {
+        padding-inline: 14px;
+    }
 }
 
 .admin-actions #admin-new-quiz {
