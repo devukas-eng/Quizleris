@@ -1,8 +1,10 @@
 import { t } from "./lang.js";
 import { parseRichValue } from "./rich-input.js";
 import { isTypedSlot } from "./state.js";
+import { resolvePrintLayout, fitImage, IMAGE_SIZES, CHOICE_IMAGE, CONTENT_WIDTH, normalizeImageSrc, naturalSize } from "./print-layout.js";
 
 // Word export: a printable sheet for students, optionally followed by an answer key.
+// Order, image sizes, page breaks and option columns come from the quiz's print layout.
 // The docx library (~1.3 MB) is loaded only when someone actually exports.
 const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.11.0/dist/index.iife.js";
 let docxLoading = null;
@@ -28,22 +30,28 @@ function loadDocx() {
 
 const SYMBOLS = {
     times: "×", cdot: "·", div: "÷", pm: "±", mp: "∓", le: "≤", leq: "≤", ge: "≥", geq: "≥",
-    ne: "≠", neq: "≠", approx: "≈", equiv: "≡", sim: "∼", infty: "∞", to: "→", rightarrow: "→",
+    ne: "≠", neq: "≠", approx: "≈", equiv: "≡", sim: "∼", propto: "∝", infty: "∞", to: "→", rightarrow: "→",
     leftarrow: "←", Rightarrow: "⇒", Leftrightarrow: "⇔", in: "∈", notin: "∉", cup: "∪", cap: "∩",
     subset: "⊂", subseteq: "⊆", emptyset: "∅", varnothing: "∅", angle: "∠", perp: "⊥", parallel: "∥",
-    triangle: "△", circ: "°", degree: "°", sum: "∑", prod: "∏", int: "∫", partial: "∂", nabla: "∇",
-    forall: "∀", exists: "∃", cdots: "⋯", ldots: "…", dots: "…", prime: "′",
+    triangle: "△", circ: "°", degree: "°", prod: "∏", partial: "∂", nabla: "∇",
+    forall: "∀", exists: "∃", cdots: "⋯", ldots: "…", dots: "…", prime: "′", mid: "|",
+    langle: "⟨", rangle: "⟩", lfloor: "⌊", rfloor: "⌋", lceil: "⌈", rceil: "⌉",
     alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε", zeta: "ζ", eta: "η",
     theta: "θ", iota: "ι", kappa: "κ", lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", pi: "π", rho: "ρ",
     sigma: "σ", tau: "τ", upsilon: "υ", phi: "φ", varphi: "φ", chi: "χ", psi: "ψ", omega: "ω",
     Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
     ",": " ", ";": " ", ":": " ", " ": " ", quad: "  ", qquad: "    ", "!": "",
-    "%": "%", "{": "{", "}": "}", "$": "$", "&": "&", "#": "#", "_": "_", "\\": " "
+    "%": "%", "{": "{", "}": "}", "$": "$", "&": "&", "#": "#", "_": "_", "|": "‖",
+    "\\": ";  " // row break (systems, matrices) reads as a separator in one line
 };
-const FUNCTIONS = new Set(["sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan",
-    "log", "ln", "lg", "exp", "lim", "max", "min", "det", "gcd", "deg"]);
+const FUNCTIONS = new Set(["sin", "cos", "tan", "tg", "ctg", "cot", "sec", "csc", "arcsin", "arccos", "arctan",
+    "log", "ln", "lg", "exp", "max", "min", "det", "gcd", "deg", "sgn"]);
 const TEXT_COMMANDS = new Set(["text", "mathrm", "textrm", "textbf", "mathbf", "operatorname", "mbox", "textit", "mathit"]);
-const IGNORED = new Set(["left", "right", "displaystyle", "limits", "big", "Big", "bigg", "Bigg"]);
+const IGNORED = new Set(["left", "right", "displaystyle", "textstyle", "limits", "nolimits", "big", "Big", "bigg", "Bigg", "middle"]);
+// Accents become a combining character on each letter of their argument
+const ACCENTS = { vec: "\u20D7", overrightarrow: "\u20D7", hat: "\u0302", widehat: "\u0302", bar: "\u0305",
+    overline: "\u0305", dot: "\u0307", ddot: "\u0308", tilde: "\u0303", widetilde: "\u0303", underline: "\u0332" };
+const ENV_BRACKETS = { pmatrix: ["(", ")"], bmatrix: ["[", "]"], vmatrix: ["|", "|"], Bmatrix: ["{", "}"], cases: ["{ ", ""] };
 
 function tokenize(latex) {
     const tokens = [];
@@ -78,9 +86,9 @@ function latexToMathChildren(d, latex) {
         if (tok.ch === "{") { pos++; return parseGroup(); }
         return parseAtom();
     };
-    const plainArg = () => {
-        // Text commands: keep the raw characters of the argument
-        if (tokens[pos]?.ch !== "{") return [{ text: tokens[pos++]?.ch || "" }];
+    const rawGroupText = () => {
+        // Text commands and environment names: keep the raw characters of the argument
+        if (tokens[pos]?.ch !== "{") return tokens[pos++]?.ch || "";
         pos++;
         let depth = 1, text = "";
         while (pos < tokens.length) {
@@ -89,18 +97,34 @@ function latexToMathChildren(d, latex) {
             if (tok.ch === "}" && --depth === 0) break;
             text += tok.ch ?? (SYMBOLS[tok.cmd] ?? tok.cmd);
         }
-        return [{ text }];
+        return text;
+    };
+    // Optional ^ / _ after the current position (either order)
+    const parseScripts = () => {
+        let sup = null, sub = null;
+        for (let k = 0; k < 2; k++) {
+            const next = tokens[pos]?.ch;
+            if (next === "^" && !sup) { pos++; sup = parseArg(); }
+            else if (next === "_" && !sub) { pos++; sub = parseArg(); }
+        }
+        return { sup, sub };
     };
     const parseAtom = () => {
         const tok = tokens[pos++];
         if (!tok) return [];
         if (tok.ch === "{") return parseGroup();
+        if (tok.ch === "&") return [{ text: "   " }];
         if (tok.ch !== undefined) return [{ text: tok.ch }];
         const cmd = tok.cmd;
         if (cmd === "frac" || cmd === "dfrac" || cmd === "tfrac") {
             const numerator = parseArg();
             const denominator = parseArg();
             return [new d.MathFraction({ numerator: build(numerator), denominator: build(denominator) })];
+        }
+        if (cmd === "binom" || cmd === "dbinom") {
+            const top = parseArg();
+            const bottom = parseArg();
+            return [{ text: "(" }, new d.MathFraction({ numerator: build(top), denominator: build(bottom), type: "noBar" }), { text: ")" }];
         }
         if (cmd === "sqrt") {
             let degree = null;
@@ -113,10 +137,43 @@ function latexToMathChildren(d, latex) {
             const body = parseArg();
             return [new d.MathRadical({ children: build(body), ...(degree ? { degree: build(degree) } : {}) })];
         }
-        if (TEXT_COMMANDS.has(cmd)) return plainArg();
+        if (cmd === "sum" || cmd === "int" || cmd === "oint") {
+            // Big operators take their limits and the term right after them
+            const { sup, sub } = parseScripts();
+            const body = pos < tokens.length && tokens[pos].ch !== "}" ? parseAtom() : [];
+            const Op = cmd === "sum" ? d.MathSum : d.MathIntegral;
+            return [new Op({ children: build(body), ...(sub ? { subScript: build(sub) } : {}), ...(sup ? { superScript: build(sup) } : {}) })];
+        }
+        if (cmd === "lim") {
+            if (tokens[pos]?.ch === "_") {
+                pos++;
+                const limit = parseArg();
+                return [new d.MathLimitLower({ children: [new d.MathRun("lim")], limit: build(limit) }), { text: " " }];
+            }
+            return [{ text: "lim " }];
+        }
+        if (cmd in ACCENTS) {
+            const arg = parseArg();
+            if (arg.every(item => typeof item.text === "string")) {
+                const text = arg.map(item => item.text).join("");
+                return [{ text: [...text].map(c => c + ACCENTS[cmd]).join("") }];
+            }
+            return arg;
+        }
+        if (cmd === "begin") {
+            const env = rawGroupText().replace("*", "");
+            return [{ text: ENV_BRACKETS[env]?.[0] ?? "" }];
+        }
+        if (cmd === "end") {
+            const env = rawGroupText().replace("*", "");
+            return [{ text: ENV_BRACKETS[env]?.[1] ?? "" }];
+        }
+        if (TEXT_COMMANDS.has(cmd)) return [{ text: rawGroupText() }];
         if (IGNORED.has(cmd)) return [];
-        if (FUNCTIONS.has(cmd)) return [{ text: cmd + " " }];
+        if (FUNCTIONS.has(cmd)) return [{ text: cmd, func: true }];
         if (cmd in SYMBOLS) return [{ text: SYMBOLS[cmd] }];
+        // Unknown command: drop the backslash, keep any braced argument's content
+        if (tokens[pos]?.ch === "{") return parseArg();
         return [{ text: cmd }];
     };
     function parseSequence(inGroup) {
@@ -125,22 +182,20 @@ function latexToMathChildren(d, latex) {
             const tok = tokens[pos];
             if (inGroup && tok.ch === "}") break;
             if (tok.ch === "^" || tok.ch === "_") {
-                pos++;
                 const base = items.length ? [items.pop()] : [{ text: "" }];
-                let sup = null, sub = null;
-                if (tok.ch === "^") sup = parseArg(); else sub = parseArg();
-                // x_1^2 / x^2_1
-                const next = tokens[pos]?.ch;
-                if ((next === "^" && !sup) || (next === "_" && !sub)) {
-                    pos++;
-                    if (next === "^") sup = parseArg(); else sub = parseArg();
-                }
+                const { sup, sub } = parseScripts();
                 if (sup && sub) items.push(new d.MathSubSuperScript({ children: build(base), subScript: build(sub), superScript: build(sup) }));
                 else if (sup) items.push(new d.MathSuperScript({ children: build(base), superScript: build(sup) }));
                 else items.push(new d.MathSubScript({ children: build(base), subScript: build(sub) }));
+                // Function names (log₂ x) get their space after the script
+                if (base[0]?.func) items.push({ text: " " });
                 continue;
             }
-            items.push(...parseAtom());
+            const atom = parseAtom();
+            items.push(...atom);
+            // "sin x": space after a function name unless a script follows
+            const last = atom[atom.length - 1];
+            if (last?.func && tokens[pos]?.ch !== "_" && tokens[pos]?.ch !== "^") items.push({ text: " " });
         }
         return items;
     }
@@ -169,11 +224,16 @@ function richRuns(d, value, { bold = false, blanks = false } = {}) {
     const runs = [];
     parseRichValue(value).forEach(part => {
         if (part.type === "math") {
+            let math;
             try {
-                runs.push(new d.Math({ children: latexToMathChildren(d, part.latex) }));
+                math = new d.Math({ children: latexToMathChildren(d, part.latex) });
             } catch {
-                runs.push(new d.TextRun({ text: part.latex, bold }));
+                math = new d.TextRun({ text: part.latex, bold });
             }
+            // \[ … \] formulas get a line of their own
+            if (part.display) runs.push(new d.TextRun({ text: "", break: 1 }));
+            runs.push(math);
+            if (part.display) runs.push(new d.TextRun({ text: "", break: 1 }));
             return;
         }
         let text = part.text;
@@ -192,91 +252,142 @@ function base64ToBytes(b64) {
     return bytes;
 }
 
-// Embedded data-URL image, scaled to fit; null for anything that is not a data URL
-async function imageRun(d, src, maxWidth, maxHeight) {
-    if (!src) return null;
-    const dataUrl = src.startsWith("data:") ? src : (src.includes(":") ? null : `data:image/jpeg;base64,${src}`);
-    if (!dataUrl) return null;
-    const m = /^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/i.exec(dataUrl);
-    if (!m) return null;
-    const size = await new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        img.onerror = () => resolve(null);
-        img.src = dataUrl;
+// Word takes PNG/JPEG/GIF/BMP; anything else (WebP, SVG, AVIF…) and very large images are
+// redrawn on a canvas first: PNG when the image has transparency, JPEG otherwise.
+async function wordImageData(url, natural) {
+    const m = /^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/i.exec(url);
+    const longest = Math.max(natural.w, natural.h);
+    if (m && longest <= 2400) return { type: m[1].toLowerCase().replace("jpeg", "jpg"), data: base64ToBytes(m[2]) };
+
+    const img = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = url;
     });
-    if (!size || !size.w || !size.h) return null;
-    const scale = Math.min(1, maxWidth / size.w, maxHeight / size.h);
-    const type = m[1].toLowerCase() === "jpeg" ? "jpg" : m[1].toLowerCase();
-    return new d.ImageRun({
-        type,
-        data: base64ToBytes(m[2]),
-        transformation: { width: Math.round(size.w * scale), height: Math.round(size.h * scale) }
-    });
+    const scale = Math.min(1, 2400 / longest);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(natural.w * scale));
+    canvas.height = Math.max(1, Math.round(natural.h * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let transparent = false;
+    for (let i = 3; i < pixels.length; i += 4 * 7) { if (pixels[i] < 250) { transparent = true; break; } }
+    const out = canvas.toDataURL(transparent ? "image/png" : "image/jpeg", 0.9);
+    return { type: transparent ? "png" : "jpg", data: base64ToBytes(out.split(",")[1]) };
 }
 
-const writingLine = (d) => new d.Paragraph({
+async function imageRun(d, src, box) {
+    const url = normalizeImageSrc(src);
+    if (!url) return null;
+    const natural = await naturalSize(url);
+    const size = fitImage(natural, box);
+    if (!size) return null;
+    try {
+        const { type, data } = await wordImageData(url, natural);
+        return new d.ImageRun({ type, data, transformation: size });
+    } catch {
+        return null;
+    }
+}
+
+// A question is first described as paragraph options ({ para }) and finished blocks ({ block }),
+// so keep-with-next can be set on every paragraph but the last when they are built.
+const writingLine = (d) => ({ para: {
     spacing: { before: 320 },
     indent: { left: 360 },
     border: { bottom: { style: d.BorderStyle.SINGLE, size: 6, color: "999999", space: 1 } },
     children: []
-});
+} });
 
 const hint = (d, text) => new d.TextRun({ text: `  ${text}`, italics: true, color: "777777", size: 20 });
 
-async function questionParagraphs(d, q, index) {
-    const out = [];
-    const type = q.type || "multiple-choice";
+// Options of a choice question: one per line, or a borderless two-column table
+async function choiceBlocks(d, q, columns) {
+    const marker = q.allowMultipleAnswers ? "☐" : "○";
+    const box = CHOICE_IMAGE[columns] || CHOICE_IMAGE[1];
+    const cells = [];
     const choices = q.choices || [];
-    const typedSlots = choices.some(isTypedSlot);
+    for (let i = 0; i < choices.length; i++) {
+        const c = choices[i];
+        const runs = [new d.TextRun({ text: `${marker}  ${String.fromCharCode(65 + i)})  ` })];
+        if (isTypedSlot(c)) {
+            runs.push(new d.TextRun({ text: columns === 2 ? "____________________" : "______________________________" }));
+        } else {
+            runs.push(...richRuns(d, c.text || ""));
+            const img = await imageRun(d, c.image, box);
+            if (img) runs.push(new d.TextRun({ text: "", break: c.text ? 1 : undefined }), img);
+        }
+        cells.push(runs);
+    }
+    if (columns !== 2) {
+        return cells.map(runs => ({ para: { indent: { left: 360 }, spacing: { after: 80 }, children: runs } }));
+    }
+    const half = Math.round((CONTENT_WIDTH - 24) * 15 / 2); // px -> twips, per column
+    const none = { style: d.BorderStyle.NONE, size: 0, color: "FFFFFF" };
+    const rows = [];
+    for (let i = 0; i < cells.length; i += 2) {
+        rows.push(new d.TableRow({
+            cantSplit: true,
+            children: [cells[i], cells[i + 1]].map(runs => new d.TableCell({
+                width: { size: half, type: d.WidthType.DXA },
+                borders: { top: none, bottom: none, left: none, right: none },
+                children: [new d.Paragraph({ spacing: { after: 80 }, keepNext: i + 2 < cells.length, children: runs || [] })]
+            }))
+        }));
+    }
+    return [{ block: new d.Table({
+        rows,
+        width: { size: half * 2, type: d.WidthType.DXA },
+        columnWidths: [half, half],
+        indent: { size: 360, type: d.WidthType.DXA },
+        borders: d.TableBorders.NONE
+    }) }];
+}
 
-    const promptRuns = [new d.TextRun({ text: `${index + 1}. `, bold: true }), ...richRuns(d, q.prompt || "", { bold: true, blanks: type === "fill-blank" })];
+async function questionBlocks(d, item) {
+    const { q, number, image, pageBreak, columns } = item;
+    const out = []; // { para: options } | { block: Table }
+    const type = q.type || "multiple-choice";
+    const typedSlots = (q.choices || []).some(isTypedSlot);
+
+    const promptRuns = [new d.TextRun({ text: `${number}. `, bold: true }), ...richRuns(d, q.prompt || "", { bold: true, blanks: type === "fill-blank" })];
     if (type === "multiple-choice" && q.allowMultipleAnswers) promptRuns.push(hint(d, t("docx.selectAll")));
     else if (type === "multiple-choice" && typedSlots) promptRuns.push(hint(d, t("docx.chooseOrWrite")));
-    out.push(new d.Paragraph({ spacing: { before: 360, after: 120 }, keepNext: true, children: promptRuns }));
+    out.push({ para: { spacing: { before: pageBreak ? 0 : 360, after: 120 }, pageBreakBefore: pageBreak, children: promptRuns } });
 
-    const qImage = await imageRun(d, q.image, 420, 260);
-    if (qImage) out.push(new d.Paragraph({ indent: { left: 360 }, spacing: { after: 120 }, children: [qImage] }));
+    const qImage = await imageRun(d, q.image, IMAGE_SIZES[image]);
+    if (qImage) out.push({ para: { indent: { left: 360 }, spacing: { after: 120 }, children: [qImage] } });
 
     switch (type) {
-        case "multiple-choice": {
-            const marker = q.allowMultipleAnswers ? "☐" : "○";
-            for (let i = 0; i < choices.length; i++) {
-                const c = choices[i];
-                const runs = [new d.TextRun({ text: `${marker}  ${String.fromCharCode(65 + i)})  ` })];
-                if (isTypedSlot(c)) {
-                    runs.push(new d.TextRun({ text: "______________________________" }));
-                } else {
-                    runs.push(...richRuns(d, c.text || ""));
-                    const cImage = await imageRun(d, c.image, 200, 120);
-                    if (cImage) runs.push(new d.TextRun({ text: "  " }), cImage);
-                }
-                out.push(new d.Paragraph({ indent: { left: 360 }, spacing: { after: 80 }, children: runs }));
-            }
+        case "multiple-choice":
+            out.push(...await choiceBlocks(d, q, columns));
             break;
-        }
         case "true-false":
-            out.push(new d.Paragraph({ indent: { left: 360 }, children: [new d.TextRun({ text: `☐  ${t("docx.true")}          ☐  ${t("docx.false")}` })] }));
+            out.push({ para: { indent: { left: 360 }, children: [new d.TextRun({ text: `☐  ${t("docx.true")}          ☐  ${t("docx.false")}` })] } });
             break;
         case "numeric":
-            out.push(new d.Paragraph({ indent: { left: 360 }, spacing: { before: 200 }, children: [new d.TextRun({ text: `${t("docx.answer")}: ______________________` })] }));
+            out.push({ para: { indent: { left: 360 }, spacing: { before: 200 }, children: [new d.TextRun({ text: `${t("docx.answer")}: ______________________` })] } });
             break;
         case "text":
             for (let i = 0; i < (q.isLongAnswer ? 6 : 2); i++) out.push(writingLine(d));
             break;
         case "image-upload":
-            out.push(new d.Paragraph({ indent: { left: 360 }, spacing: { before: 120 }, children: [new d.TextRun({ text: `${t("docx.solution")}:`, italics: true })] }));
+            out.push({ para: { indent: { left: 360 }, spacing: { before: 120 }, children: [new d.TextRun({ text: `${t("docx.solution")}:`, italics: true })] } });
             for (let i = 0; i < 6; i++) out.push(writingLine(d));
             break;
         default:
             break;
     }
-    return out;
+    // Keep each question together: Word then moves it to the next page instead of splitting it
+    return out.map((spec, i) => spec.block || new d.Paragraph({ ...spec.para, keepNext: i < out.length - 1 }));
 }
 
-function answerKeyParagraph(d, q, index) {
+function answerKeyParagraph(d, item) {
+    const { q, number } = item;
     const type = q.type || "multiple-choice";
-    const runs = [new d.TextRun({ text: `${index + 1}. `, bold: true })];
+    const runs = [new d.TextRun({ text: `${number}. `, bold: true })];
     const sep = () => runs.push(new d.TextRun({ text: ";  " }));
     switch (type) {
         case "multiple-choice": {
@@ -317,27 +428,27 @@ function safeFileName(title, withAnswers) {
 }
 
 /**
- * Builds and downloads a .docx of the quiz.
- * @param {object} quiz
- * @param {{ withAnswers?: boolean }} [options] withAnswers appends an answer key on a new page
+ * Builds and downloads a .docx of the quiz using its print layout (order, image sizes,
+ * page breaks, option columns, header line and answer key).
  */
-export async function exportQuizToDocx(quiz, { withAnswers = false } = {}) {
+export async function exportQuizToDocx(quiz) {
     const d = await loadDocx();
+    const layout = resolvePrintLayout(quiz);
     const children = [
-        new d.Paragraph({ heading: d.HeadingLevel.TITLE, spacing: { after: 200 }, children: [new d.TextRun({ text: quiz.title || "" })] }),
-        new d.Paragraph({
-            spacing: { after: 240 },
-            children: [new d.TextRun({ text: `${t("docx.name")}: ________________________________     ${t("docx.date")}: ______________`, color: "444444" })]
-        })
+        new d.Paragraph({ heading: d.HeadingLevel.TITLE, spacing: { after: 200 }, children: [new d.TextRun({ text: quiz.title || "" })] })
     ];
-    const questions = quiz.questions || [];
-    for (let i = 0; i < questions.length; i++) {
-        children.push(...await questionParagraphs(d, questions[i], i));
+    if (layout.header) {
+        children.push(new d.Paragraph({
+            spacing: { after: 240 },
+            children: [new d.TextRun({ text: `${t("docx.name")}: __________________________   ${t("docx.class")}: ______   ${t("docx.date")}: ____________`, color: "444444" })]
+        }));
     }
-    if (withAnswers) {
-        children.push(new d.Paragraph({ children: [new d.PageBreak()] }));
-        children.push(new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, spacing: { after: 200 }, children: [new d.TextRun({ text: `${t("docx.answers")}: ${quiz.title || ""}` })] }));
-        questions.forEach((q, i) => children.push(answerKeyParagraph(d, q, i)));
+    for (const item of layout.items) {
+        children.push(...await questionBlocks(d, item));
+    }
+    if (layout.answerKey) {
+        children.push(new d.Paragraph({ heading: d.HeadingLevel.HEADING_1, pageBreakBefore: true, spacing: { after: 200 }, children: [new d.TextRun({ text: `${t("docx.answers")}: ${quiz.title || ""}` })] }));
+        layout.items.forEach(item => children.push(answerKeyParagraph(d, item)));
     }
 
     const doc = new d.Document({
@@ -350,7 +461,7 @@ export async function exportQuizToDocx(quiz, { withAnswers = false } = {}) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = safeFileName(quiz.title, withAnswers);
+    a.download = safeFileName(quiz.title, layout.answerKey);
     document.body.appendChild(a);
     a.click();
     a.remove();

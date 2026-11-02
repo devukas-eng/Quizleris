@@ -10,6 +10,7 @@ import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapS
 import { confirmDialog, alertDialog } from "./dialog.js";
 import "./rich-input.js";
 import { exportQuizToDocx } from "./docx-export.js";
+import { openPrintPreview } from "./print-preview.js";
 import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind, ANSWER_KINDS, answerKindTriggerHtml, kindOfChoice } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
 
@@ -745,7 +746,7 @@ function renderAdminForm() {
           if (file && adminQuiz) {
             try {
               saveStateForUndo();
-              const resizedBase64 = await resizeImage(file, 640);
+              const resizedBase64 = await resizeImage(file, 1400);
               adminQuiz.questions[qIdx].image = resizedBase64;
               renderAdminForm();
             } catch (err) {
@@ -773,7 +774,7 @@ function renderAdminForm() {
             if (file && adminQuiz) {
               try {
                 saveStateForUndo();
-                const resizedBase64 = await resizeImage(file, 480);
+                const resizedBase64 = await resizeImage(file, 900);
                 adminQuiz.questions[qIdx].choices[cIdx].image = resizedBase64;
                 renderAdminForm();
               } catch (err) {
@@ -1208,21 +1209,26 @@ function setupFileMenu() {
     if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
   });
 
-  const exportWord = async (withAnswers) => {
+  // Print preview: layout changes (order, image sizes, page breaks…) are saved with the quiz
+  document.getElementById("admin-docx-btn")?.addEventListener("click", () => {
     if (!adminQuiz) return;
     updateQuizFromDOM();
-    btn.disabled = true;
-    try {
-      await exportQuizToDocx(adminQuiz, { withAnswers });
-    } catch (err) {
-      console.error("Word export failed", err);
-      await alertDialog(t("docx.exportFailed"), err.message || "");
-    } finally {
-      btn.disabled = false;
-    }
-  };
-  document.getElementById("admin-docx-btn")?.addEventListener("click", () => exportWord(false));
-  document.getElementById("admin-docx-key-btn")?.addEventListener("click", () => exportWord(true));
+    openPrintPreview(adminQuiz, {
+      onLayoutChange: (layout) => {
+        if (!adminQuiz) return;
+        adminQuiz.printLayout = layout;
+        triggerAutoSave();
+      },
+      onExport: async (quizToPrint) => {
+        try {
+          await exportQuizToDocx(quizToPrint);
+        } catch (err) {
+          console.error("Word export failed", err);
+          await alertDialog(t("docx.exportFailed"), err.message || "");
+        }
+      }
+    });
+  });
 }
 
 function setupAdminEventsInternal() {
@@ -1367,7 +1373,6 @@ function setupAdminEventsInternal() {
         id === "admin-export" ||
         id === "admin-file-btn" ||
         id === "admin-docx-btn" ||
-        id === "admin-docx-key-btn" ||
         id === "admin-new-quiz" ||
         id === "admin-btn-back" || 
         id === "admin-bulk-import-btn" || 
@@ -1496,11 +1501,20 @@ async function resizeImage(file, maxDim) {
             h = maxDim;
           }
         }
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = Math.round(w);
+        canvas.height = Math.round(h);
         const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.5));
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Images are printed too, so keep them sharp. Transparent images (diagrams) stay PNG,
+        // since JPEG would turn the transparency black; otherwise use whichever format is smaller
+        // (PNG wins for screenshots and line drawings, JPEG for photos).
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let transparent = false;
+        for (let i = 3; i < pixels.length; i += 4 * 7) { if (pixels[i] < 250) { transparent = true; break; } }
+        const png = canvas.toDataURL("image/png");
+        if (transparent) { resolve(png); return; }
+        const jpeg = canvas.toDataURL("image/jpeg", 0.85);
+        resolve(png.length < jpeg.length ? png : jpeg);
       };
       img.onerror = reject;
       img.src = e.target?.result;

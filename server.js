@@ -53,7 +53,7 @@ app.use(cors({
         : '*',
     optionsSuccessStatus: 200
 }));
-app.use(express.json({ limit: '10mb' })); // Quizzes can still embed base64 images
+app.use(express.json({ limit: '20mb' })); // Quizzes embed base64 images, kept sharp enough to print
 
 // --- RATE LIMITING ---
 const authLimiter = rateLimit({
