@@ -194,9 +194,19 @@
             <button id="admin-save" class="btn btn-primary" data-i18n="admin.saveQuiz">Save Quiz</button>
             <button id="admin-preview" class="btn btn-secondary"
               data-i18n="admin.preview">Peržiūra</button>
-            <button id="admin-export" class="btn btn-secondary" data-i18n="admin.exportJson">Export JSON</button>
-            <button id="admin-import-btn" class="btn btn-secondary" data-i18n="admin.importJson">Import JSON</button>
-            <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
+            <div class="admin-file-menu-wrap">
+              <button id="admin-file-btn" class="btn btn-secondary" type="button" aria-haspopup="menu" aria-expanded="false">
+                <span data-i18n="admin.fileMenu">File</span> <span aria-hidden="true">▾</span>
+              </button>
+              <div id="admin-file-menu" class="admin-file-menu" role="menu" hidden>
+                <button type="button" role="menuitem" id="admin-docx-btn">📄 <span data-i18n="admin.exportDocx">Word for students</span></button>
+                <button type="button" role="menuitem" id="admin-docx-key-btn">🔑 <span data-i18n="admin.exportDocxKey">Word with answer key</span></button>
+                <div class="admin-file-menu-sep" role="separator"></div>
+                <button type="button" role="menuitem" id="admin-export">⬇ <span data-i18n="admin.exportJson">Export JSON</span></button>
+                <button type="button" role="menuitem" id="admin-import-btn">⬆ <span data-i18n="admin.importJson">Import JSON</span></button>
+              </div>
+              <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
+            </div>
             <button id="admin-new-quiz" class="btn" data-i18n="admin.newQuizBtn">+ New quiz</button>
           </div>
           <div id="admin-share-code" class="admin-share" style="display: none;"></div>

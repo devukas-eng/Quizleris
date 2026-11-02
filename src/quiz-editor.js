@@ -9,6 +9,7 @@ import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import "./rich-input.js";
+import { exportQuizToDocx } from "./docx-export.js";
 import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind, ANSWER_KINDS, answerKindTriggerHtml, kindOfChoice } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
 
@@ -1181,6 +1182,49 @@ function previewQuiz() {
 }
 
 
+// "File" menu: Word printouts and JSON export/import in one place
+function setupFileMenu() {
+  const btn = document.getElementById("admin-file-btn");
+  const menu = document.getElementById("admin-file-menu");
+  if (!btn || !menu) return;
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    if (open) menu.querySelector("button")?.focus();
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  menu.addEventListener("click", () => setOpen(false));
+  menu.addEventListener("keydown", (e) => {
+    const items = [...menu.querySelectorAll("button")];
+    const idx = items.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); setOpen(false); btn.focus(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); items[(idx + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(idx - 1 + items.length) % items.length].focus(); }
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
+  });
+
+  const exportWord = async (withAnswers) => {
+    if (!adminQuiz) return;
+    updateQuizFromDOM();
+    btn.disabled = true;
+    try {
+      await exportQuizToDocx(adminQuiz, { withAnswers });
+    } catch (err) {
+      console.error("Word export failed", err);
+      await alertDialog(t("docx.exportFailed"), err.message || "");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  document.getElementById("admin-docx-btn")?.addEventListener("click", () => exportWord(false));
+  document.getElementById("admin-docx-key-btn")?.addEventListener("click", () => exportWord(true));
+}
+
 function setupAdminEventsInternal() {
   adminToggle.addEventListener("click", toggleAdminMode);
   adminAddQuestionBtn.addEventListener("click", () => {
@@ -1236,6 +1280,8 @@ function setupAdminEventsInternal() {
     };
     reader.readAsText(file);
   });
+  setupFileMenu();
+
   // Start a fresh quiz (the draft is always saved, so closing the editor loses nothing)
   adminNewQuizBtn.addEventListener("click", async () => {
     updateQuizFromDOM();
@@ -1318,7 +1364,10 @@ function setupAdminEventsInternal() {
         id === "admin-undo-btn" || 
         id === "admin-redo-btn" || 
         id === "admin-preview" || 
-        id === "admin-export" || 
+        id === "admin-export" ||
+        id === "admin-file-btn" ||
+        id === "admin-docx-btn" ||
+        id === "admin-docx-key-btn" ||
         id === "admin-new-quiz" ||
         id === "admin-btn-back" || 
         id === "admin-bulk-import-btn" || 

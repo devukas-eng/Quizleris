@@ -4947,6 +4947,59 @@ rich-input.formula-open .rich-input-math-btn {
     flex-shrink: 0;
 }
 
+/* Editor "File" menu (Word printouts + JSON) */
+.admin-file-menu-wrap {
+    position: relative;
+}
+
+.admin-file-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    min-width: 250px;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+    background: var(--surface-solid);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+    animation: formulaPop 0.12s ease-out;
+}
+
+.admin-file-menu[hidden] {
+    display: none;
+}
+
+.admin-file-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.92rem;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.admin-file-menu button:hover,
+.admin-file-menu button:focus-visible {
+    outline: none;
+    background: var(--accent-soft);
+}
+
+.admin-file-menu-sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--border-color);
+}
+
 .hero-pin-hint {
     margin: 14px 0 0;
     color: var(--muted);
