@@ -3929,27 +3929,38 @@ math-virtual-keyboard::part(action-toolbar) {
     margin-top: 20px;
     padding-top: 16px;
     border-top: 1px solid var(--border-color);
-    container-type: inline-size;
 }
 
-.admin-actions .label-short {
+/* The bar picks the first layout that fits (fitActionBar in quiz-editor.js measures it):
+   0 full labels on one row; 1 short "New"; 2 short "Save" too;
+   3-5 the same steps on two tidy rows: Save + Preview, then File, Print … New. */
+.admin-actions .label-short,
+.admin-actions-break {
     display: none;
 }
 
-/* Just too narrow for one row: short labels and tighter buttons keep it on one line
-   instead of "New quiz" dropping alone onto a second row. Narrower still, it wraps. */
-@container (min-width: 450px) and (max-width: 540px) {
-    .admin-actions .label-long {
-        display: none;
-    }
+.admin-actions:is([data-fit="1"], [data-fit="2"], [data-fit="4"], [data-fit="5"]) #admin-new-quiz .label-long,
+.admin-actions:is([data-fit="2"], [data-fit="5"]) #admin-save .label-long {
+    display: none;
+}
 
-    .admin-actions .label-short {
-        display: inline;
-    }
+.admin-actions:is([data-fit="1"], [data-fit="2"], [data-fit="4"], [data-fit="5"]) #admin-new-quiz .label-short,
+.admin-actions:is([data-fit="2"], [data-fit="5"]) #admin-save .label-short {
+    display: inline;
+}
 
-    .admin-actions .btn:not(.admin-print-btn) {
-        padding-inline: 14px;
-    }
+.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) {
+    row-gap: 5px; /* the zero-height break line sits between two gaps */
+}
+
+.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) .admin-actions-break {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+}
+
+.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) #admin-save {
+    flex: 1 1 auto;
 }
 
 .admin-actions #admin-new-quiz {

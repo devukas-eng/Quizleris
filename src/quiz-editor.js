@@ -1183,8 +1183,34 @@ function previewQuiz() {
 }
 
 
+// Bottom action bar: tries each layout step (see .admin-actions[data-fit] in style.css) and keeps
+// the first that fits, measured on the real buttons so fonts and languages don't matter
+const ACTION_BAR_STEPS = 6; // 0-2 on one row, 3-5 on two rows
+function setupActionBarFit() {
+  const bar = document.querySelector(".admin-actions");
+  if (!bar || !window.ResizeObserver) return;
+  const rowCount = () => new Set([...bar.children]
+    .filter(el => el.offsetParent && !el.classList.contains("admin-actions-break"))
+    .map(el => Math.round(el.getBoundingClientRect().top))).size;
+  let lastWidth = -1;
+  const fit = (force = false) => {
+    const width = bar.clientWidth;
+    if (!width || (width === lastWidth && !force)) return;
+    lastWidth = width;
+    for (let step = 0; step < ACTION_BAR_STEPS; step++) {
+      bar.dataset.fit = String(step);
+      if (rowCount() <= (step < 3 ? 1 : 2)) return;
+    }
+  };
+  new ResizeObserver(() => fit()).observe(bar);
+  // Labels change with the language; button widths settle once web fonts load
+  new MutationObserver(() => fit(true)).observe(bar, { subtree: true, childList: true, characterData: true });
+  document.fonts?.ready.then(() => fit(true));
+}
+
 // "File" menu: Word printouts and JSON export/import in one place
 function setupFileMenu() {
+  setupActionBarFit();
   const btn = document.getElementById("admin-file-btn");
   const menu = document.getElementById("admin-file-menu");
   if (!btn || !menu) return;

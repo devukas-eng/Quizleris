@@ -8,7 +8,8 @@ const translations = {
         'menu.student': 'Esu Mokinys',
         'menu.admin': 'Esu Administratorius',
         'menu.dashboard': 'Peržiūrėti Rezultatus',
-        'menu.heroHeadline': 'Pradėk žaisti dabar',
+        // Earlier wording, to switch back: 'Pradėk žaisti dabar'
+        'menu.heroHeadline': 'Pradėk spręsti dabar',
         'menu.pinPlaceholder': 'Įvesk žaidimo PIN / ID...',
         'menu.pinGo': 'Pradėti →',
         'menu.divider': 'arba',
@@ -400,7 +401,8 @@ const translations = {
         'menu.student': "I'm Student",
         'menu.admin': "I'm Admin",
         'menu.dashboard': 'View Dashboard',
-        'menu.heroHeadline': 'Start playing now',
+        // Earlier wording, to switch back: 'Start playing now'
+        'menu.heroHeadline': 'Start solving now',
         'menu.pinPlaceholder': 'Enter game PIN / ID...',
         'menu.pinGo': 'Start →',
         'menu.divider': 'or',
