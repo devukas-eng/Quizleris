@@ -1210,7 +1210,12 @@ function setupFileMenu() {
   });
 
   // Print preview: layout changes (order, image sizes, page breaks…) are saved with the quiz
-  document.getElementById("admin-docx-btn")?.addEventListener("click", () => {
+  const printBtn = document.getElementById("admin-docx-btn");
+  if (printBtn) {
+    printBtn.title = t("admin.printPreview").replace(/…$/, "");
+    printBtn.setAttribute("aria-label", printBtn.title);
+  }
+  printBtn?.addEventListener("click", () => {
     if (!adminQuiz) return;
     updateQuizFromDOM();
     openPrintPreview(adminQuiz, {

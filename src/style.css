@@ -3933,6 +3933,28 @@ math-virtual-keyboard::part(action-toolbar) {
 
 .admin-actions #admin-new-quiz {
     margin-left: auto;
+    /* Starting over replaces the draft: always outlined as a caution */
+    border-color: var(--warning, #f59e0b);
+    color: var(--text);
+}
+
+.admin-actions #admin-new-quiz:hover,
+.admin-actions #admin-new-quiz:focus-visible {
+    border-color: var(--warning, #f59e0b);
+    background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
+}
+
+/* Print: a square outline icon button the same height as its neighbours */
+.admin-actions .admin-print-btn {
+    width: var(--control-height);
+    min-width: var(--control-height);
+    padding: 0;
+    color: var(--text);
+}
+
+.admin-actions .admin-print-btn svg {
+    display: block;
+    margin: auto;
 }
 
 /* Save result / plan notices */

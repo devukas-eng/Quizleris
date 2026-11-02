@@ -199,13 +199,19 @@
                 <span data-i18n="admin.fileMenu">File</span> <span aria-hidden="true">▾</span>
               </button>
               <div id="admin-file-menu" class="admin-file-menu" role="menu" hidden>
-                <button type="button" role="menuitem" id="admin-docx-btn">🖨 <span data-i18n="admin.printPreview">Print / Word (.docx)…</span></button>
-                <div class="admin-file-menu-sep" role="separator"></div>
                 <button type="button" role="menuitem" id="admin-export">⬇ <span data-i18n="admin.exportJson">Export JSON</span></button>
                 <button type="button" role="menuitem" id="admin-import-btn">⬆ <span data-i18n="admin.importJson">Import JSON</span></button>
               </div>
               <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
             </div>
+            <button id="admin-docx-btn" class="btn btn-secondary btn-icon admin-print-btn" type="button" title="Print / Word (.docx)" aria-label="Print / Word (.docx)">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 8V3.5h10V8" />
+                <rect x="3" y="8" width="18" height="9" rx="2" />
+                <path d="M7 14h10v6.5H7z" />
+                <circle cx="17.5" cy="11" r="0.6" fill="currentColor" />
+              </svg>
+            </button>
             <button id="admin-new-quiz" class="btn" data-i18n="admin.newQuizBtn">+ New quiz</button>
           </div>
           <div id="admin-share-code" class="admin-share" style="display: none;"></div>
