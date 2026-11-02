@@ -49,7 +49,9 @@ const SYMBOLS = {
 const FUNCTIONS = new Set(["sin", "cos", "tan", "tg", "ctg", "cot", "sec", "csc", "arcsin", "arccos", "arctan",
     "log", "ln", "lg", "exp", "max", "min", "det", "gcd", "deg", "sgn"]);
 const TEXT_COMMANDS = new Set(["text", "mathrm", "textrm", "textbf", "mathbf", "operatorname", "mbox", "textit", "mathit"]);
-const IGNORED = new Set(["left", "right", "displaystyle", "textstyle", "limits", "nolimits", "big", "Big", "bigg", "Bigg", "middle"]);
+// Size commands (formula size picked in the editor) are dropped: printed formulas match the text size
+const IGNORED = new Set(["left", "right", "displaystyle", "textstyle", "limits", "nolimits", "big", "Big", "bigg", "Bigg", "middle",
+    "tiny", "scriptsize", "footnotesize", "small", "normalsize", "large", "Large", "LARGE", "huge", "Huge"]);
 // Accents become a combining character on each letter of their argument
 const ACCENTS = { vec: "\u20D7", overrightarrow: "\u20D7", hat: "\u0302", widehat: "\u0302", bar: "\u0305",
     overline: "\u0305", dot: "\u0307", ddot: "\u0308", tilde: "\u0303", widetilde: "\u0303", underline: "\u0332" };

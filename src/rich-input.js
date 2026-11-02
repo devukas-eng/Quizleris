@@ -7,9 +7,25 @@ import { t } from "./lang.js";
 // Formulas show as rendered chips. MathLive (and its virtual keyboard) only opens in a
 // small popover when inserting or editing a chip, so normal typing, spaces included,
 // stays plain text instead of being parsed as LaTeX.
+// Chips can be dragged to another spot in the text (or into another field) and resized by
+// dragging their corner grip.
 
 const ZWSP = "\u200B";
 const MATH_RE = /\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]/g;
+
+// Formula sizes are stored as a KaTeX size command at the start of the formula, e.g.
+// \(\Large x^2\), so the quiz player (KaTeX auto-render) shows them without a format change.
+export const FORMULA_SIZES = ["", "\\large", "\\Large", "\\LARGE", "\\huge"];
+const SIZE_SCALES = [1, 1.2, 1.44, 1.73, 2.07];
+const SIZE_RE = /^\\(large|Large|LARGE|huge|Huge)(?![A-Za-z])\s*/;
+const GRIP_STEP_PX = 16; // drag distance per size step
+
+/** Separates a leading size command from the formula: "\Large x" -> { size: "\Large", latex: "x" }. */
+export function splitFormulaSize(latex) {
+    const str = latex || "";
+    const m = SIZE_RE.exec(str);
+    return m ? { size: `\\${m[1]}`, latex: str.slice(m[0].length) } : { size: "", latex: str };
+}
 
 // MathLive beeps on every keystroke it rejects (e.g. space in math mode). Turn sounds off.
 customElements.whenDefined("math-field").then(() => {
@@ -34,22 +50,43 @@ export function parseRichValue(value) {
     return parts;
 }
 
+// A chip is the rendered formula plus a corner grip for resizing
 function renderChip(chip) {
+    let body = chip.querySelector(".rich-math-body");
+    if (!body) {
+        chip.textContent = "";
+        body = document.createElement("span");
+        body.className = "rich-math-body";
+        const grip = document.createElement("span");
+        grip.className = "rich-math-grip";
+        grip.title = t("rich.resizeFormula");
+        grip.setAttribute("aria-hidden", "true");
+        chip.append(body, grip);
+    }
     const latex = chip.dataset.latex || "";
+    const size = chip.dataset.size || "";
     if (window.katex) {
         try {
-            window.katex.render(latex || "\\square", chip, { throwOnError: false, displayMode: false });
+            window.katex.render(`${size ? `${size} ` : ""}${latex || "\\square"}`, body, { throwOnError: false, displayMode: false });
             return;
         } catch { /* fall back to raw LaTeX below */ }
     }
-    chip.textContent = latex;
+    body.textContent = latex;
 }
 
-function createChip(latex, display = false) {
+function setChipSize(chip, size) {
+    if (size) chip.dataset.size = size;
+    else delete chip.dataset.size;
+    renderChip(chip);
+}
+
+function createChip(rawLatex, display = false) {
+    const { size, latex } = splitFormulaSize(rawLatex);
     const chip = document.createElement("span");
     chip.className = "rich-math";
     chip.contentEditable = "false";
     chip.dataset.latex = latex;
+    if (size) chip.dataset.size = size;
     if (display) chip.dataset.display = "true";
     chip.title = t("rich.editFormula");
     renderChip(chip);
@@ -65,7 +102,8 @@ function serialize(node, out) {
         if (child.nodeType === Node.TEXT_NODE) {
             out.push(child.data);
         } else if (isChip(child)) {
-            const latex = child.dataset.latex || "";
+            const size = child.dataset.size;
+            const latex = `${size ? `${size} ` : ""}${child.dataset.latex || ""}`;
             out.push(child.dataset.display === "true" ? `\\[${latex}\\]` : `\\(${latex}\\)`);
         } else if (child.nodeName === "BR") {
             out.push("\n");
@@ -284,9 +322,20 @@ class RichInput extends HTMLElement {
 
         editor.addEventListener("drop", (e) => e.preventDefault());
 
-        editor.addEventListener("click", (e) => {
+        // Chips: drag the grip to resize, drag the chip itself to move it; a plain click edits
+        editor.addEventListener("pointerdown", (e) => {
             const chip = e.target.closest?.(".rich-math");
-            if (chip && editor.contains(chip)) openFormulaEditor(this, chip);
+            if (!chip || !editor.contains(chip) || e.button !== 0) return;
+            // No text selection or native drag of the chip while dragging
+            e.preventDefault();
+            if (e.target.closest(".rich-math-grip")) this._resizeChip(chip, e);
+            else this._dragChip(chip, e);
+        });
+
+        editor.addEventListener("click", (e) => {
+            if (this._suppressClick) return;
+            const chip = e.target.closest?.(".rich-math");
+            if (chip && editor.contains(chip) && !e.target.closest(".rich-math-grip")) openFormulaEditor(this, chip);
         });
 
         editor.addEventListener("blur", () => {
@@ -329,6 +378,169 @@ class RichInput extends HTMLElement {
         target.remove();
         this._changed();
     }
+
+    // The click that ends a drag must not open the formula editor
+    _endPointerGesture() {
+        this._suppressClick = true;
+        setTimeout(() => { this._suppressClick = false; }, 0);
+    }
+
+    // Dragging the grip right/down makes the formula bigger, left/up smaller, in size steps
+    _resizeChip(chip, e) {
+        const grip = e.target.closest(".rich-math-grip");
+        const startIndex = Math.max(0, FORMULA_SIZES.indexOf(chip.dataset.size || ""));
+        const start = { x: e.clientX, y: e.clientY };
+        let index = startIndex;
+        grip.setPointerCapture(e.pointerId);
+        chip.classList.add("resizing");
+        const onMove = (ev) => {
+            const pull = (ev.clientX - start.x + ev.clientY - start.y) / 2;
+            const next = Math.min(FORMULA_SIZES.length - 1, Math.max(0, startIndex + Math.round(pull / GRIP_STEP_PX)));
+            if (next === index) return;
+            index = next;
+            setChipSize(chip, FORMULA_SIZES[index]);
+        };
+        const onUp = () => {
+            grip.removeEventListener("pointermove", onMove);
+            grip.removeEventListener("pointerup", onUp);
+            grip.removeEventListener("pointercancel", onUp);
+            chip.classList.remove("resizing");
+            this._endPointerGesture();
+            if (index !== startIndex) this._changed();
+        };
+        grip.addEventListener("pointermove", onMove);
+        grip.addEventListener("pointerup", onUp);
+        grip.addEventListener("pointercancel", onUp);
+    }
+
+    // Moves the chip to where it is dropped: another spot in this text or in another field
+    _dragChip(chip, e) {
+        const start = { x: e.clientX, y: e.clientY };
+        let dragging = false;
+        let target = null;
+        const onMove = (ev) => {
+            if (!dragging) {
+                if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 5) return;
+                dragging = true;
+                chip.setPointerCapture(e.pointerId);
+                chip.classList.add("dragging");
+            }
+            target = chipDropTarget(ev.clientX, ev.clientY, chip);
+            showDropCaret(target?.range);
+        };
+        const onUp = () => {
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            document.removeEventListener("pointercancel", onUp);
+            showDropCaret(null);
+            chip.classList.remove("dragging");
+            if (!dragging) return; // a plain click: the click handler opens the editor
+            this._endPointerGesture();
+            if (!target) return;
+            const oldPrev = chip.previousSibling;
+            const oldNext = chip.nextSibling;
+            target.range.insertNode(chip);
+            // Where the chip was: "a  b" -> "a b"
+            if (oldPrev?.nodeType === Node.TEXT_NODE && oldNext?.nodeType === Node.TEXT_NODE &&
+                / $/.test(oldPrev.data) && /^ /.test(oldNext.data)) {
+                oldNext.data = oldNext.data.slice(1);
+            }
+            // Where it landed: keep a space between it and neighbouring words
+            const prev = chip.previousSibling;
+            const next = chip.nextSibling;
+            if (prev?.nodeType === Node.TEXT_NODE && /[^\s\u200B]$/.test(prev.data)) prev.data += " ";
+            if (next?.nodeType === Node.TEXT_NODE && /^[^\s\u200B.,;:!?)]/.test(next.data)) next.data = ` ${next.data}`;
+            this._changed();
+            if (target.host !== this) target.host._changed();
+        };
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
+    }
+}
+
+// --- Chip drag helpers ---
+
+function caretRangeAt(x, y) {
+    if (document.caretPositionFromPoint) {
+        const pos = document.caretPositionFromPoint(x, y);
+        if (!pos?.offsetNode) return null;
+        const range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+        return range;
+    }
+    return document.caretRangeFromPoint?.(x, y) || null;
+}
+
+/** Where a dragged chip would land: { host, range } inside a rich-input's text, or null. */
+function chipDropTarget(x, y, dragged) {
+    const host = document.elementFromPoint(x, y)?.closest("rich-input");
+    const editor = host?._editor;
+    if (!editor) return null;
+    const range = caretRangeAt(x, y);
+    if (!range || !editor.contains(range.startContainer)) {
+        // Past the end of the text: append
+        const end = document.createRange();
+        end.selectNodeContents(editor);
+        end.collapse(false);
+        return { host, range: end };
+    }
+    // Over a chip (the dragged one included): before or after it, whichever half is nearer
+    const node = range.startContainer;
+    const overChip = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest(".rich-math");
+    if (overChip && editor.contains(overChip)) {
+        const rect = overChip.getBoundingClientRect();
+        if (x < rect.left + rect.width / 2) range.setStartBefore(overChip);
+        else range.setStartAfter(overChip);
+        range.collapse(true);
+    }
+    if (dragged.contains(range.startContainer)) return null;
+    // Inside a word: snap to the nearer end of it
+    if (range.startContainer.nodeType === Node.TEXT_NODE) {
+        const { data } = range.startContainer;
+        const offset = range.startOffset;
+        if (/\S/.test(data[offset - 1] || "") && /\S/.test(data[offset] || "")) {
+            let left = offset, right = offset;
+            while (left > 0 && /\S/.test(data[left - 1])) left--;
+            while (right < data.length && /\S/.test(data[right])) right++;
+            range.setStart(range.startContainer, offset - left <= right - offset ? left : right);
+            range.collapse(true);
+        }
+    }
+    return { host, range };
+}
+
+let dropCaret = null;
+
+function showDropCaret(range) {
+    if (!range) {
+        if (dropCaret) dropCaret.hidden = true;
+        return;
+    }
+    if (!dropCaret) {
+        dropCaret = document.createElement("div");
+        dropCaret.className = "rich-drop-caret";
+        document.body.appendChild(dropCaret);
+    }
+    let rect = range.getClientRects()[0];
+    let left = rect?.left;
+    if (!rect || !rect.height) {
+        // Collapsed ranges between elements have no box: use the neighbouring node's edge
+        const { startContainer: c, startOffset: o } = range;
+        const before = c.nodeType === Node.ELEMENT_NODE ? c.childNodes[o - 1] : null;
+        const after = c.nodeType === Node.ELEMENT_NODE ? c.childNodes[o] : null;
+        const box = (n) => n?.nodeType === Node.ELEMENT_NODE ? n.getBoundingClientRect()
+            : n ? (() => { const r = document.createRange(); r.selectNodeContents(n); return r.getBoundingClientRect(); })() : null;
+        const b = box(before), a = box(after);
+        if (b?.height) { rect = b; left = b.right; }
+        else if (a?.height) { rect = a; left = a.left; }
+        else { rect = (c.nodeType === Node.ELEMENT_NODE ? c : c.parentElement).getBoundingClientRect(); left = rect.left + 4; }
+    }
+    dropCaret.hidden = false;
+    dropCaret.style.left = `${left - 1}px`;
+    dropCaret.style.top = `${rect.top}px`;
+    dropCaret.style.height = `${Math.max(rect.height, 18)}px`;
 }
 
 if (!customElements.get("rich-input")) customElements.define("rich-input", RichInput);
@@ -351,6 +563,10 @@ function ensurePopover() {
             <span class="rich-formula-hint"></span>
         </div>
         <math-field class="rich-formula-field" math-virtual-keyboard-policy="auto"></math-field>
+        <div class="rich-formula-sizes" role="group">
+            <span class="rich-formula-size-label"></span>
+            ${FORMULA_SIZES.map((_, i) => `<button type="button" data-size-index="${i}" style="font-size: ${0.8 + i * 0.16}rem">A</button>`).join("")}
+        </div>
         <div class="rich-formula-actions">
             <button type="button" class="btn btn-secondary btn-compact rich-formula-remove"></button>
             <button type="button" class="btn btn-secondary btn-compact rich-formula-cancel"></button>
@@ -362,6 +578,10 @@ function ensurePopover() {
 
     popover.querySelector(".rich-formula-cancel").addEventListener("click", () => closeFormulaEditor(false));
     popover.querySelector(".rich-formula-insert").addEventListener("click", () => closeFormulaEditor(true));
+    popover.querySelector(".rich-formula-sizes").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-size-index]");
+        if (btn) setPopoverSize(FORMULA_SIZES[Number(btn.dataset.sizeIndex)]);
+    });
     popover.querySelector(".rich-formula-remove").addEventListener("click", () => {
         if (activeChip) mathField.value = "";
         closeFormulaEditor(true);
@@ -403,8 +623,19 @@ function positionPopover() {
     popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
 }
 
+let activeSize = "";
+
+// The chosen size also scales the formula being edited, as a preview
+function setPopoverSize(size) {
+    activeSize = size;
+    const index = Math.max(0, FORMULA_SIZES.indexOf(size));
+    popover.querySelectorAll("[data-size-index]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.sizeIndex) === index)));
+    mathField.style.fontSize = `${SIZE_SCALES[index]}em`;
+}
+
 function openFormulaEditor(host, chip) {
     ensurePopover();
+    if (popover.classList.contains("open")) closeFormulaEditor(false);
     const range = host._currentRange();
     if (range) host._savedRange = range.cloneRange();
     activeHost = host;
@@ -416,6 +647,10 @@ function openFormulaEditor(host, chip) {
     const removeBtn = popover.querySelector(".rich-formula-remove");
     removeBtn.textContent = t("rich.remove");
     removeBtn.hidden = !chip;
+    const sizeGroup = popover.querySelector(".rich-formula-sizes");
+    sizeGroup.setAttribute("aria-label", t("rich.formulaSize"));
+    popover.querySelector(".rich-formula-size-label").textContent = t("rich.formulaSize");
+    setPopoverSize(chip?.dataset.size || "");
 
     host.classList.add("formula-open");
     positionPopover();
@@ -442,14 +677,16 @@ function closeFormulaEditor(commit) {
         if (chip) {
             if (latex) {
                 chip.dataset.latex = latex;
-                renderChip(chip);
+                setChipSize(chip, activeSize);
             } else {
                 chip.remove();
             }
             host._changed();
             host.focus();
         } else if (latex) {
-            host._insertNodes([createChip(latex)], host._currentRange());
+            const newChip = createChip(latex);
+            setChipSize(newChip, activeSize);
+            host._insertNodes([newChip], host._currentRange());
             host._changed();
         } else {
             host.focus();

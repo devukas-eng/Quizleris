@@ -429,7 +429,9 @@ function el(html) {
 
 // Text with \( \) formulas (rendered by KaTeX afterwards); "___" become writing lines
 function richHtml(value, { blanks = false } = {}) {
-    let html = escapeHtml(String(value || "")).replace(/\n/g, "<br>");
+    // Formula sizes are dropped like in the Word file, so the preview paginates the same way
+    const text = String(value || "").replace(/\\(?:large|Large|LARGE|huge|Huge)(?![A-Za-z])\s*/g, "");
+    let html = escapeHtml(text).replace(/\n/g, "<br>");
     if (blanks) html = html.replace(/_{3,}/g, '<span class="pp-blank"></span>');
     return html;
 }
