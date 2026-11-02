@@ -2,7 +2,8 @@ import { getCurrentUser, showAuthModal, logoutUser } from "./auth-ui.js";
 import { fetchAllUsers, fetchProfile, deleteQuizFromCloud } from "./api.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
-import { codeChipHtml, linkRowsHtml, wireCopyButtons } from "./share-links.js";
+import { shareStripHtml, wireCopyButtons } from "./share-links.js";
+import { initGlide } from "./glide.js";
 
 let dashboardModal = null;
 
@@ -72,6 +73,7 @@ async function renderDashboard() {
         (user.role === "admin" ? `<section class="dash-section" id="dash-admin-users"><p class="dash-muted">${t("profile.loading")}</p></section>` : "");
 
     wireCopyButtons(body);
+    initGlide(body);
     body.querySelector("#dashboard-create-btn")?.addEventListener("click", () => openEditor());
     body.querySelectorAll("[data-edit-quiz]").forEach(btn => {
         btn.addEventListener("click", () => openEditor(btn.dataset.editQuiz));
@@ -143,7 +145,7 @@ function profileCard(user, limits, quizCount) {
                 </div>
                 <span class="dash-plan-badge ${planClass}">${escapeHtml(planLabel)}</span>
             </div>
-            <div class="dash-stats">
+            <div class="dash-stats" data-glide>
                 <div class="dash-stat">
                     <div class="dash-stat-label">${t("profile.validUntil")}</div>
                     <div class="dash-stat-value">${escapeHtml(validity)}</div>
@@ -189,7 +191,7 @@ function quizzesSection(quizzes) {
             const isPublic = q.visibility === "public";
             const expiry = q.expires_at ? ` · ${escapeHtml(t("profile.expiresOn").replace("{date}", formatDate(q.expires_at)))}` : "";
             html += `
-                <div class="dash-quiz">
+                <div class="dash-quiz" data-glide>
                     <div class="dash-quiz-main">
                         <div class="dash-quiz-title">${escapeHtml(q.title || "—")}</div>
                         <div class="dash-quiz-meta">
@@ -197,15 +199,11 @@ function quizzesSection(quizzes) {
                             <span class="dash-muted">${t("profile.updated")} ${escapeHtml(formatDate(q.updated_at || q.created_at))}${expiry}</span>
                         </div>
                     </div>
-                    ${codeChipHtml(q.pin)}
                     <div class="dash-quiz-actions">
                         <button class="btn btn-secondary" data-edit-quiz="${escapeHtml(q.id)}">${t("profile.edit")}</button>
                         <button class="btn btn-secondary btn-icon dash-delete" data-delete-quiz="${escapeHtml(q.id)}" data-title="${escapeHtml(q.title || "")}" title="${t("profile.delete")}" aria-label="${t("profile.delete")}">🗑</button>
                     </div>
-                    <details class="dash-quiz-share">
-                        <summary>${t("share.links")}</summary>
-                        <div class="dash-quiz-share-body">${linkRowsHtml(q)}</div>
-                    </details>
+                    ${shareStripHtml(q)}
                 </div>
             `;
         });

@@ -35,14 +35,14 @@ export const STORAGE_KEY_IMAGE_REGISTRY_PREFIX = "quiz-images_";
 /**
  * Generates a collision-resistant, non-guessable quiz ID (fits the server's VARCHAR(50) / [A-Za-z0-9_-] rule).
  */
+// A quiz ID is also the code students type: six characters, no 0/O/1/I/L (mirrors server.js)
+export const QUIZ_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+export const QUIZ_CODE_RE = new RegExp(`^[${QUIZ_CODE_ALPHABET}]{6}$`);
+
 export function generateQuizId() {
-    const c = globalThis.crypto;
-    if (c && typeof c.randomUUID === "function") {
-        return `quiz_${c.randomUUID().replace(/-/g, "")}`;
-    }
-    const bytes = new Uint8Array(16);
-    c.getRandomValues(bytes);
-    return `quiz_${Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")}`;
+    const bytes = new Uint8Array(6);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => QUIZ_CODE_ALPHABET[b % QUIZ_CODE_ALPHABET.length]).join("");
 }
 import { saveQuizToCloud, fetchQuizDetails } from "./api.js";
 
@@ -155,7 +155,23 @@ export function getHighScores(allResults) {
  */
 export function saveImageRegistry(quizId, images) {
     const key = STORAGE_KEY_IMAGE_REGISTRY_PREFIX + quizId;
-    localStorage.setItem(key, JSON.stringify(images));
+    const data = JSON.stringify(images);
+    try {
+        localStorage.setItem(key, data);
+        return true;
+    } catch {
+        // Browser storage is full (big pictures): drop other quizzes' cached images and retry once
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const other = localStorage.key(i);
+            if (other && other !== key && other.startsWith(STORAGE_KEY_IMAGE_REGISTRY_PREFIX)) localStorage.removeItem(other);
+        }
+        try {
+            localStorage.setItem(key, data);
+            return true;
+        } catch {
+            return false; // callers carry on: the quiz itself is saved in the cloud
+        }
+    }
 }
 export function getImageFromRegistry(quizId, imgId) {
     const key = STORAGE_KEY_IMAGE_REGISTRY_PREFIX + quizId;

@@ -78,8 +78,8 @@
     </section>
     <!-- Admin panel (hidden by default) -->
     <section id="admin-panel" class="admin-panel" style="display: none;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
-        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; flex: 1;">
+      <div class="admin-panel-head" data-glide>
+        <div class="admin-panel-head-main" data-glide>
           <h2 style="margin: 0;" data-i18n="admin.title">Create/Edit Quiz</h2>
           <!-- Auto-Save Status Badge -->
           <span id="admin-draft-status" style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s ease;">
@@ -120,7 +120,7 @@
                 <option value="public">Public</option>
             </select>
           </label>
-          <div class="admin-settings-card">
+          <div class="admin-settings-card" data-glide>
             <div style="flex: 1;">
               <label for="admin-timer-mode" style="display: block; margin-bottom: 5px;" data-i18n="admin.timerMode">Timer
                 Mode:</label>
@@ -137,7 +137,7 @@
                 style="width: 100%;" />
             </div>
           </div>
-          <div class="admin-settings-card admin-settings-card-top">
+          <div class="admin-settings-card admin-settings-card-top" data-glide>
             <div style="flex: 1;">
               <span style="display: block; margin-bottom: 8px; font-weight: bold;" data-i18n="admin.quizMode">Quiz
                 Mode:</span>
@@ -186,9 +186,8 @@
           
 
           <div id="admin-questions-list"></div>
-          <div class="admin-question-actions">
+          <div class="admin-question-actions" data-glide>
             <button id="admin-add-question" class="btn" data-i18n="admin.addQuestion">+ Add Question</button>
-            <button id="admin-bulk-import-btn" class="btn" data-i18n="admin.bulkImport">📝 Bulk Import</button>
           </div>
           <div class="admin-actions-wrap">
           <div class="admin-actions">
@@ -203,10 +202,9 @@
                 <button type="button" role="menuitem" id="admin-export">⬇ <span data-i18n="admin.exportJson">Export JSON</span></button>
                 <button type="button" role="menuitem" id="admin-import-btn">⬆ <span data-i18n="admin.importJson">Import JSON</span></button>
                 <div class="admin-file-menu-sep" role="separator"></div>
-                <button type="button" role="menuitem" id="admin-docx-import-btn">📄 <span data-i18n="admin.importDocx">Import from Word (.docx)…</span></button>
+                <button type="button" role="menuitem" id="admin-docx-import-btn">📄 <span data-i18n="admin.importDocx">Import questions (Word, PDF, text)…</span></button>
               </div>
               <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
-              <input type="file" id="admin-docx-import-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;" />
             </div>
             <button id="admin-docx-btn" class="btn btn-secondary btn-icon admin-print-btn" type="button" title="Print / Word (.docx)" aria-label="Print / Word (.docx)">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -346,22 +344,6 @@
     <div class="theme-picker-item" data-theme="cyberpunk" role="option">
       <div><div class="tp-name">Tamsus fonas³</div><div class="tp-subtitle">Cyber Midnight</div></div>
       <span class="tp-bubble" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></span>
-    </div>
-  </div>
-
-  <!-- Bulk Import Modal Overlay -->
-  <div id="bulk-import-modal-overlay" class="modal-overlay" style="display: none;">
-    <div class="modal-window" style="max-width: 600px; padding: 24px; border-radius: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
-        <h2 style="margin: 0; font-size: 1.5rem;" data-i18n="admin.bulkImportTitle">Enter Questions for Bulk Import</h2>
-        <button id="bulk-import-close-btn" aria-label="Close" style="background: none; border: none; color: inherit; font-size: 1.8rem; cursor: pointer; line-height: 1;">&times;</button>
-      </div>
-      <p style="margin: 0 0 12px 0; font-size: 0.9rem;" data-i18n="admin.bulkImportHint">Use format: ...</p>
-      <textarea id="bulk-import-textarea" class="input-field" style="width: 100%; height: 250px; font-family: monospace; background: rgba(0,0,0,0.1); color: inherit; margin-bottom: 20px; font-size: 0.9rem; padding: 12px; border-radius: 8px;" placeholder="Q: Question text&#10;A) Choice 1&#10;*B) Choice 2&#10;C) Choice 3&#10;&#10;Q: Next question..."></textarea>
-      <div style="display: flex; gap: 12px; justify-content: flex-end;">
-        <button id="bulk-import-cancel-btn" class="btn" data-i18n="admin.cancel">Cancel</button>
-        <button id="bulk-import-submit-btn" class="btn btn-primary" data-i18n="admin.importBtn">Import</button>
-      </div>
     </div>
   </div>
 

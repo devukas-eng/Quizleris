@@ -166,39 +166,24 @@ const USERNAME_RE = /^[A-Za-z0-9_.-]{3,50}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const QUIZ_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
 
-// Game codes: six characters students type to open a quiz. Private quizzes stay unlisted but
-// open for anyone with the code, just as with the share link. No 0/O/1/I/L to avoid mix-ups.
-const PIN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const PIN_LENGTH = 6;
-const PIN_RE = new RegExp(`^[${PIN_ALPHABET}]{${PIN_LENGTH}}$`);
-// Generated IDs (quiz_ + 32 random hex) are as unguessable as the share link, so they open private quizzes too
+// Quiz IDs are the codes students type: six characters without 0/O/1/I/L (src/storage.js makes
+// them). Private quizzes stay unlisted but open for anyone with the code, just as with a share link.
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{6}$`);
+// Older generated IDs (quiz_ + 32 random hex) are converted to codes on startup; until then (or if
+// the database user may not create the alias table) they are unguessable and open the same way
 const RANDOM_ID_RE = /^quiz_[0-9a-f]{32}$/;
 
-function generatePin() {
-    return Array.from(crypto.randomBytes(PIN_LENGTH), b => PIN_ALPHABET[b % PIN_ALPHABET.length]).join('');
+function generateCode() {
+    return Array.from(crypto.randomBytes(6), b => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
-/** Gives a quiz a game code if it has none yet; returns the code (null if the quiz is missing). */
-async function ensureQuizPin(quizId) {
-    const [rows] = await pool.query('SELECT pin FROM quizzes WHERE id = ?', [quizId]);
-    if (!rows[0]) return null;
-    if (rows[0].pin) return rows[0].pin;
-    for (let attempt = 0; attempt < 8; attempt++) {
-        const pin = generatePin();
-        try {
-            // updated_at = updated_at: handing out a code is not an edit
-            const [result] = await pool.query(
-                'UPDATE quizzes SET pin = ?, updated_at = updated_at WHERE id = ? AND pin IS NULL',
-                [pin, quizId]
-            );
-            if (result.affectedRows > 0) return pin;
-            const [again] = await pool.query('SELECT pin FROM quizzes WHERE id = ?', [quizId]);
-            return again[0]?.pin || null;
-        } catch (error) {
-            if (error.code !== 'ER_DUP_ENTRY') throw error; // code taken: try another
-        }
-    }
-    return null;
+// Converted quizzes keep their old ID as an alias, so old links and drafts still find them
+let aliasesReady = false;
+async function resolveAlias(id) {
+    if (!aliasesReady) return null;
+    const [rows] = await pool.query('SELECT new_id FROM quiz_id_aliases WHERE old_id = ?', [id]);
+    return rows[0]?.new_id || null;
 }
 const VISIBILITIES = new Set(['public', 'private']);
 
@@ -283,7 +268,7 @@ app.get('/api/me', authenticateToken, async (req, res) => {
         const [userRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
         const row = userRows[0];
         const [quizRows] = await pool.query(`
-            SELECT id, title, visibility, storage_bytes, expires_at, created_at, updated_at, pin
+            SELECT id, title, visibility, storage_bytes, expires_at, created_at, updated_at
             FROM quizzes WHERE owner_id = ?
             ORDER BY updated_at DESC
         `, [req.user.id]);
@@ -330,7 +315,7 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
     try {
         if (req.user && req.user.role === 'admin') {
             const [rows] = await pool.query(`
-                SELECT q.id, q.title, q.visibility, q.created_at, q.pin, u.username AS author
+                SELECT q.id, q.title, q.visibility, q.created_at, u.username AS author
                 FROM quizzes q
                 LEFT JOIN users u ON q.owner_id = u.id
                 ORDER BY q.created_at DESC
@@ -341,7 +326,7 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
         // Public quizzes, system quizzes (owner_id IS NULL), and the caller's own quizzes
         const ownerId = req.user ? req.user.id : -1;
         const [rows] = await pool.query(`
-            SELECT q.id, q.title, q.visibility, q.created_at, q.pin, u.username AS author
+            SELECT q.id, q.title, q.visibility, q.created_at, u.username AS author
             FROM quizzes q
             LEFT JOIN users u ON q.owner_id = u.id
             WHERE (q.visibility = 'public' OR q.owner_id IS NULL OR q.owner_id = ?)
@@ -355,39 +340,32 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
     }
 });
 
-// Opens a quiz by its game code (case-insensitive) or by its ID
+// Opens a quiz by its code (any letter case) or ID; converted old IDs are found through their alias
 app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) => {
     try {
-        const key = String(req.params.id || '').trim();
-        if (!QUIZ_ID_RE.test(key)) return res.status(404).json({ error: 'Quiz not found' });
+        const raw = String(req.params.id || '').trim();
+        if (!QUIZ_ID_RE.test(raw)) return res.status(404).json({ error: 'Quiz not found' });
+        const key = CODE_RE.test(raw.toUpperCase()) ? raw.toUpperCase() : raw;
 
-        const columns = 'SELECT owner_id, visibility, expires_at, quiz_data FROM quizzes';
-        let quiz = null;
-        let byCode = false;
-        if (PIN_RE.test(key.toUpperCase())) {
-            try {
-                const [rows] = await pool.query(`${columns} WHERE pin = ?`, [key.toUpperCase()]);
-                quiz = rows[0] || null;
-                byCode = !!quiz;
-            } catch (error) {
-                console.error('[GET QUIZ] code lookup failed:', error.code || error.message); // e.g. no pin column yet
-            }
+        const select = 'SELECT owner_id, visibility, expires_at, quiz_data FROM quizzes WHERE id = ?';
+        let [rows] = await pool.query(select, [key]);
+        if (!rows[0] && key !== raw) [rows] = await pool.query(select, [raw]); // a custom ID in a case-sensitive database
+        if (!rows[0]) {
+            const target = await resolveAlias(raw);
+            if (target) [rows] = await pool.query(select, [target]);
         }
-        if (!quiz) {
-            const [rows] = await pool.query(`${columns} WHERE id = ?`, [key]);
-            quiz = rows[0] || null;
-        }
+        const quiz = rows[0];
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
         const isOwner = req.user && quiz.owner_id === req.user.id;
         const isAdmin = req.user && req.user.role === 'admin';
         const isExpired = quiz.expires_at && new Date(quiz.expires_at) <= new Date();
         const isListed = quiz.visibility === 'public' || quiz.owner_id === null;
-        const hasCode = byCode || RANDOM_ID_RE.test(key);
+        const isCode = CODE_RE.test(key) || RANDOM_ID_RE.test(raw);
 
-        // Private quizzes open with their game code or generated ID; expired ones only for the owner
-        // and admins. 404 (not 403) so private IDs can't be probed.
-        if (!isOwner && !isAdmin && (isExpired || (!isListed && !hasCode))) {
+        // Private quizzes open with their code; custom IDs (guessable words) only for the owner and
+        // admins, expired quizzes too. 404 (not 403) so private IDs can't be probed.
+        if (!isOwner && !isAdmin && (isExpired || (!isListed && !isCode))) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
         res.json(quiz.quiz_data);
@@ -399,9 +377,14 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
 
 app.delete('/api/quizzes/:id', authenticateToken, async (req, res) => {
     try {
-        const [result] = req.user.role === 'admin'
-            ? await pool.query('DELETE FROM quizzes WHERE id = ?', [req.params.id])
-            : await pool.query('DELETE FROM quizzes WHERE id = ? AND owner_id = ?', [req.params.id, req.user.id]);
+        const remove = (id) => (req.user.role === 'admin'
+            ? pool.query('DELETE FROM quizzes WHERE id = ?', [id])
+            : pool.query('DELETE FROM quizzes WHERE id = ? AND owner_id = ?', [id, req.user.id]));
+        let [result] = await remove(req.params.id);
+        if (result.affectedRows === 0) {
+            const target = await resolveAlias(req.params.id);
+            if (target) [result] = await remove(target);
+        }
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
@@ -433,7 +416,15 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
         }
 
         // Ownership check (IDOR prevention): only the owner or an admin may overwrite
-        const [existing] = await pool.query('SELECT owner_id FROM quizzes WHERE id = ?', [quizData.id]);
+        let [existing] = await pool.query('SELECT owner_id FROM quizzes WHERE id = ?', [quizData.id]);
+        if (existing.length === 0) {
+            // A draft still using an old long ID saves into the quiz that ID was converted to
+            const target = await resolveAlias(quizData.id);
+            if (target) {
+                quizData.id = target;
+                [existing] = await pool.query('SELECT owner_id FROM quizzes WHERE id = ?', [target]);
+            }
+        }
         if (existing.length > 0 && req.user.role !== 'admin' && existing[0].owner_id !== req.user.id) {
             return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.' });
         }
@@ -470,17 +461,10 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             Buffer.byteLength(quizJsonStr, 'utf8'),
             expiresAt
         ]);
-        let pin = null;
-        try {
-            pin = await ensureQuizPin(quizData.id);
-        } catch (error) {
-            console.error('[SAVE QUIZ] could not assign a game code:', error.code || error.message);
-        }
 
         res.json({
             message: 'Quiz saved successfully',
-            id: quizData.id,
-            pin,
+            id: quizData.id, // differs from the sent ID when an old ID was converted: the editor adopts it
             expires_at: expiresAt,
             storage_bytes: Buffer.byteLength(quizJsonStr, 'utf8')
         });
@@ -521,15 +505,41 @@ async function addColumnIfMissing(table, column, definition) {
     console.log(`[SCHEMA] added ${table}.${column}`);
 }
 
-async function addUniqueIndexIfMissing(table, index, column) {
-    const [rows] = await pool.query(
-        `SELECT 1 FROM information_schema.STATISTICS
-         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
-        [table, index]
-    );
-    if (rows.length > 0) return;
-    await pool.query(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${index}\` (\`${column}\`)`);
-    console.log(`[SCHEMA] added index ${table}.${index}`);
+// Quizzes made before short codes have IDs like quiz_3f2a…; give each a code and remember the old ID
+// as an alias. The alias is written first: if converting fails halfway, the old ID still works.
+async function convertLongIds() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS quiz_id_aliases (
+            old_id VARCHAR(50) PRIMARY KEY,
+            new_id VARCHAR(50) NOT NULL
+        )
+    `);
+    aliasesReady = true;
+    const [rows] = await pool.query("SELECT id, quiz_data FROM quizzes WHERE id LIKE 'quiz\\_%'");
+    let converted = 0;
+    for (const row of rows) {
+        if (!RANDOM_ID_RE.test(row.id)) continue;
+        const data = typeof row.quiz_data === 'string' ? JSON.parse(row.quiz_data) : row.quiz_data;
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const code = generateCode();
+            await pool.query(
+                'INSERT INTO quiz_id_aliases (old_id, new_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE new_id = VALUES(new_id)',
+                [row.id, code]
+            );
+            try {
+                // updated_at = updated_at: a new ID is not an edit
+                await pool.query(
+                    'UPDATE quizzes SET id = ?, quiz_data = ?, updated_at = updated_at WHERE id = ?',
+                    [code, JSON.stringify({ ...data, id: code }), row.id]
+                );
+                converted++;
+                break;
+            } catch (error) {
+                if (error.code !== 'ER_DUP_ENTRY') throw error; // code taken: try another
+            }
+        }
+    }
+    if (converted > 0) console.log(`[SCHEMA] gave ${converted} quiz(zes) a short code`);
 }
 
 async function ensureSchema() {
@@ -539,29 +549,17 @@ async function ensureSchema() {
         // Non-fatal: everything treats a missing column as "premium never expires"
         console.error('[SCHEMA] could not update schema:', error.code || error.message);
     }
-    let hasPins = false;
-    try {
-        await addColumnIfMissing('quizzes', 'pin', 'VARCHAR(8) NULL DEFAULT NULL');
-        await addUniqueIndexIfMissing('quizzes', 'quizzes_pin_unique', 'pin');
-        hasPins = true;
-    } catch (error) {
-        console.error('[SCHEMA] could not add game codes:', error.code || error.message);
-    }
     try {
         const added = await seedPremadeQuizzes(pool);
         if (added > 0) console.log(`[SEED] added ${added} premade quiz(zes)`);
     } catch (error) {
         console.error('[SEED] could not seed premade quizzes:', error.code || error.message);
     }
-    // Quizzes saved before game codes existed get one now
-    if (hasPins) {
-        try {
-            const [rows] = await pool.query('SELECT id FROM quizzes WHERE pin IS NULL');
-            for (const row of rows) await ensureQuizPin(row.id);
-            if (rows.length > 0) console.log(`[SCHEMA] gave ${rows.length} quiz(zes) a game code`);
-        } catch (error) {
-            console.error('[SCHEMA] could not assign game codes:', error.code || error.message);
-        }
+    try {
+        await convertLongIds();
+    } catch (error) {
+        // Non-fatal: old long IDs keep working as they are
+        console.error('[SCHEMA] could not convert old quiz IDs:', error.code || error.message);
     }
 }
 

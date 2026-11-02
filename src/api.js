@@ -135,7 +135,7 @@ export async function saveQuizToCloud(quizData) {
         if (res.ok) {
             return { success: true, ...data };
         } else {
-            return { success: false, error: data.error || "Failed to save" };
+            return { success: false, status: res.status, error: data.error || "Failed to save" };
         }
     } catch (e) {
         console.error("Cloud sync failed", e);

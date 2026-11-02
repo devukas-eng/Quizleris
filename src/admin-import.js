@@ -70,9 +70,7 @@ export function parseBulkImportText(text) {
         isTrue: isTrue
       });
     } else if (choices.length > 0) {
-      if (!choices.some(c => c.isCorrect)) {
-        choices[0].isCorrect = true;
-      }
+      // No marked answer stays unmarked: the import preview asks the teacher to pick one
       const correctCount = choices.filter(c => c.isCorrect).length;
       questions.push({
         id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,

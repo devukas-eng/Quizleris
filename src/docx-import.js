@@ -1,12 +1,10 @@
-// Word import: reads a .docx in the browser (no library) and turns it into quiz questions.
-//
-// Understands files exported by this app (options, typed-answer slots, true/false, numeric,
-// written answers and the answer key) and ordinary teacher documents:
-//   1. Question text            (typed numbers or Word's automatic numbering)
-//   A) option   B) option       (typed letters, lettered or bulleted lists, ○ ☐ markers)
-// Correct options can be marked with *, ☑/✓/●, bold, underline or highlight, or come from an
-// answer key section ("Atsakymai" / "Answers": "1. B; C"). Word equations become LaTeX and
-// pictures are kept.
+import { t } from "./lang.js";
+
+// Word import: reads a .docx in the browser (no library) into lines for the shared question
+// parser (quiz-import.js). Keeps paragraph text with Word equations turned into LaTeX,
+// pictures, automatic numbering, and the formatting that can mark a correct option.
+// Old Equation 3.0 / MathType objects can't be read in a browser: they become a visible
+// "[formulė]" placeholder and are counted, so the teacher knows what to retype.
 
 const NS = {
     w: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -14,8 +12,22 @@ const NS = {
     a: "http://schemas.openxmlformats.org/drawingml/2006/main",
     r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     v: "urn:schemas-microsoft-com:vml",
+    o: "urn:schemas-microsoft-com:office:office",
     rel: "http://schemas.openxmlformats.org/package/2006/relationships"
 };
+
+// Symbol-font characters (Insert → Symbol) teachers use as answer boxes
+const SYMBOL_CHARS = {
+    wingdings: { "6C": "●", "6E": "■", "6F": "□", "71": "□", "A1": "○", "A8": "☐", "FB": "✗", "FC": "✓", "FD": "☒", "FE": "☑" },
+    "wingdings 2": { "50": "✓", "52": "☑", "54": "☒", "A3": "□", "A2": "□", "99": "○", "9A": "●" },
+    symbol: { "B7": "•", "D6": "√", "B4": "×", "B1": "±", "A3": "≤", "B3": "≥", "B9": "≠", "BB": "≈", "70": "π" }
+};
+
+function symbolChar(sym) {
+    const font = (attr(sym, "w", "font") || "").toLowerCase();
+    const code = (attr(sym, "w", "char") || "").toUpperCase().replace(/^F0/, "");
+    return SYMBOL_CHARS[font]?.[code] ?? "";
+}
 
 // --- ZIP (stored or deflated entries, read with the browser's DecompressionStream) ---
 
@@ -200,7 +212,7 @@ const IMAGE_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", g
  * Reads the document into a flat list of lines (paragraphs, table cells in reading order):
  * { text, images: [Blob], styleId, list: { fmt, level } | null, bold, underline, highlight, writingLine }
  */
-async function readLines(zip) {
+async function readLines(zip, warnings) {
     const doc = await zip.readXml("word/document.xml");
     if (!doc) throw new Error("not a Word document");
     const rels = new Map();
@@ -213,7 +225,10 @@ async function readLines(zip) {
         if (!target || /^https?:/i.test(target)) return null;
         const path = target.startsWith("/") ? target.slice(1) : `word/${target.replace(/^\.\//, "")}`;
         const type = IMAGE_TYPES[path.split(".").pop().toLowerCase()];
-        if (!type) return null; // EMF/WMF and other Office-only formats can't be shown in a browser
+        if (!type) {
+            warnings.skippedImages++; // EMF/WMF/TIFF can't be shown in a browser
+            return null;
+        }
         const data = await zip.read(path);
         return data ? new Blob([data], { type }) : null;
     };
@@ -236,21 +251,30 @@ async function readLines(zip) {
             for (const el of node.children) {
                 if (isEl(el, "w", "r")) {
                     const rPr = childEl(el, "w", "rPr");
-                    const bold = isOn(childEl(rPr, "w", "b"));
+                    const charStyle = attr(childEl(rPr, "w", "rStyle"), "w", "val") || "";
+                    const bold = isOn(childEl(rPr, "w", "b")) || /strong|bold|paryškint/i.test(charStyle);
                     const underline = isOn(childEl(rPr, "w", "u"));
                     const shd = attr(childEl(rPr, "w", "shd"), "w", "fill");
                     const highlight = isOn(childEl(rPr, "w", "highlight")) || (!!shd && !/^(auto|FFFFFF)$/i.test(shd));
+                    const addText = (text) => {
+                        line.text += text;
+                        const visible = text.replace(/\s/g, "").length;
+                        chars += visible;
+                        if (bold) boldChars += visible;
+                        if (underline) underlineChars += visible;
+                        if (highlight) highlightChars += visible;
+                    };
                     for (const c of el.children) {
-                        if (isEl(c, "w", "t")) {
-                            line.text += c.textContent;
-                            const visible = c.textContent.replace(/\s/g, "").length;
-                            chars += visible;
-                            if (bold) boldChars += visible;
-                            if (underline) underlineChars += visible;
-                            if (highlight) highlightChars += visible;
-                        } else if (isEl(c, "w", "tab")) line.text += " ";
+                        if (isEl(c, "w", "t")) addText(c.textContent);
+                        else if (isEl(c, "w", "sym")) addText(symbolChar(c));
+                        else if (isEl(c, "w", "tab")) line.text += "\t"; // kept so "A)⇥B)⇥C)" splits into options
                         else if (isEl(c, "w", "br") || isEl(c, "w", "cr")) line.text += "\n";
-                        else if (isEl(c, "w", "drawing") || isEl(c, "w", "pict") || isEl(c, "w", "object")) {
+                        else if (isEl(c, "w", "object") && [...c.getElementsByTagNameNS(NS.o, "OLEObject")]
+                            .some(ole => /equation|mathtype|dsmt/i.test(ole.getAttribute("ProgID") || ""))) {
+                            // Old Equation 3.0 / MathType formula: only a WMF picture of it is stored
+                            warnings.skippedEquations++;
+                            line.text += ` ${t("import.formulaPlaceholder")} `;
+                        } else if (isEl(c, "w", "drawing") || isEl(c, "w", "pict") || isEl(c, "w", "object")) {
                             for (const blip of c.getElementsByTagNameNS(NS.a, "blip")) {
                                 const img = await imageFor(attr(blip, "r", "embed"));
                                 if (img) line.images.push(img);
@@ -275,7 +299,7 @@ async function readLines(zip) {
             }
         };
         await walk(p);
-        line.text = line.text.replace(/[ \u00A0]+/g, " ").trim();
+        line.text = line.text.replace(/[ \u00A0]+/g, " ").replace(/^[ \t]+|[ \t]+$/g, "");
         line.bold = chars > 0 && boldChars === chars;
         line.underline = chars > 0 && underlineChars === chars;
         line.highlight = chars > 0 && highlightChars === chars;
@@ -314,289 +338,19 @@ async function readNumbering(zip) {
     return (numId, level) => abstract.get(nums.get(numId))?.get(level) || "decimal";
 }
 
-// --- Lines -> questions ---
-
-const CORRECT_MARKERS = "☑☒✓✔●◉■◼✗✘";
-const OPTION_MARKERS = `○◯☐□◻•▪–-${CORRECT_MARKERS}`;
-const OPTION_RE = new RegExp(`^([${OPTION_MARKERS}*]\\s*)?([A-Ha-h])\\s?[.)]\\s*([\\s\\S]*)$`);
-const QUESTION_RE = /^(?:(\d{1,3})\s*[.)]|(?:Q|Klausimas|Question)\s*\d*\s*[:.)])\s*([\s\S]*)$/i;
-const BLANK_RE = /_{3,}/;
-const KEY_HEADING_RE = /^(atsakymai|atsakym[uų] lapas|answers|answer key|teisingi atsakymai)\b/i;
-const HEADER_RE = /(vardas|pavard|name|klas[eė]|class|data|date)[^_]*_{3,}/i;
-const HINTS = ["(pažymėkite visus teisingus)", "(pasirinkite arba įrašykite)", "(tick every correct answer)", "(choose or write your own)"];
-const TRUE_WORDS = ["taip", "tiesa", "teisinga", "true", "yes"];
-const FALSE_WORDS = ["ne", "netiesa", "neteisinga", "false", "no"];
-
-const newId = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-
-function lineKind(line) {
-    const text = line.text;
-    if (line.list) {
-        const letter = /letter|roman/i.test(line.list.fmt);
-        const bullet = line.list.fmt === "bullet";
-        if (line.list.level > 0 || letter || bullet) return { kind: "option", text, marker: "" };
-        return { kind: "question", text };
-    }
-    const q = QUESTION_RE.exec(text);
-    if (q) return { kind: "question", text: q[2].trim(), number: q[1] ? Number(q[1]) : null };
-    const o = OPTION_RE.exec(text);
-    if (o) return { kind: "option", text: o[3].trim(), marker: (o[1] || "").trim(), letter: o[2].toLowerCase() };
-    return { kind: "text", text };
-}
-
-/** Builds questions from the lines; returns { title, questions, unmarked }. */
-async function linesToQuiz(lines, resizeImage) {
-    const toDataUrl = async (blob, key) => {
-        try {
-            return await resizeImage(blob, key);
-        } catch {
-            return null; // a picture the browser can't decode is skipped
-        }
-    };
-    let title = "";
-    const drafts = [];
-    let current = null;
-    let inKey = false;
-    let listNumber = 0; // Word's automatic numbering of question list items
-    const keyLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!title && !drafts.length && /^(Title|Antrašt|Pavadinimas)/i.test(line.styleId) && line.text) {
-            title = line.text;
-            continue;
-        }
-        const beforeColon = line.text.replace(/:[\s\S]*$/, "").trim();
-        if (KEY_HEADING_RE.test(beforeColon) && beforeColon.length < 30) {
-            inKey = true;
-            continue;
-        }
-        if (inKey) {
-            if (line.text) keyLines.push(line.text);
-            continue;
-        }
-        if (HEADER_RE.test(line.text) && !current) continue;
-
-        const info = lineKind(line);
-        // "A. …" after options that already reached B, C… is not the next option but new text
-        if (info.kind === "option" && info.letter && current?.options.length &&
-            info.letter.charCodeAt(0) - 97 !== current.options.length) {
-            info.kind = "question";
-            info.text = line.text;
-        }
-        if (info.kind === "question") {
-            // The question's own number, so "6. Vilnius" in the answer key finds question 6
-            const number = info.number ?? (line.list ? ++listNumber : null);
-            current = { prompt: info.text, number, images: [], options: [], extra: [], writingLines: 0, line };
-            drafts.push(current);
-            for (const img of line.images) current.images.push(img);
-            continue;
-        }
-        if (!current) {
-            // Text before the first question: the title if none was styled as one
-            if (!title && line.text && !drafts.length && line.text.length < 120) title = line.text;
-            continue;
-        }
-        if (info.kind === "option") {
-            current.options.push({ text: info.text, marker: info.marker, line, images: [...line.images] });
-            continue;
-        }
-        if (!line.text && line.images.length) {
-            (current.options.length ? current.options[current.options.length - 1].images : current.images).push(...line.images);
-            continue;
-        }
-        if (!line.text) {
-            if (line.writingLine) current.writingLines++;
-            continue;
-        }
-        if (current.options.length) {
-            const last = current.options[current.options.length - 1];
-            last.text += `\n${line.text}`;
-        } else {
-            current.extra.push(line.text);
-        }
-    }
-
-    const key = parseAnswerKey(keyLines);
-    const numbered = drafts.some(d => d.number != null);
-    const questions = [];
-    let unmarked = 0;
-    for (let n = 0; n < drafts.length; n++) {
-        const d = drafts[n];
-        // Unnumbered questions ("Q: …") count by position; stray unnumbered text in a numbered test gets no key
-        const answer = numbered ? (d.number != null ? key.get(d.number) : undefined) : key.get(n + 1);
-        let prompt = [d.prompt, ...d.extra.filter(x => !isTypeLine(x))].join("\n");
-        let multi = false;
-        for (const hint of HINTS) {
-            if (prompt.includes(hint)) {
-                prompt = prompt.replace(hint, "").trim();
-                if (hint.includes("visus") || hint.includes("every")) multi = true;
-            }
-        }
-        const q = { id: newId("q"), prompt };
-        const image = d.images[0] && await toDataUrl(d.images[0], "q");
-        if (image) q.image = image;
-        const tf = trueFalseLine(d.extra) ?? trueFalseOptions(d.options);
-
-        if (tf) {
-            q.type = "true-false";
-            const marked = tf.marked;
-            const fromKey = answer ? parseTrueFalse(answer) : null;
-            q.isTrue = fromKey ?? marked ?? true;
-            if (fromKey == null && marked == null) unmarked++;
-        } else if (d.options.length >= 1) {
-            q.type = "multiple-choice";
-            const choices = [];
-            for (let c = 0; c < d.options.length; c++) {
-                const opt = d.options[c];
-                const id = String.fromCharCode(97 + c);
-                const typed = !opt.text.replace(/_{3,}/g, "").trim() && BLANK_RE.test(opt.text);
-                const choice = typed ? { id, kind: "write", accepted: [], isCorrect: false } : { id, text: opt.text, isCorrect: false };
-                if (!typed && opt.images[0]) {
-                    const img = await toDataUrl(opt.images[0], "option");
-                    if (img) choice.image = img;
-                }
-                choices.push(choice);
-            }
-            markCorrect(choices, d.options, answer);
-            if (!choices.some(c => c.isCorrect)) unmarked++;
-            const correct = choices.filter(c => c.isCorrect).length;
-            q.allowMultipleAnswers = multi || correct > 1 || d.options.some(o => /[☐□◻]/.test(o.marker));
-            q.choices = choices;
-        } else if (d.extra.some(x => /^(sprendimas|solution)\s*:?$/i.test(x.trim()))) {
-            q.type = "image-upload";
-        } else if (/(atsakymas|answer)\s*:?\s*_{3,}/i.test(d.extra.join(" "))) {
-            q.type = "numeric";
-            const num = answer && parseNumberAnswer(answer);
-            q.correctAnswerNumber = num ? num.value : NaN;
-            q.toleranceValue = num ? num.tolerance : 0;
-            q.toleranceType = "absolute";
-            if (!num) unmarked++;
-        } else if (BLANK_RE.test(prompt)) {
-            q.type = "fill-blank";
-            q.prompt = prompt.replace(/_{3,}/g, "___"); // the editor's blank marker
-            q.blankAnswers = answer ? answer.split(/\s*;\s*/).filter(Boolean) : [];
-            if (!answer) unmarked++;
-        } else {
-            q.type = "text";
-            q.isLongAnswer = d.writingLines > 3;
-            q.expectedKeywords = [];
-        }
-        questions.push(q);
-    }
-    return { title, questions, unmarked };
-}
-
-// Lines our export adds under a question that describe its type rather than its text
-function isTypeLine(text) {
-    return /^(atsakymas|answer|sprendimas|solution)\s*:?\s*_*$/i.test(text.trim()) || trueFalseLine([text]) != null;
-}
-
-function trueFalseLine(texts) {
-    for (const text of texts) {
-        const words = text.toLowerCase().replace(/[○◯☐□◻☑☒✓✔●◉■◼*]/g, " ").split(/[\s/|,]+/).filter(Boolean);
-        const hasTrue = words.some(w => TRUE_WORDS.includes(w));
-        const hasFalse = words.some(w => FALSE_WORDS.includes(w));
-        if (hasTrue && hasFalse && words.length <= 4) {
-            // ☑ Taip ☐ Ne: the checked box tells the answer
-            const m = new RegExp(`[${CORRECT_MARKERS}]\\s*(\\S+)`).exec(text);
-            return { marked: m ? TRUE_WORDS.includes(m[1].toLowerCase()) : null };
-        }
-    }
-    return null;
-}
-
-function trueFalseOptions(options) {
-    if (options.length !== 2) return null;
-    const words = options.map(o => o.text.toLowerCase().replace(/[.!]$/, ""));
-    const t = words.findIndex(w => TRUE_WORDS.includes(w));
-    const f = words.findIndex(w => FALSE_WORDS.includes(w));
-    if (t < 0 || f < 0) return null;
-    const marked = options.map(isMarked);
-    return { marked: marked[t] && !marked[f] ? true : marked[f] && !marked[t] ? false : null };
-}
-
-const isMarked = (opt) => /^\*|\*$/.test(opt.text) || (!!opt.marker && (opt.marker === "*" || CORRECT_MARKERS.includes(opt.marker)));
-
-function markCorrect(choices, options, answer) {
-    options.forEach((opt, i) => {
-        if (/^\*\s*|\s*\*$/.test(opt.text) && choices[i].text !== undefined) choices[i].text = choices[i].text.replace(/^\*\s*|\s*\*$/g, "");
-    });
-    if (answer) {
-        // "B, D" / "B; D", or "B) text; D) text", or "C) ats1 / ats2" for a typed slot
-        const lettersOnly = /^[A-Ha-h](?:\s*[,;]\s*[A-Ha-h]|\s+[A-Ha-h])*\.?$/.test(answer.trim());
-        const parts = lettersOnly ? answer.match(/[A-Ha-h]/g) : answer.split(/\s*;\s*/);
-        for (const part of parts) {
-            const m = /^([A-Ha-h])(?:\)|$|\s*[.)]\s*)([\s\S]*)$/.exec(part.trim());
-            if (!m) continue;
-            const choice = choices[m[1].toLowerCase().charCodeAt(0) - 97];
-            if (!choice) continue;
-            choice.isCorrect = true;
-            if (choice.kind === "write" && m[2].trim()) choice.accepted = m[2].trim().split(/\s*\/\s*/).filter(Boolean);
-        }
-        // A key that names the answer instead of its letter: "1. Vilnius"
-        if (!choices.some(c => c.isCorrect)) {
-            const wanted = answer.trim().toLowerCase();
-            choices.forEach(c => { if (c.text && c.text.trim().toLowerCase() === wanted) c.isCorrect = true; });
-        }
-        if (choices.some(c => c.isCorrect)) return;
-    }
-    const byMarker = options.map(isMarked);
-    if (byMarker.some(Boolean)) {
-        byMarker.forEach((on, i) => { if (on) choices[i].isCorrect = true; });
-        return;
-    }
-    // Formatting counts only when it singles some options out (not when every option is bold)
-    for (const prop of ["highlight", "bold", "underline"]) {
-        const flags = options.map(o => !!o.line[prop]);
-        if (flags.some(Boolean) && !flags.every(Boolean)) {
-            flags.forEach((on, i) => { if (on) choices[i].isCorrect = true; });
-            return;
-        }
-    }
-}
-
-function parseAnswerKey(lines) {
-    const key = new Map();
-    let last = 0;
-    for (const text of lines.join("\n").split("\n")) {
-        const m = /^\s*(\d{1,3})\s*[.)]\s*(.*)$/.exec(text);
-        if (m) {
-            last = Number(m[1]);
-            key.set(last, m[2].trim());
-        } else if (last && text.trim()) {
-            key.set(last, `${key.get(last)} ${text.trim()}`.trim());
-        }
-    }
-    return key;
-}
-
-function parseTrueFalse(text) {
-    const word = text.toLowerCase().replace(/[^a-ząčęėįšųūž]/g, "");
-    if (TRUE_WORDS.includes(word)) return true;
-    if (FALSE_WORDS.includes(word)) return false;
-    return null;
-}
-
-function parseNumberAnswer(text) {
-    const m = /(-?\d+(?:[.,]\d+)?)\s*(?:±\s*(\d+(?:[.,]\d+)?))?/.exec(text);
-    if (!m) return null;
-    const num = (s) => parseFloat(String(s).replace(",", "."));
-    return { value: num(m[1]), tolerance: m[2] ? num(m[2]) : 0 };
-}
+// --- Entry point ---
 
 /**
- * Reads a .docx file into questions.
- * @param {File|Blob} file
- * @param {{ resizeImage: (blob: Blob, key: "q"|"option") => Promise<string> }} options
- * @returns {Promise<{ title: string, questions: object[], unmarked: number }>}
+ * Reads a .docx file into lines for linesToQuiz (quiz-import.js).
+ * @returns {Promise<{ lines: object[], warnings: { skippedEquations: number, skippedImages: number } }>}
  */
-export async function importQuizFromDocx(file, { resizeImage }) {
+export async function readDocx(file) {
     if (typeof DecompressionStream === "undefined") throw new Error("This browser cannot read .docx files");
     const zip = await openZip(await file.arrayBuffer());
-    const lines = await readLines(zip);
-    return linesToQuiz(lines, resizeImage);
+    const warnings = { skippedEquations: 0, skippedImages: 0 };
+    const lines = await readLines(zip, warnings);
+    return { lines, warnings };
 }
 
 // Exposed for tests
-export const _internal = { ommlToLatex, lineKind, parseAnswerKey, linesToQuiz };
+export const _internal = { ommlToLatex };

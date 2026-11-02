@@ -4,7 +4,8 @@ import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, lo
 import { isAdminAccessAllowed, promptAdminPassword } from "./auth.js";
 import { t, updatePageLanguage } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
-import { parseBulkImportText } from "./admin-import.js";
+import { openImportDialog } from "./import-dialog.js";
+import { initGlide } from "./glide.js";
 import { setupDragAndDrop } from "./admin-dragdrop.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
@@ -17,6 +18,15 @@ import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "
 
 // Private quizzes on the free plan are deleted after this many days (mirrors server PRIVATE_EXPIRY_DAYS)
 const FREE_PRIVATE_EXPIRY_DAYS = 30;
+
+// Line icons for the question card buttons; they stay when the labels slide away on narrow cards
+const cardIcon = (paths) => `<svg class="btn-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const CARD_ICONS = {
+  remove: cardIcon('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
+  up: cardIcon('<path d="M12 19V5M5 12l7-7 7 7"/>'),
+  down: cardIcon('<path d="M12 5v14M19 12l-7 7-7-7"/>'),
+  copy: cardIcon('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>')
+};
 
 let adminMode = false;
 let adminQuiz = null;
@@ -46,12 +56,6 @@ let adminShuffleQuestions;
 let adminShuffleAnswers;
 let btnShuffleQuestions;
 let btnShuffleAnswers;
-let adminBulkImportBtn;
-let bulkImportOverlay;
-let bulkImportCloseBtn;
-let bulkImportCancelBtn;
-let bulkImportSubmitBtn;
-let bulkImportTextarea;
 
 // QoL Editor Features
 let undoStack = [];
@@ -128,12 +132,6 @@ function setupAdmin(callbacks) {
   adminShuffleAnswers = getRequiredElement("admin-shuffle-answers");
   btnShuffleQuestions = getRequiredElement("btn-shuffle-questions");
   btnShuffleAnswers = getRequiredElement("btn-shuffle-answers");
-  adminBulkImportBtn = getRequiredElement("admin-bulk-import-btn");
-  bulkImportOverlay = getRequiredElement("bulk-import-modal-overlay");
-  bulkImportCloseBtn = getRequiredElement("bulk-import-close-btn");
-  bulkImportCancelBtn = getRequiredElement("bulk-import-cancel-btn");
-  bulkImportSubmitBtn = getRequiredElement("bulk-import-submit-btn");
-  bulkImportTextarea = getRequiredElement("bulk-import-textarea");
 
   // QoL references
   
@@ -375,12 +373,12 @@ function renderAdminForm() {
       `;
     } else {
       qDiv.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="admin-q-head" data-glide>
+          <div class="admin-q-head-title">
             <div class="drag-handle" title="${t('admin.dragToReorder') || 'Drag to reorder'}">⋮⋮</div>
-            <h3 style="margin:0;">${t("admin.question")} ${qIdx + 1}</h3>
+            <h3>${t("admin.question")} ${qIdx + 1}</h3>
           </div>
-          <div style="display: flex; gap: 12px; align-items: center;">
+          <div class="admin-q-head-tools">
             ${typeTriggerHtml(q, qIdx)}
             <span class="card-collapse-toggle" data-qidx="${qIdx}" title="Collapse" style="font-size: 1.1rem; padding: 4px 8px;">▲</span>
           </div>
@@ -410,11 +408,11 @@ function renderAdminForm() {
           ${renderQuestionConfig(q, qIdx)}
         </div>
 
-        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; width: 100%;">
-          <button class="admin-remove-question-btn btn btn-danger" data-qidx="${qIdx}" style="margin-right: auto;">${t("admin.removeQuestion")}</button>
-          <button class="admin-move-up-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === 0 ? "disabled" : ""} style="padding: 6px 12px; font-size: 0.85rem;">⬆️ ${t('admin.moveUp') || 'Up'}</button>
-          <button class="admin-move-down-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === adminQuiz.questions.length - 1 ? "disabled" : ""} style="padding: 6px 12px; font-size: 0.85rem;">⬇️ ${t('admin.moveDown') || 'Down'}</button>
-          <button class="admin-duplicate-question-btn btn btn-secondary" data-qidx="${qIdx}" style="padding: 6px 12px; font-size: 0.85rem; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.3);">📄 ${t('admin.duplicate') || 'Clone'}</button>
+        <div class="admin-q-foot" data-glide>
+          <button class="admin-remove-question-btn btn btn-danger" data-qidx="${qIdx}" title="${t("admin.removeQuestion")}">${CARD_ICONS.remove}<span class="btn-label">${t("admin.removeQuestion")}</span></button>
+          <button class="admin-move-up-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === 0 ? "disabled" : ""} title="${t('admin.moveUp')}">${CARD_ICONS.up}<span class="btn-label">${t('admin.moveUp')}</span></button>
+          <button class="admin-move-down-btn btn btn-secondary" data-qidx="${qIdx}" ${qIdx === adminQuiz.questions.length - 1 ? "disabled" : ""} title="${t('admin.moveDown')}">${CARD_ICONS.down}<span class="btn-label">${t('admin.moveDown')}</span></button>
+          <button class="admin-duplicate-question-btn btn btn-secondary" data-qidx="${qIdx}" title="${t('admin.duplicate')}">${CARD_ICONS.copy}<span class="btn-label">${t('admin.duplicate')}</span></button>
         </div>
       `;
     }
@@ -1090,12 +1088,19 @@ async function saveAdminQuiz() {
     return;
   }
   adminSaveBtn.disabled = true;
-  const saveResult = await saveQuizToStorage(adminQuiz);
+  let saveResult = await saveQuizToStorage(adminQuiz);
+  // A new quiz whose random code is already someone else's (409) just gets another code
+  for (let attempt = 0; attempt < 3 && saveResult?.status === 409 && !readDraft()?.inCloud; attempt++) {
+    adminQuiz.id = generateQuizId();
+    saveResult = await saveQuizToStorage(adminQuiz);
+  }
   adminSaveBtn.disabled = false;
   if (saveResult && !saveResult.success) {
       await alertDialog(t("admin.saveFailed"), saveResult.error || "");
       return;
   }
+  // An old long ID is converted to a short code by the server: carry on with the code
+  if (saveResult?.id && saveResult.id !== adminQuiz.id) adminQuiz.id = saveResult.id;
   // The draft stays as the working copy; it now matches the cloud
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = null;
@@ -1117,7 +1122,9 @@ async function saveAdminQuiz() {
           qCount: adminQuiz.questions.length,
           shareCode: shareCode
       });
-      localStorage.setItem("quizleris_community_quizzes", JSON.stringify(community));
+      try {
+          localStorage.setItem("quizleris_community_quizzes", JSON.stringify(community));
+      } catch (e) { console.error("Could not cache community quizzes:", e); } // storage full; the quiz is saved anyway
   }
 
   let warningHtml = '';
@@ -1136,8 +1143,8 @@ async function saveAdminQuiz() {
   adminShareCode.innerHTML = `
         <div class="admin-notice success">
             <strong>\u2713 ${t("admin.saveSuccess") || "Išsaugota sėkmingai!"}</strong>
-            ${codeChipHtml(saveResult?.pin)}
-            ${linkRowsHtml({ id: adminQuiz.id, pin: saveResult?.pin })}
+            ${codeChipHtml(adminQuiz.id)}
+            ${linkRowsHtml(adminQuiz)}
             <p class="admin-share-note">${t("share.dashboardNote")}</p>
             ${warningHtml}
         </div>`;
@@ -1170,7 +1177,9 @@ const ACTION_BAR_LAYOUTS = [
   { rows: 3, collapse: "new save" }
 ];
 const ACTION_BAR_MOTION = { duration: 340, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
-const ACTION_BAR_SLACK = 12; // spare px needed to go back to a roomier layout, so it never flickers
+// Spare px needed to go back to a roomier layout, so it never flickers (more than a scrollbar,
+// which can appear when the bar gets taller)
+const ACTION_BAR_SLACK = 24;
 
 function setupActionBar() {
   const bar = document.querySelector(".admin-actions-wrap > .admin-actions");
@@ -1260,6 +1269,38 @@ function setupActionBar() {
   refit();
 }
 
+// Questions from the import dialog are added to the open quiz; its title is taken over only
+// while it is still the default one
+function openImport(options) {
+  if (!adminQuiz) adminQuiz = blankQuiz();
+  updateQuizFromDOM();
+  openImportDialog({
+    ...options,
+    // Several files at once is a Premium feature (plan checked with the server)
+    canImportMany: () => (getToken()
+      ? fetchProfile().then(({ user }) => user.role === "admin" || !!user.premium_active)
+      : Promise.resolve(false)),
+    resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900),
+    onImport: (questions, title) => {
+      saveStateForUndo();
+      const firstNew = adminQuiz.questions.length;
+      adminQuiz.questions.push(...questions);
+      const defaultTitles = [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
+      if (firstNew === 0 && title && (!adminQuiz.title?.trim() || defaultTitles.includes(adminQuiz.title.trim()))) adminQuiz.title = title;
+      renderAdminForm();
+      triggerAutoSave();
+      // Bring the first imported question into view; the new ones glow in briefly
+      const items = [...adminQuestionsList.querySelectorAll(".admin-question-item")].slice(firstNew);
+      items[0]?.scrollIntoView({ behavior: "smooth", block: "start" });
+      items.forEach((el, i) => {
+        el.style.setProperty("--i", Math.min(i, 10));
+        el.classList.add("just-imported");
+        setTimeout(() => el.classList.remove("just-imported"), 2400);
+      });
+    }
+  });
+}
+
 // "File" menu: Word printouts and JSON export/import in one place
 function setupFileMenu() {
   setupActionBar();
@@ -1287,39 +1328,8 @@ function setupFileMenu() {
     if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
   });
 
-  // Word import: questions are added to the open quiz (its title is taken over only if it is empty)
-  const docxInput = document.getElementById("admin-docx-import-input");
-  document.getElementById("admin-docx-import-btn")?.addEventListener("click", () => docxInput?.click());
-  docxInput?.addEventListener("change", async () => {
-    const file = docxInput.files?.[0];
-    docxInput.value = "";
-    if (!file) return;
-    if (!adminQuiz) adminQuiz = blankQuiz();
-    updateQuizFromDOM();
-    let result;
-    try {
-      const { importQuizFromDocx } = await import("./docx-import.js");
-      result = await importQuizFromDocx(file, { resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900) });
-    } catch (err) {
-      console.error("Word import failed", err);
-      await alertDialog(t("docxImport.title"), t("docxImport.failed"));
-      return;
-    }
-    if (!result.questions.length) {
-      await alertDialog(t("docxImport.title"), t("docxImport.none"));
-      return;
-    }
-    saveStateForUndo();
-    const wasEmpty = adminQuiz.questions.length === 0;
-    adminQuiz.questions.push(...result.questions);
-    const defaultTitles = [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
-    if (wasEmpty && result.title && (!adminQuiz.title?.trim() || defaultTitles.includes(adminQuiz.title.trim()))) adminQuiz.title = result.title;
-    renderAdminForm();
-    triggerAutoSave();
-    let message = t("docxImport.done").replace("{n}", result.questions.length);
-    if (result.unmarked) message += ` ${t("docxImport.unmarked").replace("{n}", result.unmarked)}`;
-    await alertDialog(t("docxImport.title"), message);
-  });
+  // Word / PDF import (File menu) opens the import dialog straight at the file picker
+  document.getElementById("admin-docx-import-btn")?.addEventListener("click", () => openImport({ pickFile: true }));
 
   // Print preview: layout changes (order, image sizes, page breaks…) are saved with the quiz
   const printBtn = document.getElementById("admin-docx-btn");
@@ -1404,6 +1414,7 @@ function setupAdminEventsInternal() {
     reader.readAsText(file);
   });
   setupFileMenu();
+  initGlide(adminPanel); // buttons and fields glide to their new rows while the editor is resized
 
   // Start a fresh quiz (the draft is always saved, so closing the editor loses nothing)
   adminNewQuizBtn.addEventListener("click", async () => {
@@ -1425,30 +1436,15 @@ function setupAdminEventsInternal() {
     adminQuizTitle.select();
   });
 
-  // Bulk Import Events
-  adminBulkImportBtn.addEventListener("click", () => {
-    if (!adminQuiz) adminQuiz = { id: generateQuizId(), title: "New Quiz", questions: [] };
-    bulkImportTextarea.value = "";
-    bulkImportOverlay.style.display = "flex";
-    bulkImportTextarea.focus();
+  // Dropping a Word/PDF/text file on the editor opens the import dialog with it
+  adminPanel?.addEventListener("dragover", (e) => {
+    if ([...(e.dataTransfer?.types || [])].includes("Files")) e.preventDefault();
   });
-  const hideBulkImport = () => {
-    bulkImportOverlay.style.display = "none";
-  };
-  bulkImportCloseBtn.addEventListener("click", hideBulkImport);
-  bulkImportCancelBtn.addEventListener("click", hideBulkImport);
-  bulkImportSubmitBtn.addEventListener("click", () => {
-    const text = bulkImportTextarea.value;
-    const parsed = parseBulkImportText(text);
-    if (parsed.length > 0) {
-      saveStateForUndo();
-      updateQuizFromDOM();
-      adminQuiz.questions.push(...parsed);
-      renderAdminForm();
-      hideBulkImport();
-    } else {
-      alert("Neradome jokių klausimų. Patikrinkite formatą.");
-    }
+  adminPanel?.addEventListener("drop", (e) => {
+    const files = [...(e.dataTransfer?.files || [])].filter(f => /\.(docx|pdf|txt|doc)$/i.test(f.name));
+    if (!files.length) return;
+    e.preventDefault();
+    openImport({ files });
   });
   document.getElementById("admin-btn-back")?.addEventListener("click", () => {
     if (adminMode) toggleAdminMode();
@@ -1492,7 +1488,6 @@ function setupAdminEventsInternal() {
         id === "admin-docx-btn" ||
         id === "admin-new-quiz" ||
         id === "admin-btn-back" || 
-        id === "admin-bulk-import-btn" || 
         id === "bulk-import-close-btn" || 
         id === "bulk-import-cancel-btn" || 
         id === "admin-import-btn" ||
