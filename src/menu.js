@@ -56,7 +56,7 @@ export function renderStartMenu() {
 
             <!-- PIN / Quiz ID entry -->
             <div class="pin-entry-bar">
-                <input id="hero-pin-input" type="text" placeholder="${t('menu.pinPlaceholder')}" autocomplete="off" spellcheck="false" />
+                <input id="hero-pin-input" type="text" placeholder="${t('menu.pinPlaceholder')}" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60" />
                 <button class="pin-go-btn" id="hero-pin-go">${t('menu.pinGo')}</button>
             </div>
             <p class="hero-pin-hint">${t('menu.pinHint')}</p>
@@ -68,7 +68,8 @@ export function renderStartMenu() {
     const pinGoBtn = document.getElementById('hero-pin-go');
     if (pinGoBtn && pinInput) {
         const doStart = () => {
-            const val = pinInput.value.trim();
+            // Codes may be typed with spaces ("K7M 3QX"); IDs never contain them
+            const val = pinInput.value.trim().replace(/\s+/g, "");
             if (val) {
                 isStudentMenuOpen = true;
                 startStudentQuiz('', val);
@@ -281,7 +282,9 @@ async function startStudentQuiz(name, quizId) {
     let quiz = await loadQuizFromStorage(quizId);
     
     if (!quiz) {
-        alert("Quiz not found with that ID.");
+        const { alertDialog } = await import("./dialog.js");
+        await alertDialog(t("menu.quizNotFoundTitle"), t("menu.quizNotFound"));
+        document.getElementById("hero-pin-input")?.focus();
         return;
     }
     // Save student name to session/local for results later

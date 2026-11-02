@@ -190,11 +190,11 @@
             <button id="admin-add-question" class="btn" data-i18n="admin.addQuestion">+ Add Question</button>
             <button id="admin-bulk-import-btn" class="btn" data-i18n="admin.bulkImport">📝 Bulk Import</button>
           </div>
+          <div class="admin-actions-wrap">
           <div class="admin-actions">
-            <button id="admin-save" class="btn btn-primary"><span class="label-long" data-i18n="admin.saveQuiz">Save Quiz</span><span class="label-short" data-i18n="admin.saveQuizShort">Save</span></button>
+            <button id="admin-save" class="btn btn-primary"><span data-i18n="admin.saveQuizShort">Save</span><span class="label-extra" data-for="save" data-i18n="admin.saveQuizExtra">quiz</span></button>
             <button id="admin-preview" class="btn btn-secondary"
               data-i18n="admin.preview">Peržiūra</button>
-            <span class="admin-actions-break" aria-hidden="true"></span>
             <div class="admin-file-menu-wrap">
               <button id="admin-file-btn" class="btn btn-secondary" type="button" aria-haspopup="menu" aria-expanded="false">
                 <span data-i18n="admin.fileMenu">File</span> <span aria-hidden="true">▾</span>
@@ -202,8 +202,11 @@
               <div id="admin-file-menu" class="admin-file-menu" role="menu" hidden>
                 <button type="button" role="menuitem" id="admin-export">⬇ <span data-i18n="admin.exportJson">Export JSON</span></button>
                 <button type="button" role="menuitem" id="admin-import-btn">⬆ <span data-i18n="admin.importJson">Import JSON</span></button>
+                <div class="admin-file-menu-sep" role="separator"></div>
+                <button type="button" role="menuitem" id="admin-docx-import-btn">📄 <span data-i18n="admin.importDocx">Import from Word (.docx)…</span></button>
               </div>
               <input type="file" id="admin-import-input" accept=".json" style="display: none;" />
+              <input type="file" id="admin-docx-import-input" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display: none;" />
             </div>
             <button id="admin-docx-btn" class="btn btn-secondary btn-icon admin-print-btn" type="button" title="Print / Word (.docx)" aria-label="Print / Word (.docx)">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -213,7 +216,8 @@
                 <circle cx="17.5" cy="11" r="0.6" fill="currentColor" />
               </svg>
             </button>
-            <button id="admin-new-quiz" class="btn"><span class="label-long" data-i18n="admin.newQuizBtn">+ New quiz</span><span class="label-short" data-i18n="admin.newQuizShort">+ New</span></button>
+            <button id="admin-new-quiz" class="btn"><span data-i18n="admin.newQuizShort">+ New</span><span class="label-extra" data-for="new" data-i18n="admin.newQuizExtra">quiz</span></button>
+          </div>
           </div>
           <div id="admin-share-code" class="admin-share" style="display: none;"></div>
         </div>
@@ -229,7 +233,7 @@
     <!-- Apple-like Theme Picker Button -->
     <button id="theme-btn" title="Select Theme">
       <span class="theme-btn-bubble" id="theme-btn-bubble"></span>
-      <span id="theme-btn-label">Šviesus Fonas</span>
+      <span id="theme-btn-label">Šviesus fonas</span>
     </button>
     <!-- Dual Language Flag Pills -->
     <div class="lang-pills">
@@ -328,19 +332,19 @@
   <div id="theme-picker-popup" role="listbox" aria-label="Select Theme">
     <div class="theme-picker-label">TEMA</div>
     <div class="theme-picker-item" data-theme="emerald" role="option">
-      <div><div class="tp-name">Šviesus Fonas</div><div class="tp-subtitle">Light Classic</div></div>
+      <div><div class="tp-name">Šviesus fonas</div><div class="tp-subtitle">Light Classic</div></div>
       <span class="tp-bubble" style="background: linear-gradient(135deg, #1B9B7E 50%, #ffffff 50%);"></span>
     </div>
     <div class="theme-picker-item" data-theme="slate-dark" role="option">
-      <div><div class="tp-name">Tamsus Fonas</div><div class="tp-subtitle">Slate / Sky</div></div>
+      <div><div class="tp-name">Tamsus fonas</div><div class="tp-subtitle">Slate / Sky</div></div>
       <span class="tp-bubble" style="background: linear-gradient(135deg, #38bdf8 50%, #0f172a 50%);"></span>
     </div>
     <div class="theme-picker-item" data-theme="solar" role="option">
-      <div><div class="tp-name">Tamsus Fonas²</div><div class="tp-subtitle">Solar Flare</div></div>
+      <div><div class="tp-name">Tamsus fonas²</div><div class="tp-subtitle">Solar Flare</div></div>
       <span class="tp-bubble" style="background: linear-gradient(135deg, #ff9100 50%, #120e0a 50%);"></span>
     </div>
     <div class="theme-picker-item" data-theme="cyberpunk" role="option">
-      <div><div class="tp-name">Tamsus Fonas³</div><div class="tp-subtitle">Cyber Midnight</div></div>
+      <div><div class="tp-name">Tamsus fonas³</div><div class="tp-subtitle">Cyber Midnight</div></div>
       <span class="tp-bubble" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></span>
     </div>
   </div>

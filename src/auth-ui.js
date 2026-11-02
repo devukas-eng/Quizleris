@@ -1,4 +1,5 @@
 import { login, register, getToken, logout } from "./api.js";
+import { t } from "./lang.js";
 
 let authModal = null;
 let currentUser = null;
@@ -10,7 +11,7 @@ export function initAuthUI() {
             <div class="modal-content glass-card" style="max-width: 400px; width: 100%; padding: 30px; text-align: center;">
                 <h2 id="auth-title" style="margin-bottom: 20px; color: var(--text);">Prisijungti</h2>
                 <div id="auth-error-msg" style="color: #ff4d4d; background: rgba(255, 77, 77, 0.1); padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; font-size: 0.9em;"></div>
-                <input type="text" id="auth-username" class="input-field" placeholder="Vartotojo vardas" style="width: 100%; margin-bottom: 10px;" />
+                <input type="text" id="auth-username" class="input-field" placeholder="Naudotojo vardas" style="width: 100%; margin-bottom: 10px;" />
                 <input type="email" id="auth-email" class="input-field" placeholder="El. paštas (tik registracijai)" style="width: 100%; margin-bottom: 10px; display: none;" />
                 <input type="password" id="auth-password" class="input-field" placeholder="Slaptažodis" style="width: 100%; margin-bottom: 20px;" />
                 <button id="auth-submit-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Prisijungti</button>
@@ -64,7 +65,7 @@ export function initAuthUI() {
         
         try {
             document.getElementById("auth-submit-btn").disabled = true;
-            document.getElementById("auth-submit-btn").textContent = "Kraunama...";
+            document.getElementById("auth-submit-btn").textContent = "Įkeliama…";
             
             if (isRegistering) {
                 await register(username, email, pass);
@@ -130,7 +131,7 @@ function updateMenuAuthButton() {
     if (!btn) return;
     
     if (currentUser) {
-        btn.textContent = currentUser.role === "admin" ? "Admin Dashboard" : "Teacher Dashboard";
+        btn.textContent = currentUser.role === "admin" ? t("profile.adminTitle") : t("profile.teacherTitle");
         btn.onclick = () => {
             // Trigger Dashboard Open Event
             document.dispatchEvent(new window.CustomEvent("open-dashboard"));

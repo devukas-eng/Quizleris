@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 // --- CONFIG VALIDATION (fail fast instead of running insecurely) ---
 // These values were committed to git history and must never be accepted again.
@@ -74,6 +75,17 @@ const apiLimiter = rateLimit({
     message: { error: 'School/Network limit reached. Please wait a few minutes.' }
 });
 app.use('/api/', apiLimiter);
+
+// Wrong quiz codes/IDs are counted separately so game codes can't be guessed by brute force;
+// successful lookups (a class joining) don't count
+const quizLookupLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 120,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many wrong quiz codes. Please wait a few minutes.' }
+});
 
 // --- AUTH HELPERS ---
 function readToken(req) {
@@ -153,6 +165,41 @@ const isPremium = (user) => user.role === 'admin' || hasActivePremium(user);
 const USERNAME_RE = /^[A-Za-z0-9_.-]{3,50}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const QUIZ_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
+
+// Game codes: six characters students type to open a quiz. Private quizzes stay unlisted but
+// open for anyone with the code, just as with the share link. No 0/O/1/I/L to avoid mix-ups.
+const PIN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const PIN_LENGTH = 6;
+const PIN_RE = new RegExp(`^[${PIN_ALPHABET}]{${PIN_LENGTH}}$`);
+// Generated IDs (quiz_ + 32 random hex) are as unguessable as the share link, so they open private quizzes too
+const RANDOM_ID_RE = /^quiz_[0-9a-f]{32}$/;
+
+function generatePin() {
+    return Array.from(crypto.randomBytes(PIN_LENGTH), b => PIN_ALPHABET[b % PIN_ALPHABET.length]).join('');
+}
+
+/** Gives a quiz a game code if it has none yet; returns the code (null if the quiz is missing). */
+async function ensureQuizPin(quizId) {
+    const [rows] = await pool.query('SELECT pin FROM quizzes WHERE id = ?', [quizId]);
+    if (!rows[0]) return null;
+    if (rows[0].pin) return rows[0].pin;
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const pin = generatePin();
+        try {
+            // updated_at = updated_at: handing out a code is not an edit
+            const [result] = await pool.query(
+                'UPDATE quizzes SET pin = ?, updated_at = updated_at WHERE id = ? AND pin IS NULL',
+                [pin, quizId]
+            );
+            if (result.affectedRows > 0) return pin;
+            const [again] = await pool.query('SELECT pin FROM quizzes WHERE id = ?', [quizId]);
+            return again[0]?.pin || null;
+        } catch (error) {
+            if (error.code !== 'ER_DUP_ENTRY') throw error; // code taken: try another
+        }
+    }
+    return null;
+}
 const VISIBILITIES = new Set(['public', 'private']);
 
 // --- AUTH ROUTES ---
@@ -236,7 +283,7 @@ app.get('/api/me', authenticateToken, async (req, res) => {
         const [userRows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
         const row = userRows[0];
         const [quizRows] = await pool.query(`
-            SELECT id, title, visibility, storage_bytes, expires_at, created_at, updated_at
+            SELECT id, title, visibility, storage_bytes, expires_at, created_at, updated_at, pin
             FROM quizzes WHERE owner_id = ?
             ORDER BY updated_at DESC
         `, [req.user.id]);
@@ -283,7 +330,7 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
     try {
         if (req.user && req.user.role === 'admin') {
             const [rows] = await pool.query(`
-                SELECT q.id, q.title, q.visibility, q.created_at, u.username AS author
+                SELECT q.id, q.title, q.visibility, q.created_at, q.pin, u.username AS author
                 FROM quizzes q
                 LEFT JOIN users u ON q.owner_id = u.id
                 ORDER BY q.created_at DESC
@@ -294,7 +341,7 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
         // Public quizzes, system quizzes (owner_id IS NULL), and the caller's own quizzes
         const ownerId = req.user ? req.user.id : -1;
         const [rows] = await pool.query(`
-            SELECT q.id, q.title, q.visibility, q.created_at, u.username AS author
+            SELECT q.id, q.title, q.visibility, q.created_at, q.pin, u.username AS author
             FROM quizzes q
             LEFT JOIN users u ON q.owner_id = u.id
             WHERE (q.visibility = 'public' OR q.owner_id IS NULL OR q.owner_id = ?)
@@ -308,25 +355,39 @@ app.get('/api/quizzes', optionalAuth, async (req, res) => {
     }
 });
 
-app.get('/api/quizzes/:id', optionalAuth, async (req, res) => {
+// Opens a quiz by its game code (case-insensitive) or by its ID
+app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) => {
     try {
-        if (!QUIZ_ID_RE.test(req.params.id)) return res.status(404).json({ error: 'Quiz not found' });
+        const key = String(req.params.id || '').trim();
+        if (!QUIZ_ID_RE.test(key)) return res.status(404).json({ error: 'Quiz not found' });
 
-        const [rows] = await pool.query(
-            'SELECT owner_id, visibility, expires_at, quiz_data FROM quizzes WHERE id = ?',
-            [req.params.id]
-        );
-        const quiz = rows[0];
+        const columns = 'SELECT owner_id, visibility, expires_at, quiz_data FROM quizzes';
+        let quiz = null;
+        let byCode = false;
+        if (PIN_RE.test(key.toUpperCase())) {
+            try {
+                const [rows] = await pool.query(`${columns} WHERE pin = ?`, [key.toUpperCase()]);
+                quiz = rows[0] || null;
+                byCode = !!quiz;
+            } catch (error) {
+                console.error('[GET QUIZ] code lookup failed:', error.code || error.message); // e.g. no pin column yet
+            }
+        }
+        if (!quiz) {
+            const [rows] = await pool.query(`${columns} WHERE id = ?`, [key]);
+            quiz = rows[0] || null;
+        }
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
         const isOwner = req.user && quiz.owner_id === req.user.id;
         const isAdmin = req.user && req.user.role === 'admin';
         const isExpired = quiz.expires_at && new Date(quiz.expires_at) <= new Date();
         const isListed = quiz.visibility === 'public' || quiz.owner_id === null;
+        const hasCode = byCode || RANDOM_ID_RE.test(key);
 
-        // Private or expired quizzes are only visible to their owner and admins.
-        // 404 (not 403) so private IDs can't be probed.
-        if (!isOwner && !isAdmin && (!isListed || isExpired)) {
+        // Private quizzes open with their game code or generated ID; expired ones only for the owner
+        // and admins. 404 (not 403) so private IDs can't be probed.
+        if (!isOwner && !isAdmin && (isExpired || (!isListed && !hasCode))) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
         res.json(quiz.quiz_data);
@@ -409,10 +470,17 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             Buffer.byteLength(quizJsonStr, 'utf8'),
             expiresAt
         ]);
+        let pin = null;
+        try {
+            pin = await ensureQuizPin(quizData.id);
+        } catch (error) {
+            console.error('[SAVE QUIZ] could not assign a game code:', error.code || error.message);
+        }
 
         res.json({
             message: 'Quiz saved successfully',
             id: quizData.id,
+            pin,
             expires_at: expiresAt,
             storage_bytes: Buffer.byteLength(quizJsonStr, 'utf8')
         });
@@ -453,6 +521,17 @@ async function addColumnIfMissing(table, column, definition) {
     console.log(`[SCHEMA] added ${table}.${column}`);
 }
 
+async function addUniqueIndexIfMissing(table, index, column) {
+    const [rows] = await pool.query(
+        `SELECT 1 FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+        [table, index]
+    );
+    if (rows.length > 0) return;
+    await pool.query(`ALTER TABLE \`${table}\` ADD UNIQUE INDEX \`${index}\` (\`${column}\`)`);
+    console.log(`[SCHEMA] added index ${table}.${index}`);
+}
+
 async function ensureSchema() {
     try {
         await addColumnIfMissing('users', 'subscription_expires_at', 'DATETIME NULL DEFAULT NULL');
@@ -460,11 +539,29 @@ async function ensureSchema() {
         // Non-fatal: everything treats a missing column as "premium never expires"
         console.error('[SCHEMA] could not update schema:', error.code || error.message);
     }
+    let hasPins = false;
+    try {
+        await addColumnIfMissing('quizzes', 'pin', 'VARCHAR(8) NULL DEFAULT NULL');
+        await addUniqueIndexIfMissing('quizzes', 'quizzes_pin_unique', 'pin');
+        hasPins = true;
+    } catch (error) {
+        console.error('[SCHEMA] could not add game codes:', error.code || error.message);
+    }
     try {
         const added = await seedPremadeQuizzes(pool);
         if (added > 0) console.log(`[SEED] added ${added} premade quiz(zes)`);
     } catch (error) {
         console.error('[SEED] could not seed premade quizzes:', error.code || error.message);
+    }
+    // Quizzes saved before game codes existed get one now
+    if (hasPins) {
+        try {
+            const [rows] = await pool.query('SELECT id FROM quizzes WHERE pin IS NULL');
+            for (const row of rows) await ensureQuizPin(row.id);
+            if (rows.length > 0) console.log(`[SCHEMA] gave ${rows.length} quiz(zes) a game code`);
+        } catch (error) {
+            console.error('[SCHEMA] could not assign game codes:', error.code || error.message);
+        }
     }
 }
 

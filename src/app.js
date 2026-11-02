@@ -39,10 +39,10 @@ async function initApp() {
 
         // ── Apple-like Theme Picker ──────────────────────────────────
         const THEMES = [
-            { value: 'emerald',    labelLt: '\u0160viesus Fonas',    labelEn: 'Light Classic' },
-            { value: 'slate-dark', labelLt: 'Tamsus Fonas',         labelEn: 'Dark Mode' },
-            { value: 'solar',      labelLt: 'Tamsus Fonas\u00b2',   labelEn: 'Dark Mode II' },
-            { value: 'cyberpunk',  labelLt: 'Tamsus Fonas\u00b3',   labelEn: 'Dark Mode III' },
+            { value: 'emerald',    labelLt: '\u0160viesus fonas',    labelEn: 'Light Classic' },
+            { value: 'slate-dark', labelLt: 'Tamsus fonas',         labelEn: 'Dark Mode' },
+            { value: 'solar',      labelLt: 'Tamsus fonas\u00b2',   labelEn: 'Dark Mode II' },
+            { value: 'cyberpunk',  labelLt: 'Tamsus fonas\u00b3',   labelEn: 'Dark Mode III' },
         ];
 
         const applyTheme = (theme) => {
@@ -352,7 +352,7 @@ function getLegalContent(type, lang) {
                 <p><strong>2. Paslaugos teikimas ir prieinamumas</strong></p>
                 <p>Quizleris yra mokymo, testavimo ir interaktyvaus mokymosi platforma. Mes dedame visas pastangas, kad užtikrintume nenutrūkstamą paslaugos veikimą, tačiau platforma teikiama "tokia, kokia yra" (angl. "as is"). Mes negarantuojame, kad paslauga veiks be klaidų ar pertraukimų.</p>
                 
-                <p><strong>3. Vartotojų atsakomybė ir turinys</strong></p>
+                <p><strong>3. Naudotojų atsakomybė ir turinys</strong></p>
                 <p>Jūs esate visiškai atsakingas už visą turinį (klausimus, atsakymus, testus), kurį sukuriate ar įkeliate į Quizleris. Griežtai draudžiama įkelti neteisėtą, autorių teises pažeidžiantį, įžeidžiantį, diskriminuojantį ar kitaip žalingą turinį. Mes pasiliekame teisę be išankstinio įspėjimo pašalinti bet kokį turinį, pažeidžiantį šias taisykles.</p>
                 
                 <p><strong>4. Intelektinė nuosavybė</strong></p>
@@ -386,7 +386,7 @@ function getLegalContent(type, lang) {
                 <p><strong>2. Kokie duomenys renkami?</strong></p>
                 <ul>
                     <li><strong>Techninė ir naudojimo informacija:</strong> Renkame anoniminius analitikos duomenis, tokius kaip jūsų naršyklės tipas, įrenginio operacinė sistema, pasirinkta kalba, temos nustatymai, ir sąveika su testais.</li>
-                    <li><strong>Vartotojo pateikti duomenys:</strong> Duomenys, kuriuos savanoriškai įvedate, pavyzdžiui, slapyvardžiai, testų atsakymai bei sukurto turinio informacija.</li>
+                    <li><strong>Naudotojo pateikti duomenys:</strong> Duomenys, kuriuos savanoriškai įvedate, pavyzdžiui, slapyvardžiai, testų atsakymai bei sukurto turinio informacija.</li>
                 </ul>
                 
                 <p><strong>3. Kaip naudojame jūsų duomenis?</strong></p>

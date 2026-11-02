@@ -35,6 +35,27 @@ customElements.whenDefined("math-field").then(() => {
     }
 });
 
+// Pasted LaTeX from other tools: $…$ and $$…$$ become formulas, and text that is entirely
+// LaTeX (e.g. "\frac{1}{2} + x^2") becomes one formula. "$5 and $10" stays text: TeX math
+// never starts or ends with a space inside the dollars.
+export function pastedTextToRich(text) {
+    const str = String(text ?? "");
+    if (/\\\(|\\\[/.test(str)) return str; // already in the stored format
+    const converted = str
+        .replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => `\\[${math.trim()}\\]`)
+        .replace(/\$([^$\n]+?)\$/g, (whole, math) => (/^\s|\s$/.test(math) ? whole : `\\(${math}\\)`));
+    if (converted !== str) return converted;
+    return looksLikeLatex(str) ? `\\(${str.trim()}\\)` : str;
+}
+
+function looksLikeLatex(str) {
+    const s = str.trim();
+    if (!s || s.length > 2000 || !/\\[A-Za-z]+|[\^_]/.test(s)) return false;
+    // Real words outside commands mean prose with a formula in it, which is left as text
+    const bare = s.replace(/\\(?:begin|end)\{[^}]*\}/g, " ").replace(/\\[A-Za-z]+/g, " ");
+    return !/[A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž]{4,}/.test(bare);
+}
+
 /** Splits a stored value into text and math parts. */
 export function parseRichValue(value) {
     const parts = [];
@@ -313,7 +334,7 @@ class RichInput extends HTMLElement {
             e.preventDefault();
             const text = e.clipboardData?.getData("text/plain") ?? "";
             if (!text) return;
-            const nodes = this._nodesFromText(text);
+            const nodes = this._nodesFromText(pastedTextToRich(text));
             if (nodes.length) {
                 this._insertNodes(nodes, this._currentRange());
                 this._changed();

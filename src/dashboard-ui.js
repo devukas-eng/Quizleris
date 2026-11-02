@@ -2,6 +2,7 @@ import { getCurrentUser, showAuthModal, logoutUser } from "./auth-ui.js";
 import { fetchAllUsers, fetchProfile, deleteQuizFromCloud } from "./api.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
+import { codeChipHtml, linkRowsHtml, wireCopyButtons } from "./share-links.js";
 
 let dashboardModal = null;
 
@@ -70,6 +71,7 @@ async function renderDashboard() {
     body.innerHTML = profileCard(user, limits, quizzes.length) + quizzesSection(quizzes) +
         (user.role === "admin" ? `<section class="dash-section" id="dash-admin-users"><p class="dash-muted">${t("profile.loading")}</p></section>` : "");
 
+    wireCopyButtons(body);
     body.querySelector("#dashboard-create-btn")?.addEventListener("click", () => openEditor());
     body.querySelectorAll("[data-edit-quiz]").forEach(btn => {
         btn.addEventListener("click", () => openEditor(btn.dataset.editQuiz));
@@ -195,10 +197,15 @@ function quizzesSection(quizzes) {
                             <span class="dash-muted">${t("profile.updated")} ${escapeHtml(formatDate(q.updated_at || q.created_at))}${expiry}</span>
                         </div>
                     </div>
+                    ${codeChipHtml(q.pin)}
                     <div class="dash-quiz-actions">
                         <button class="btn btn-secondary" data-edit-quiz="${escapeHtml(q.id)}">${t("profile.edit")}</button>
                         <button class="btn btn-secondary btn-icon dash-delete" data-delete-quiz="${escapeHtml(q.id)}" data-title="${escapeHtml(q.title || "")}" title="${t("profile.delete")}" aria-label="${t("profile.delete")}">🗑</button>
                     </div>
+                    <details class="dash-quiz-share">
+                        <summary>${t("share.links")}</summary>
+                        <div class="dash-quiz-share-body">${linkRowsHtml(q)}</div>
+                    </details>
                 </div>
             `;
         });

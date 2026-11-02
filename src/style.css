@@ -2665,13 +2665,15 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    flex-wrap: wrap; /* narrow screens: whole links move to the next line, never half a link */
+    gap: 6px 16px;
     padding: 14px 0 0;
     margin-top: 10px;
     border-top: 1px solid var(--border-color, rgba(0,0,0,0.07));
 }
 
 .legal-link {
+    white-space: nowrap;
     font-size: 0.75rem;
     color: var(--muted, #6B7280);
     cursor: pointer;
@@ -3931,36 +3933,110 @@ math-virtual-keyboard::part(action-toolbar) {
     border-top: 1px solid var(--border-color);
 }
 
-/* The bar picks the first layout that fits (fitActionBar in quiz-editor.js measures it):
-   0 full labels on one row; 1 short "New"; 2 short "Save" too;
-   3-5 the same steps on two tidy rows: Save + Preview, then File, Print … New. */
-.admin-actions .label-short,
-.admin-actions-break {
-    display: none;
+/* Bottom action bar. Sizes are fluid: padding, type, height and gaps follow the bar's width
+   (container units), so it shrinks smoothly while the window is resized. When even that is
+   not enough, "quiz" slides out of the New and Save labels, then the bar becomes a grid:
+   Save across the top, the other buttons in equal columns below. setupActionBar in
+   quiz-editor.js measures an invisible copy (.admin-actions-measure) to pick the layout. */
+.admin-actions-wrap {
+    --bar-h: clamp(38px, 26px + 2.8cqi, 44px);
+    position: relative;
+    container-type: inline-size;
 }
 
-.admin-actions:is([data-fit="1"], [data-fit="2"], [data-fit="4"], [data-fit="5"]) #admin-new-quiz .label-long,
-.admin-actions:is([data-fit="2"], [data-fit="5"]) #admin-save .label-long {
-    display: none;
+.admin-actions-wrap .admin-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: clamp(6px, 1.7cqi, 10px);
 }
 
-.admin-actions:is([data-fit="1"], [data-fit="2"], [data-fit="4"], [data-fit="5"]) #admin-new-quiz .label-short,
-.admin-actions:is([data-fit="2"], [data-fit="5"]) #admin-save .label-short {
-    display: inline;
+.admin-actions-wrap .admin-actions > * {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
-.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) {
-    row-gap: 5px; /* the zero-height break line sits between two gaps */
+.admin-actions-wrap .admin-actions .btn {
+    min-height: var(--bar-h);
+    padding-inline: clamp(10px, 3.6cqi - 6px, 22px);
+    overflow: hidden;
+    font-size: clamp(0.8rem, 0.62rem + 0.85cqi, 0.95rem);
+    white-space: nowrap;
+    text-overflow: clip;
 }
 
-.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) .admin-actions-break {
-    display: block;
-    flex-basis: 100%;
-    height: 0;
+/* .btn spaces its children like icons; a label word only needs its own small gap */
+.admin-actions-wrap .admin-actions .btn:has(> .label-extra) {
+    gap: 0;
 }
 
-.admin-actions:is([data-fit="3"], [data-fit="4"], [data-fit="5"]) #admin-save {
-    flex: 1 1 auto;
+.label-extra {
+    display: inline-block;
+    max-width: var(--extra-w, 6em);
+    padding-left: 0.3em;
+    overflow: hidden;
+    vertical-align: bottom;
+    white-space: nowrap;
+    transition: max-width 0.34s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.34s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease;
+}
+
+.admin-actions[data-collapse~="new"] #admin-new-quiz .label-extra,
+.admin-actions[data-collapse~="save"] #admin-save .label-extra,
+.admin-actions-measure[data-collapse~="new"] .label-extra[data-for="new"],
+.admin-actions-measure[data-collapse~="save"] .label-extra[data-for="save"] {
+    max-width: 0;
+    padding-left: 0;
+    opacity: 0;
+}
+
+.admin-actions.no-label-motion .label-extra {
+    transition: none;
+}
+
+/* Grid layouts: Save across the top; the rest in 4 (rows="2") or 2 (rows="3") equal columns */
+.admin-actions-wrap .admin-actions:is([data-rows="2"], [data-rows="3"]) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-actions-wrap .admin-actions[data-rows="3"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-actions:is([data-rows="2"], [data-rows="3"]) > :first-child {
+    grid-column: 1 / -1;
+}
+
+.admin-actions-wrap .admin-actions:is([data-rows="2"], [data-rows="3"]) .btn,
+.admin-actions-wrap .admin-actions:is([data-rows="2"], [data-rows="3"]) .admin-print-btn {
+    width: 100%;
+    margin-left: 0;
+}
+
+/* The invisible copy used for measuring: same width and styles, never animated */
+.admin-actions-wrap .admin-actions-measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.admin-actions-measure,
+.admin-actions-measure * {
+    transition: none !important;
+    animation: none !important;
+}
+
+.admin-actions-wrap .admin-actions-measure:not([data-rows="2"]):not([data-rows="3"]) > * {
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .label-extra {
+        transition: none;
+    }
 }
 
 .admin-actions #admin-new-quiz {
@@ -3982,6 +4058,13 @@ math-virtual-keyboard::part(action-toolbar) {
     min-width: var(--control-height);
     padding: 0;
     color: var(--text);
+}
+
+.admin-actions-wrap .admin-actions .admin-print-btn {
+    flex: 0 0 auto;
+    width: var(--bar-h);
+    min-width: var(--bar-h);
+    padding: 0;
 }
 
 .admin-actions .admin-print-btn svg {
@@ -4405,6 +4488,86 @@ math-virtual-keyboard::part(action-toolbar) {
     flex-shrink: 0;
 }
 
+.dash-quiz {
+    flex-wrap: wrap;
+}
+
+/* Game code: big, monospaced, one click to copy */
+.share-code {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 4px 4px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 10px;
+    background: var(--accent-soft);
+    white-space: nowrap;
+}
+
+.share-code-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.share-code-value {
+    color: var(--accent);
+    font: 700 1.15rem/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    letter-spacing: 0.12em;
+}
+
+.share-copy-icon {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--accent);
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.share-copy-icon:hover,
+.share-copy-icon:focus-visible,
+.share-copy-icon.copied {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    outline: none;
+}
+
+.dash-quiz-share {
+    flex-basis: 100%;
+}
+
+.dash-quiz-share > summary {
+    width: fit-content;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.dash-quiz-share > summary:hover {
+    color: var(--accent);
+}
+
+.dash-quiz-share-body {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.admin-notice.success .share-code {
+    align-self: flex-start;
+}
+
+.admin-share-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
 .dash-quiz-actions .btn {
     min-height: 38px;
     padding: 6px 14px;
@@ -4750,8 +4913,9 @@ rich-input.formula-open .rich-input-math-btn {
     display: none;
 }
 
-/* Prompts keep the line breaks typed in the editor */
-.prompt {
+/* Prompts and answer options keep the line breaks typed in the editor */
+.prompt,
+.mc-text {
     white-space: pre-line;
 }
 

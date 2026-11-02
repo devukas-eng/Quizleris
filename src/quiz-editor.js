@@ -11,6 +11,7 @@ import { confirmDialog, alertDialog } from "./dialog.js";
 import "./rich-input.js";
 import { exportQuizToDocx } from "./docx-export.js";
 import { openPrintPreview } from "./print-preview.js";
+import { codeChipHtml, linkRowsHtml, wireCopyButtons } from "./share-links.js";
 import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind, ANSWER_KINDS, answerKindTriggerHtml, kindOfChoice } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
 
@@ -838,7 +839,7 @@ function renderChoiceBody(choice, qIdx, cIdx) {
     `;
   }
   return `
-    <rich-input class="admin-choice-text" data-qidx="${qIdx}" data-cidx="${cIdx}"
+    <rich-input class="admin-choice-text" multiline data-qidx="${qIdx}" data-cidx="${cIdx}"
       value="${escapeHtml(choice.text || "")}" placeholder="${t("rich.choicePlaceholder")} ${String.fromCharCode(65 + cIdx)}"></rich-input>
     ${choice.image ? `
       <div style="position: relative; display: inline-block;">
@@ -1119,11 +1120,6 @@ async function saveAdminQuiz() {
       localStorage.setItem("quizleris_community_quizzes", JSON.stringify(community));
   }
 
-  if (shareCode.length > 8e3) await alertDialog("⚠️", "Quiz data is very large. The share URL might not work in every browser.");
-  const base = window.location.origin + "/";
-  const shareUrl = `${base}?quiz=${shareCode}`;
-  const dashUrl = `${base}?dashboard=${escapeHtml(adminQuiz.id)}`;
-  
   let warningHtml = '';
   if (saveResult && saveResult.expires_at) {
       const expDate = new Date(saveResult.expires_at).toLocaleDateString('lt-LT');
@@ -1140,36 +1136,12 @@ async function saveAdminQuiz() {
   adminShareCode.innerHTML = `
         <div class="admin-notice success">
             <strong>\u2713 ${t("admin.saveSuccess") || "Išsaugota sėkmingai!"}</strong>
-            <label class="admin-share-row">
-                <span>Student URL:</span>
-                <span class="admin-share-field">
-                    <input type="text" readonly value="${escapeHtml(shareUrl)}" id="share-url-input" />
-                    <button id="copy-share-btn" class="btn btn-secondary">${t("admin.copy")}</button>
-                </span>
-            </label>
-            <label class="admin-share-row">
-                <span>Dashboard URL:</span>
-                <span class="admin-share-field">
-                    <input type="text" readonly value="${escapeHtml(dashUrl)}" id="dash-url-input" />
-                    <button id="copy-dash-btn" class="btn btn-secondary">${t("admin.copy")}</button>
-                </span>
-            </label>
-            <div class="admin-share-row"><span>Quiz ID:</span><code>${escapeHtml(adminQuiz.id)}</code></div>
+            ${codeChipHtml(saveResult?.pin)}
+            ${linkRowsHtml({ id: adminQuiz.id, pin: saveResult?.pin })}
+            <p class="admin-share-note">${t("share.dashboardNote")}</p>
             ${warningHtml}
         </div>`;
-  const wireCopy = (btnId, inputId, value) => {
-    const btn = document.getElementById(btnId);
-    btn?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      document.getElementById(inputId).select();
-      await navigator.clipboard.writeText(value);
-      const label = btn.textContent;
-      btn.textContent = "✓";
-      setTimeout(() => { btn.textContent = label; }, 1200);
-    });
-  };
-  wireCopy("copy-share-btn", "share-url-input", shareUrl);
-  wireCopy("copy-dash-btn", "dash-url-input", dashUrl);
+  wireCopyButtons(adminShareCode);
 }
 
 function previewQuiz() {
@@ -1183,34 +1155,114 @@ function previewQuiz() {
 }
 
 
-// Bottom action bar: tries each layout step (see .admin-actions[data-fit] in style.css) and keeps
-// the first that fits, measured on the real buttons so fonts and languages don't matter
-const ACTION_BAR_STEPS = 6; // 0-2 on one row, 3-5 on two rows
-function setupActionBarFit() {
-  const bar = document.querySelector(".admin-actions");
+// Bottom action bar (see .admin-actions-wrap in style.css). Its sizes are fluid; these are the
+// layouts it steps through when fluid sizing is not enough, roomiest first. An invisible copy
+// of the bar is measured in each and the first that fits is used, so fonts and languages
+// don't matter.
+const ACTION_BAR_LAYOUTS = [
+  { rows: 1, collapse: "" },
+  { rows: 1, collapse: "new" },
+  { rows: 1, collapse: "new save" },
+  { rows: 2, collapse: "" },
+  { rows: 2, collapse: "new" },
+  { rows: 2, collapse: "new save" },
+  { rows: 3, collapse: "" },
+  { rows: 3, collapse: "new save" }
+];
+const ACTION_BAR_MOTION = { duration: 340, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" };
+const ACTION_BAR_SLACK = 12; // spare px needed to go back to a roomier layout, so it never flickers
+
+function setupActionBar() {
+  const bar = document.querySelector(".admin-actions-wrap > .admin-actions");
   if (!bar || !window.ResizeObserver) return;
-  const rowCount = () => new Set([...bar.children]
-    .filter(el => el.offsetParent && !el.classList.contains("admin-actions-break"))
-    .map(el => Math.round(el.getBoundingClientRect().top))).size;
-  let lastWidth = -1;
-  const fit = (force = false) => {
-    const width = bar.clientWidth;
-    if (!width || (width === lastWidth && !force)) return;
-    lastWidth = width;
-    for (let step = 0; step < ACTION_BAR_STEPS; step++) {
-      bar.dataset.fit = String(step);
-      if (rowCount() <= (step < 3 ? 1 : 2)) return;
+  const measure = bar.cloneNode(true);
+  measure.classList.add("admin-actions-measure");
+  measure.setAttribute("aria-hidden", "true");
+  measure.inert = true;
+  measure.querySelectorAll("input, .admin-file-menu").forEach(el => el.remove());
+  measure.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+  bar.after(measure); // its data-i18n labels are translated along with the real ones
+
+  const fits = (layout, slack) => {
+    measure.dataset.rows = layout.rows;
+    measure.dataset.collapse = layout.collapse;
+    if (layout.rows === 1) {
+      // Width the buttons take side by side (they never shrink in the copy)
+      const left = measure.getBoundingClientRect().left;
+      const right = Math.max(...[...measure.children].map(el => el.getBoundingClientRect().right));
+      return right - left <= measure.clientWidth - slack;
     }
+    return [...measure.querySelectorAll(".btn")].every(btn => btn.scrollWidth <= btn.clientWidth - slack);
   };
-  new ResizeObserver(() => fit()).observe(bar);
-  // Labels change with the language; button widths settle once web fonts load
-  new MutationObserver(() => fit(true)).observe(bar, { subtree: true, childList: true, characterData: true });
-  document.fonts?.ready.then(() => fit(true));
+
+  // "quiz" slides out over exactly its own width (in em, so it follows the fluid font size)
+  const syncLabelWidths = () => {
+    measure.dataset.rows = "1";
+    measure.dataset.collapse = "";
+    measure.querySelectorAll(".label-extra").forEach(extra => {
+      const em = extra.scrollWidth / (parseFloat(getComputedStyle(extra).fontSize) || 16);
+      const width = `${(em + 0.05).toFixed(3)}em`;
+      extra.style.setProperty("--extra-w", width);
+      bar.querySelector(`.label-extra[data-for="${extra.dataset.for}"]`)?.style.setProperty("--extra-w", width);
+    });
+  };
+
+  // Changing the number of rows glides every button from its old place and size to the new one
+  const apply = (layout, animate) => {
+    const rowsChange = bar.dataset.rows !== String(layout.rows);
+    const motion = animate && rowsChange && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const buttons = [...bar.querySelectorAll(".btn")].filter(btn => !btn.closest(".admin-file-menu"));
+    const before = motion ? buttons.map(btn => btn.getBoundingClientRect()) : null;
+    const barBefore = bar.getBoundingClientRect().height;
+    if (rowsChange) bar.classList.add("no-label-motion");
+    bar.dataset.rows = layout.rows;
+    bar.dataset.collapse = layout.collapse;
+    if (rowsChange) {
+      void bar.offsetWidth;
+      requestAnimationFrame(() => bar.classList.remove("no-label-motion"));
+    }
+    if (!motion) return;
+    const box = { boxSizing: "border-box" };
+    bar.animate([{ ...box, height: `${barBefore}px` }, { ...box, height: `${bar.getBoundingClientRect().height}px` }], ACTION_BAR_MOTION);
+    buttons.forEach((btn, i) => {
+      const from = before[i];
+      const to = btn.getBoundingClientRect();
+      if (!to.width || !from.width) return;
+      btn.animate([
+        { ...box, transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)`, width: `${from.width}px`, height: `${from.height}px` },
+        { ...box, transform: "translate(0, 0)", width: `${to.width}px`, height: `${to.height}px` }
+      ], ACTION_BAR_MOTION);
+    });
+  };
+
+  let current = -1;
+  const fit = () => {
+    if (!bar.clientWidth) return; // editor hidden
+    let next = ACTION_BAR_LAYOUTS.length - 1;
+    for (let i = 0; i < ACTION_BAR_LAYOUTS.length; i++) {
+      if (fits(ACTION_BAR_LAYOUTS[i], current >= 0 && i < current ? ACTION_BAR_SLACK : 0)) {
+        next = i;
+        break;
+      }
+    }
+    if (next !== current) apply(ACTION_BAR_LAYOUTS[next], current >= 0);
+    current = next;
+  };
+  const refit = () => {
+    syncLabelWidths();
+    fit();
+  };
+
+  new ResizeObserver(fit).observe(bar.parentElement);
+  // Labels change with the language; widths settle once web fonts load
+  new MutationObserver(refit).observe(bar, { subtree: true, childList: true, characterData: true });
+  document.fonts?.ready.then(refit);
+  refit();
 }
 
 // "File" menu: Word printouts and JSON export/import in one place
 function setupFileMenu() {
-  setupActionBarFit();
+  setupActionBar();
   const btn = document.getElementById("admin-file-btn");
   const menu = document.getElementById("admin-file-menu");
   if (!btn || !menu) return;
@@ -1233,6 +1285,40 @@ function setupFileMenu() {
   });
   document.addEventListener("mousedown", (e) => {
     if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
+  });
+
+  // Word import: questions are added to the open quiz (its title is taken over only if it is empty)
+  const docxInput = document.getElementById("admin-docx-import-input");
+  document.getElementById("admin-docx-import-btn")?.addEventListener("click", () => docxInput?.click());
+  docxInput?.addEventListener("change", async () => {
+    const file = docxInput.files?.[0];
+    docxInput.value = "";
+    if (!file) return;
+    if (!adminQuiz) adminQuiz = blankQuiz();
+    updateQuizFromDOM();
+    let result;
+    try {
+      const { importQuizFromDocx } = await import("./docx-import.js");
+      result = await importQuizFromDocx(file, { resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900) });
+    } catch (err) {
+      console.error("Word import failed", err);
+      await alertDialog(t("docxImport.title"), t("docxImport.failed"));
+      return;
+    }
+    if (!result.questions.length) {
+      await alertDialog(t("docxImport.title"), t("docxImport.none"));
+      return;
+    }
+    saveStateForUndo();
+    const wasEmpty = adminQuiz.questions.length === 0;
+    adminQuiz.questions.push(...result.questions);
+    const defaultTitles = [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
+    if (wasEmpty && result.title && (!adminQuiz.title?.trim() || defaultTitles.includes(adminQuiz.title.trim()))) adminQuiz.title = result.title;
+    renderAdminForm();
+    triggerAutoSave();
+    let message = t("docxImport.done").replace("{n}", result.questions.length);
+    if (result.unmarked) message += ` ${t("docxImport.unmarked").replace("{n}", result.unmarked)}`;
+    await alertDialog(t("docxImport.title"), message);
   });
 
   // Print preview: layout changes (order, image sizes, page breaks…) are saved with the quiz
