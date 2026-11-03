@@ -16,6 +16,7 @@ const fakePool = {
       return [{ insertId: users.length }];
     }
     if (s.startsWith('SELECT id, username, role, subscription_tier, password_hash FROM users')) return [users.filter(u => u.username === p[0])];
+    if (s === 'SELECT * FROM users WHERE id = ?') return [users.filter(u => u.id === p[0])];
     if (s.startsWith('SELECT id, username, email, role')) return [users.map(({ password_hash, ...u }) => u)];
     if (s.startsWith('SELECT owner_id FROM quizzes')) { const q = quizzes.get(p[0]); return [q ? [{ owner_id: q.owner_id }] : []]; }
     if (s.startsWith('SELECT COUNT(*)')) return [[{ cnt: [...quizzes.values()].filter(q => q.owner_id === p[0]).length }]];
