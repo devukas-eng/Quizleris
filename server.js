@@ -28,6 +28,7 @@ for (const key of ['DB_USER', 'DB_PASS', 'DB_NAME']) {
 
 const pool = require('./src/backend/db.js');
 const { seedPremadeQuizzes } = require('./src/backend/premade.js');
+const { ensureBankSchema, createBankRouter } = require('./src/backend/bank.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -630,6 +631,9 @@ app.delete('/api/quizzes/:id/attempts/:attemptId', authenticateToken, async (req
     }
 });
 
+// --- TASK BANK (užduočių bankas): /api/bank/* and the pictures at /api/media/* ---
+app.use('/api', createBankRouter({ pool, authenticateToken, requireAdmin }));
+
 // Unknown API routes return JSON 404 instead of the SPA HTML
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -737,6 +741,12 @@ async function ensureSchema() {
     } catch (error) {
         // Non-fatal: old long IDs keep working as they are
         console.error('[SCHEMA] could not convert old quiz IDs:', error.code || error.message);
+    }
+    try {
+        await ensureBankSchema(pool);
+    } catch (error) {
+        // Non-fatal: quizzes and the editor work without the task bank
+        console.error('[SCHEMA] could not set up the task bank:', error.code || error.message);
     }
 }
 

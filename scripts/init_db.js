@@ -1,4 +1,5 @@
 const pool = require('../src/backend/db.js');
+const { ensureBankSchema } = require('../src/backend/bank.js');
 
 async function initDB() {
     console.log("Initializing database...");
@@ -51,6 +52,10 @@ async function initDB() {
             )
         `);
         console.log("✅ Quiz attempts table created or already exists.");
+
+        // Task bank tables with their starting classifiers (the server also does this on start)
+        await ensureBankSchema(pool);
+        console.log("✅ Task bank tables created or already exist.");
 
         console.log("Database initialization complete!");
     } catch (err) {

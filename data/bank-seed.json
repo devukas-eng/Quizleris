@@ -1,0 +1,120 @@
+{
+  "grades": [
+    [1, "1 kl."], [2, "2 kl."], [3, "3 kl."], [4, "4 kl."],
+    [5, "5 kl."], [6, "6 kl."], [7, "7 kl."], [8, "8 kl."],
+    [9, "9 kl. (I gimn.)"], [10, "10 kl. (II gimn.)"],
+    [11, "11 kl. (III gimn.)"], [12, "12 kl. (IV gimn.)"]
+  ],
+  "difficulties": [
+    { "name": "Slenkstinis", "color": "#94a3b8" },
+    { "name": "Patenkinamas", "color": "#22c55e" },
+    { "name": "Pagrindinis", "color": "#f59e0b" },
+    { "name": "Aukštesnysis", "color": "#ef4444" }
+  ],
+  "subjects": [
+    { "name": "Matematika", "icon": "📐" },
+    { "name": "Lietuvių kalba ir literatūra", "icon": "📖" },
+    { "name": "Anglų kalba", "icon": "🌍" },
+    { "name": "Gamtos mokslai", "icon": "🌱" },
+    { "name": "Fizika", "icon": "🧲" },
+    { "name": "Chemija", "icon": "🧪" },
+    { "name": "Biologija", "icon": "🧬" },
+    { "name": "Informatika", "icon": "💻" },
+    { "name": "Istorija", "icon": "🏛️" },
+    { "name": "Geografija", "icon": "🗺️" },
+    { "name": "Ekonomika ir verslumas", "icon": "💶" }
+  ],
+  "topics": {
+    "Matematika": [
+      { "name": "Skaičiai ir skaičiavimai", "children": [
+        { "name": "Natūralieji ir sveikieji skaičiai", "children": [
+          { "name": "Natūralieji skaičiai", "grades": { "5": 6 } },
+          { "name": "Veiksmai su natūraliaisiais skaičiais", "grades": { "5": 8 } },
+          { "name": "Sveikieji skaičiai", "grades": { "6": 10 } },
+          { "name": "Veiksmai su sveikaisiais skaičiais", "grades": { "6": 12 } }
+        ] },
+        { "name": "Trupmenos ir dalys", "children": [
+          { "name": "Trupmenos", "grades": { "5": 6 } },
+          { "name": "Veiksmai su trupmenomis", "grades": { "5": 8, "6": 12 } }
+        ] },
+        { "name": "Realieji skaičiai", "children": [
+          { "name": "Laipsnis su sveikuoju rodikliu", "grades": { "7": 10 } },
+          { "name": "Kvadratinė ir kubinė šaknys", "grades": { "8": 8 } },
+          { "name": "Skaičių aibės", "grades": { "8": 3 } },
+          { "name": "Veiksmai su realiaisiais skaičiais", "grades": { "8": 9 } }
+        ] },
+        { "name": "Finansiniai skaičiavimai", "grades": { "5": 6, "6": 7, "7": 7, "8": 5 } }
+      ] },
+      { "name": "Modeliai ir sąryšiai", "children": [
+        { "name": "Dėsningumai", "grades": { "10": 12 }, "children": [
+          { "name": "Sekos", "grades": { "5": 5 } },
+          { "name": "Skaičių sekos", "grades": { "9": 8 } }
+        ] },
+        { "name": "Algebra", "children": [
+          { "name": "Lygtys", "grades": { "5": 6, "6": 9 } },
+          { "name": "Raidiniai reiškiniai", "grades": { "5": 6, "8": 10, "9": 9 } },
+          { "name": "Nelygybės", "grades": { "7": 12 } },
+          { "name": "Lygčių sistemos", "grades": { "8": 10, "9": 9, "10": 10 } },
+          { "name": "Kvadratinės lygtys", "grades": { "9": 10 } },
+          { "name": "Racionaliosios lygtys", "grades": { "10": 12 } },
+          { "name": "Kvadratinės nelygybės", "grades": { "10": 10 } }
+        ] },
+        { "name": "Tiesiniai ir netiesiniai sąryšiai", "children": [
+          { "name": "Tiesioginis proporcingumas", "grades": { "6": 7 } },
+          { "name": "Atvirkštinis proporcingumas", "grades": { "7": 8 } },
+          { "name": "Tiesinis sąryšis", "grades": { "8": 4 } },
+          { "name": "Funkcija", "grades": { "9": 10 } },
+          { "name": "Tiesinė ir kvadratinė funkcijos", "grades": { "9": 12 } }
+        ] }
+      ] },
+      { "name": "Geometrija ir matavimai", "children": [
+        { "name": "Matavimo skalės ir vienetai", "children": [
+          { "name": "Kelias, laikas, greitis", "grades": { "5": 5 } },
+          { "name": "Ilgis, plotas, tūris", "grades": { "5": 4 } }
+        ] },
+        { "name": "Konstravimas", "children": [
+          { "name": "Transformacijos", "grades": { "5": 5, "6": 7, "7": 5, "8": 4, "9": 5 } },
+          { "name": "Braižymas", "grades": { "6": 5, "7": 5, "8": 4 } }
+        ] },
+        { "name": "Figūros", "children": [
+          { "name": "Plokščios figūros", "grades": { "5": 7, "6": 11, "7": 12, "8": 10, "9": 12, "10": 14 } },
+          { "name": "Erdvės figūros", "grades": { "5": 5, "7": 9, "8": 9 } },
+          { "name": "Ilgio, ploto, tūrio skaičiavimai", "grades": { "5": 7, "7": 12, "8": 5 } },
+          { "name": "Įvadas į trigonometriją", "grades": { "9": 10, "10": 14 } }
+        ] }
+      ] },
+      { "name": "Duomenys ir tikimybės", "children": [
+        { "name": "Duomenys ir interpretavimas", "grades": { "5": 4, "6": 6, "7": 6, "8": 7, "9": 7, "10": 8 } },
+        { "name": "Tikimybės ir interpretavimas", "grades": { "5": 4, "6": 6, "7": 6, "8": 6, "10": 10 } }
+      ] }
+    ]
+  },
+  "dimensions": [
+    { "name": "Pasiekimas", "subject": "Matematika", "values": [
+      { "name": "A. Gilus supratimas ir argumentavimas", "children": [
+        { "name": "A1. Matematinės procedūros" },
+        { "name": "A2. Tyrinėjimas ir hipotezės" },
+        { "name": "A3. Argumentavimas ir įrodymas" },
+        { "name": "A4. Mokymosi įsivertinimas" }
+      ] },
+      { "name": "B. Matematinis komunikavimas", "children": [
+        { "name": "B1. Pranešimo analizė ir interpretavimas" },
+        { "name": "B2. Matematiniai faktai ir terminai" },
+        { "name": "B3. Pranešimo kūrimas ir pristatymas" }
+      ] },
+      { "name": "C. Problemų sprendimas", "children": [
+        { "name": "C1. Problemos modeliavimas" },
+        { "name": "C2. Sprendimo strategijos ir planas" },
+        { "name": "C3. Rezultatų vertinimas ir išvados" }
+      ] }
+    ] },
+    { "name": "Kontekstas", "values": [
+      { "name": "Asmeninis" }, { "name": "Profesinis" }, { "name": "Visuomeninis" }, { "name": "Mokslinis" }
+    ] },
+    { "name": "Kompetencija", "values": [
+      { "name": "Pažinimo" }, { "name": "Komunikavimo" }, { "name": "Skaitmeninė" }, { "name": "Kūrybiškumo" },
+      { "name": "Kultūrinė" }, { "name": "Pilietiškumo" }, { "name": "Socialinė, emocinė ir sveikos gyvensenos" }
+    ] },
+    { "name": "Žymos", "values": [] }
+  ]
+}
