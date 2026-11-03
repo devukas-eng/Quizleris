@@ -24,71 +24,6 @@
     { "name": "Geografija", "icon": "🗺️" },
     { "name": "Ekonomika ir verslumas", "icon": "💶" }
   ],
-  "topics": {
-    "Matematika": [
-      { "name": "Skaičiai ir skaičiavimai", "children": [
-        { "name": "Natūralieji ir sveikieji skaičiai", "children": [
-          { "name": "Natūralieji skaičiai", "grades": { "5": 6 } },
-          { "name": "Veiksmai su natūraliaisiais skaičiais", "grades": { "5": 8 } },
-          { "name": "Sveikieji skaičiai", "grades": { "6": 10 } },
-          { "name": "Veiksmai su sveikaisiais skaičiais", "grades": { "6": 12 } }
-        ] },
-        { "name": "Trupmenos ir dalys", "children": [
-          { "name": "Trupmenos", "grades": { "5": 6 } },
-          { "name": "Veiksmai su trupmenomis", "grades": { "5": 8, "6": 12 } }
-        ] },
-        { "name": "Realieji skaičiai", "children": [
-          { "name": "Laipsnis su sveikuoju rodikliu", "grades": { "7": 10 } },
-          { "name": "Kvadratinė ir kubinė šaknys", "grades": { "8": 8 } },
-          { "name": "Skaičių aibės", "grades": { "8": 3 } },
-          { "name": "Veiksmai su realiaisiais skaičiais", "grades": { "8": 9 } }
-        ] },
-        { "name": "Finansiniai skaičiavimai", "grades": { "5": 6, "6": 7, "7": 7, "8": 5 } }
-      ] },
-      { "name": "Modeliai ir sąryšiai", "children": [
-        { "name": "Dėsningumai", "grades": { "10": 12 }, "children": [
-          { "name": "Sekos", "grades": { "5": 5 } },
-          { "name": "Skaičių sekos", "grades": { "9": 8 } }
-        ] },
-        { "name": "Algebra", "children": [
-          { "name": "Lygtys", "grades": { "5": 6, "6": 9 } },
-          { "name": "Raidiniai reiškiniai", "grades": { "5": 6, "8": 10, "9": 9 } },
-          { "name": "Nelygybės", "grades": { "7": 12 } },
-          { "name": "Lygčių sistemos", "grades": { "8": 10, "9": 9, "10": 10 } },
-          { "name": "Kvadratinės lygtys", "grades": { "9": 10 } },
-          { "name": "Racionaliosios lygtys", "grades": { "10": 12 } },
-          { "name": "Kvadratinės nelygybės", "grades": { "10": 10 } }
-        ] },
-        { "name": "Tiesiniai ir netiesiniai sąryšiai", "children": [
-          { "name": "Tiesioginis proporcingumas", "grades": { "6": 7 } },
-          { "name": "Atvirkštinis proporcingumas", "grades": { "7": 8 } },
-          { "name": "Tiesinis sąryšis", "grades": { "8": 4 } },
-          { "name": "Funkcija", "grades": { "9": 10 } },
-          { "name": "Tiesinė ir kvadratinė funkcijos", "grades": { "9": 12 } }
-        ] }
-      ] },
-      { "name": "Geometrija ir matavimai", "children": [
-        { "name": "Matavimo skalės ir vienetai", "children": [
-          { "name": "Kelias, laikas, greitis", "grades": { "5": 5 } },
-          { "name": "Ilgis, plotas, tūris", "grades": { "5": 4 } }
-        ] },
-        { "name": "Konstravimas", "children": [
-          { "name": "Transformacijos", "grades": { "5": 5, "6": 7, "7": 5, "8": 4, "9": 5 } },
-          { "name": "Braižymas", "grades": { "6": 5, "7": 5, "8": 4 } }
-        ] },
-        { "name": "Figūros", "children": [
-          { "name": "Plokščios figūros", "grades": { "5": 7, "6": 11, "7": 12, "8": 10, "9": 12, "10": 14 } },
-          { "name": "Erdvės figūros", "grades": { "5": 5, "7": 9, "8": 9 } },
-          { "name": "Ilgio, ploto, tūrio skaičiavimai", "grades": { "5": 7, "7": 12, "8": 5 } },
-          { "name": "Įvadas į trigonometriją", "grades": { "9": 10, "10": 14 } }
-        ] }
-      ] },
-      { "name": "Duomenys ir tikimybės", "children": [
-        { "name": "Duomenys ir interpretavimas", "grades": { "5": 4, "6": 6, "7": 6, "8": 7, "9": 7, "10": 8 } },
-        { "name": "Tikimybės ir interpretavimas", "grades": { "5": 4, "6": 6, "7": 6, "8": 6, "10": 10 } }
-      ] }
-    ]
-  },
   "dimensions": [
     { "name": "Pasiekimas", "subject": "Matematika", "values": [
       { "name": "A. Gilus supratimas ir argumentavimas", "children": [
@@ -108,6 +43,9 @@
         { "name": "C3. Rezultatų vertinimas ir išvados" }
       ] }
     ] },
+    { "name": "Kursas", "subject": "Matematika", "values": [
+      { "name": "Bendrasis" }, { "name": "Išplėstinis" }
+    ] },
     { "name": "Kontekstas", "values": [
       { "name": "Asmeninis" }, { "name": "Profesinis" }, { "name": "Visuomeninis" }, { "name": "Mokslinis" }
     ] },
@@ -116,5 +54,405 @@
       { "name": "Kultūrinė" }, { "name": "Pilietiškumo" }, { "name": "Socialinė, emocinė ir sveikos gyvensenos" }
     ] },
     { "name": "Žymos", "values": [] }
-  ]
+  ],
+  "topics": {
+    "Matematika": [
+      { "name": "Skaičiai ir skaičiavimai",
+        "description": "Skaičių samprata nuo natūraliųjų iki realiųjų skaičių, veiksmai su jais, mintinis ir rašytinis skaičiavimas, finansiniai skaičiavimai; III–IV gimn. klasėse – laipsniai, šaknys, logaritmai ir trigonometriniai skaičiai.",
+        "children": [
+        { "name": "Natūralieji ir sveikieji skaičiai",
+          "description": "Skaičių skaitymas, rašymas, palyginimas ir veiksmai su natūraliaisiais, vėliau ir su sveikaisiais skaičiais.",
+          "curriculum": [
+            { "grade": 1, "description": "Skaičiai iki 100: skaitymas, rašymas, palyginimas; vienaženklių ir dviženklių skaičių sudėtis ir atimtis (ir peržengiant dešimtį), mintinio skaičiavimo strategijos." },
+            { "grade": 2, "description": "Skaičiai iki 1000; daugybos ir dalybos samprata, daugybos lentelė (10 × 10), lyginiai ir nelyginiai skaičiai, dviejų žingsnių žodiniai uždaviniai." },
+            { "grade": 3, "description": "Skaičiai iki 10 000: skaitymas, užrašymas žodžiais, skaitmenimis ir skyrių suma, palyginimas ir apvalinimas; veiksmai, kai rezultatas neviršija 10 000." },
+            { "grade": 4, "description": "Skaičiai iki 1 000 000: skaitymas, rašymas, palyginimas ir apvalinimas; dalyba iš vienaženklio skaičiaus, problemų sprendimo strategijos įvairiuose kontekstuose." }
+          ],
+          "children": [
+            { "name": "Natūralieji skaičiai", "description": "Didelių natūraliųjų skaičių skaitymas, rašymas ir apvalinimas.",
+              "curriculum": [ { "grade": 5, "hours": 6, "description": "Milijardų klasė, didelių skaičių užrašymas trumpiniais (tūkst., mln., mlrd.), skaičių palyginimas ir apvalinimas." } ] },
+            { "name": "Veiksmai su natūraliaisiais skaičiais", "description": "Skaičiavimas, dalumas ir problemų sprendimas su natūraliaisiais skaičiais.",
+              "curriculum": [ { "grade": 5, "hours": 8, "description": "Dalyba iš dviženklio skaičiaus, mintinio skaičiavimo strategijos, dalumo požymiai, dalikliai ir kartotiniai, pirminiai ir sudėtiniai skaičiai, DBD ir MBK." } ] },
+            { "name": "Sveikieji skaičiai", "description": "Neigiamieji skaičiai ir sveikųjų skaičių aibė.",
+              "curriculum": [ { "grade": 6, "hours": 10, "description": "Teigiamieji ir neigiamieji skaičiai, skaičiui priešingas skaičius, sveikųjų skaičių aibė, koordinačių plokštuma ir jos ketvirčiai." } ] },
+            { "name": "Veiksmai su sveikaisiais skaičiais", "description": "Aritmetiniai veiksmai su sveikaisiais skaičiais.",
+              "curriculum": [ { "grade": 6, "hours": 12, "description": "Sveikųjų skaičių sudėtis, atimtis, daugyba ir dalyba, šių veiksmų vizualizavimas skaičių tiesėje." } ] }
+          ] },
+        { "name": "Trupmenos ir dalys",
+          "description": "Visumos dalies, trupmenos ir dešimtainio skaičiaus samprata, trupmenų palyginimas ir veiksmai su jomis.",
+          "curriculum": [
+            { "grade": 2, "description": "Visumos dalys: pusė, trečdalis, ketvirtadalis, aštuntadalis; visumos radimas, kai žinoma jos dalis (trupmenos sąvoka dar neįvedama)." },
+            { "grade": 3, "description": "Trupmenos sąvoka (vardiklis 2–10 ir 100), trupmenos skaičių tiesėje, vieneto neviršijančių trupmenų palyginimas, lygiavertės trupmenos." },
+            { "grade": 4, "description": "Mišrieji skaičiai, jų sudėtis ir atimtis esant vienodiems vardikliams; dešimtainiai skaičiai su vienu ar dviem skaitmenimis po kablelio, jų sudėtis ir atimtis." }
+          ],
+          "children": [
+            { "name": "Trupmenos", "description": "Paprastosios trupmenos ir mišrieji skaičiai, jų pertvarkymas.",
+              "curriculum": [ { "grade": 5, "hours": 6, "description": "Trupmenos, kurių skaitiklis didesnis už vardiklį, mišrieji skaičiai; trupmenų prastinimas, pertvarkymas, palyginimas ir apvalinimas." } ] },
+            { "name": "Veiksmai su trupmenomis", "description": "Aritmetiniai veiksmai su trupmenomis, mišriaisiais ir dešimtainiais skaičiais.",
+              "curriculum": [
+                { "grade": 5, "hours": 8, "description": "Mišriųjų skaičių sudėtis ir atimtis su skirtingais vardikliais (ir kai trupmeninių dalių suma viršija vienetą), trupmenos daugyba iš natūraliojo skaičiaus." },
+                { "grade": 6, "hours": 12, "description": "Trupmenų ir mišriųjų skaičių daugyba ir dalyba, veiksmai su dešimtainiais skaičiais; racionalieji skaičiai, atvirkštinis skaičius, baigtinės ir periodinės dešimtainės trupmenos." }
+              ] }
+          ] },
+        { "name": "Realieji skaičiai",
+          "description": "Laipsniai, šaknys, logaritmai, skaičių aibės ir veiksmai su realiaisiais skaičiais.",
+          "children": [
+            { "name": "Laipsnis su sveikuoju rodikliu", "description": "Laipsniai su sveikuoju rodikliu ir standartinė skaičiaus išraiška.",
+              "curriculum": [ { "grade": 7, "hours": 10, "description": "Laipsnis su teigiamu, nuliniu ir neigiamu sveikuoju rodikliu, veiksmų su laipsniais savybės, standartinė skaičiaus išraiška a · 10^k." } ] },
+            { "name": "Kvadratinė ir kubinė šaknys", "description": "Kvadratinės ir kubinės šaknų sąvokos ir jų reikšmės.",
+              "curriculum": [ { "grade": 8, "hours": 8, "description": "Kvadratinės ir kubinės šaknų sąvokos, jų reikšmių apskaičiavimas, kai pošaknyje yra racionaliojo skaičiaus kvadratas ar kubas." } ] },
+            { "name": "Skaičių aibės", "description": "Skaičių aibių ryšiai ir veiksmai su aibėmis.",
+              "curriculum": [
+                { "grade": 8, "hours": 3, "description": "Racionalieji, iracionalieji ir realieji skaičiai; baigtinės ir begalinės aibės, poaibiai, aibių N, Z, Q, I, R ryšiai." },
+                { "grade": 11, "course": "Bendrasis", "hours": 2, "description": "Skaičių aibių ir intervalų sąjunga, sankirta ir skirtumas, jų užrašymas aibių simboliais." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 4, "description": "Skaičių aibių ir intervalų sąjunga, sankirta ir skirtumas; lygčių ir nelygybių sprendinių aibių užrašymas aibių teorijos žymenimis." }
+              ] },
+            { "name": "Veiksmai su realiaisiais skaičiais", "description": "Skaitinių reiškinių su realiaisiais skaičiais apskaičiavimas ir įvertinimas.",
+              "curriculum": [ { "grade": 8, "hours": 9, "description": "Veiksmų su realiaisiais skaičiais tvarka, skaitinių reiškinių reikšmių apskaičiavimas, palyginimas ir įvertinimas mintinai ir skaičiuotuvu." } ] },
+            { "name": "Realiojo skaičiaus modulis", "description": "Skaičiaus modulis ir jo savybės.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Realiojo skaičiaus modulio apibrėžimas ir geometrinė prasmė, reiškinių su moduliu reikšmių apskaičiavimas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 16, "description": "Modulio apibrėžimas, geometrinė prasmė ir savybės, reiškinių su moduliais pertvarkymas, atstumas skaičių tiesėje." }
+              ] },
+            { "name": "Paklaidos", "description": "Apytikslių skaičiavimų tikslumas.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Absoliučioji ir santykinė paklaida, apytikslių skaičiavimų rezultatų tikslumo įvertinimas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 4, "description": "Absoliučioji ir santykinė paklaida, matavimų ir apytikslių skaičiavimų rezultatų tikslumo įvertinimas." }
+              ] },
+            { "name": "Šaknys", "description": "Aukštesniojo laipsnio šaknys ir jų savybės.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "n-tojo laipsnio šaknis, jos apibrėžimo sritis ir savybės, šaknų ir laipsnių ryšys, skaitinių reiškinių su šaknimis pertvarkymas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "n-tojo laipsnio šaknis ir jos savybių įrodymas, šaknų ir laipsnių ryšys, sudėtingesnių reiškinių su šaknimis pertvarkymas." }
+              ] },
+            { "name": "Laipsniai", "description": "Laipsniai su racionaliuoju rodikliu ir jų savybės.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 6, "description": "Laipsnis su racionaliuoju rodikliu, jo prasmingumo sąlygos, laipsnių savybės ir jų taikymas pertvarkant skaitinius reiškinius." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "Laipsnis su racionaliuoju rodikliu, laipsnių savybių įrodymas ir taikymas pertvarkant sudėtingesnius reiškinius." }
+              ] },
+            { "name": "Logaritmai", "description": "Logaritmo sąvoka ir logaritmų savybės.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 8, "description": "Logaritmo apibrėžimas ir prasmingumo sąlygos, pagrindinė logaritmų tapatybė, logaritmų savybės ir skaitinių reiškinių su logaritmais pertvarkymas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "Logaritmo apibrėžimas, pagrindinė logaritmų tapatybė, logaritmų savybių įrodymas ir taikymas, sudėtingesnių reiškinių pertvarkymas." }
+              ] }
+          ] },
+        { "name": "Finansiniai skaičiavimai",
+          "description": "Pinigai, kainos, procentai, palūkanos, biudžetas ir mokesčiai įvairiuose kontekstuose (finansinis raštingumas).",
+          "curriculum": [
+            { "grade": 1, "description": "Pinigų vaidmuo kasdienėse situacijose, naudojimasis pinigais, žodynas apie prekių ir paslaugų kainas." },
+            { "grade": 2, "description": "Prekių ir paslaugų kainos ir jų pokyčiai, pirkimo situacijos, pinigų skaičiavimas mintinai." },
+            { "grade": 3, "description": "Pinigų smulkinimas ir stambinimas, prekės ar paslaugos kainos, jos pokyčio ir likučio apskaičiavimas." },
+            { "grade": 4, "description": "Kainų skaičiavimai, kai kainos užrašytos dešimtainiu pavidalu; skaičiavimais grįsti sprendimai apie išlaidas, taupymą, uždarbį ir aukojimą." },
+            { "grade": 5, "hours": 6, "description": "Procento sąvoka: dalies ir visumos radimas, skaičiaus padidėjimas ir sumažėjimas procentais; nuolaidos, išlaidos, pinigų pervedimai." },
+            { "grade": 6, "hours": 7, "description": "Nuolaida ir procentinė nuolaida, prekių ir paslaugų vieneto tarifai, skolinimasis ir taupymas, savaitės biudžetas, mokesčių procentai." },
+            { "grade": 7, "hours": 7, "description": "Dydžio keitimas kelis kartus procentais, palūkanos ir palūkanų norma, PVM, asmeninio biudžeto sudarymas ir valdymas." },
+            { "grade": 8, "hours": 5, "description": "Valiutų kursai ir konvertavimas, paprastosios ir sudėtinės palūkanos, kredito ir lizingo pasiūlymų palyginimas." }
+          ] },
+        { "name": "Sinusas, kosinusas ir tangentas",
+          "description": "Trigonometriniai skaičiai: posūkio kampas, vienetinis apskritimas, sinusas, kosinusas, tangentas ir atvirkštinės trigonometrinės reikšmės.",
+          "curriculum": [
+            { "grade": 11, "course": "Bendrasis", "hours": 16, "description": "Posūkio kampai ir vienetinis apskritimas, kampo sinusas, kosinusas ir tangentas, pagrindinė trigonometrinė tapatybė, arksinusas, arkkosinusas ir arktangentas." },
+            { "grade": 11, "course": "Išplėstinis", "hours": 20, "description": "Posūkio kampai laipsniais ir radianais, vienetinis apskritimas ir tangentų tiesė, sinusas, kosinusas ir tangentas, jų sąryšiai, arksinusas, arkkosinusas ir arktangentas." }
+          ] }
+      ] },
+      { "name": "Modeliai ir sąryšiai",
+        "description": "Dėsningumai ir sekos, algebriniai reiškiniai, lygtys ir nelygybės, proporcingumas ir funkcijos; III–IV gimn. klasėse – progresijos, funkcijų tyrimas, išvestinė ir integralas.",
+        "children": [
+        { "name": "Dėsningumai",
+          "description": "Objektų ir skaičių sekos, jų sudarymo taisyklės, algoritmai ir komandos, vėliau – skaičių sekos ir progresijos.",
+          "curriculum": [
+            { "grade": 1, "description": "Objektų sekos iš 2–3 pasikartojančių narių grupių: atpažinimas, pratęsimas, trūkstami nariai, seka pagal nurodytą taisyklę ir savo seka." },
+            { "grade": 2, "description": "Sudėtingesnės objektų ir skaičių sekos; algoritmo ir komandos sąvokos, nuoseklus komandų atlikimas, pasirinkimo komanda „jei–tai“." },
+            { "grade": 3, "description": "Sekos, kurių elementai skiriasi dydžiu, spalva, linijos storiu ar posūkio kampu; pasirinkimo komanda „jei–tai–kitaip“, sekos fizinėmis ir skaitmeninėmis priemonėmis." },
+            { "grade": 4, "description": "Sekos iš trupmenų ar dešimtainių skaičių, augančios ar mažėjančios objektų sekos, dviejų sekų suliejimas; kartojimo komanda." },
+            { "grade": 10, "hours": 12, "description": "Dėsningumų taikymas sprendžiant problemas: proporcingoji dalyba, Fibonačio seka, procentai ir dydžių santykiai, finansiniai kontekstai." }
+          ],
+          "children": [
+            { "name": "Sekos", "description": "Skaičių sekos ir įvesties–išvesties lentelės.",
+              "curriculum": [ { "grade": 5, "hours": 5, "description": "Skaičių sekos, kurių kiekvienas kitas narys gaunamas atliekant tą patį veiksmą (ar kelis veiksmus); įvesties–išvesties lentelės ir jomis aprašytas sąryšis." } ] },
+            { "name": "Skaičių sekos", "description": "Skaičių seka kaip funkcija ir jos aprašymo būdai.",
+              "curriculum": [ { "grade": 9, "hours": 8, "description": "Skaičių seka kaip funkcija, kurios apibrėžimo sritis yra N; sekų aprašymas n-tojo nario formule ir rekurentiniu būdu." } ] },
+            { "name": "Progresijos", "description": "Aritmetinė ir geometrinė progresijos.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 20, "description": "Aritmetinė ir geometrinė progresijos: n-tojo nario ir pirmųjų n narių sumos formulės, viduriniojo nario savybė, įvairaus konteksto uždaviniai." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 28, "description": "Skaičių sekos sąvokos, aritmetinė ir geometrinė progresijos, jų formulių įrodymas, nykstamoji geometrinė progresija ir jos suma." }
+              ] }
+          ] },
+        { "name": "Algebra",
+          "description": "Raidiniai reiškiniai, lygtys, nelygybės ir jų sistemos, situacijų modeliavimas.",
+          "curriculum": [
+            { "grade": 3, "description": "Lygties sprendimo samprata: paprasčiausių lygčių su vienu veiksmu sprendimas įvairiais būdais (ir parašant lygtį su atvirkštiniu veiksmu), sprendinio patikrinimas." },
+            { "grade": 4, "description": "Situacijų modeliavimas reiškiniais ir lygtimis, ta pati lygtis skirtingoms situacijoms, kintamojo ir nežinomojo nurodymas." }
+          ],
+          "children": [
+            { "name": "Lygtys", "description": "Pirmojo laipsnio lygtys su vienu nežinomuoju.",
+              "curriculum": [
+                { "grade": 5, "hours": 6, "description": "Pirmojo laipsnio 1–3 žingsnių lygtys su vienu nežinomuoju, sprendžiamos keičiant jas ekvivalenčiomis lygtimis." },
+                { "grade": 6, "hours": 9, "description": "Pirmojo laipsnio 1–4 žingsnių lygtys, ir su skliaustais bei trupmenomis; panašiųjų narių sutraukimas." }
+              ] },
+            { "name": "Raidiniai reiškiniai", "description": "Raidinių reiškinių sudarymas ir pertvarkymas.",
+              "curriculum": [
+                { "grade": 5, "hours": 6, "description": "Raidinės skaičiavimo dėsnių išraiškos, raidinių reiškinių sudarymas ir jų reikšmių apskaičiavimas." },
+                { "grade": 8, "hours": 10, "description": "Vienanariai ir daugianariai, greitosios daugybos formulės, dvinario kvadrato išskyrimas, daugianario skaidymas dauginamaisiais." },
+                { "grade": 9, "hours": 9, "description": "Kvadratinis trinaris ir jo skaidymas dauginamaisiais, trupmeniniai racionalieji reiškiniai ir jų pertvarkymas." }
+              ] },
+            { "name": "Nelygybės", "description": "Pirmojo laipsnio nelygybės su vienu nežinomuoju.",
+              "curriculum": [ { "grade": 7, "hours": 12, "description": "Skaitinių nelygybių savybės, nelygybės su vienu nežinomuoju ir jų sprendinių aibės, dvigubos nelygybės ir nelygybių sistemos." } ] },
+            { "name": "Lygčių sistemos", "description": "Dviejų lygčių su dviem nežinomaisiais sistemos ir jų taikymas.",
+              "curriculum": [
+                { "grade": 8, "hours": 10, "description": "Lygtis ax + by = c ir jos sprendinių grafikas; tiesinių lygčių sistemų sprendimas grafiniu, keitimo, sudėties ir sulyginimo būdais." },
+                { "grade": 9, "hours": 9, "description": "Sistemos, kurių viena lygtis tiesinė, o kita kvadratinė, ir jomis modeliuojami uždaviniai." },
+                { "grade": 10, "hours": 10, "description": "Lygčių sistemos, kurių viena lygtis gali būti racionalioji; įvairaus konteksto situacijų modeliavimas sistemomis." },
+                { "grade": 11, "course": "Išplėstinis", "description": "Netiesinių lygčių sistemos (ir su iracionaliosiomis, rodiklinėmis, logaritminėmis lygtimis) ir jų taikymas tekstiniams uždaviniams." }
+              ] },
+            { "name": "Kvadratinės lygtys", "description": "Antrojo laipsnio lygtys ir jų taikymas.",
+              "curriculum": [ { "grade": 9, "hours": 10, "description": "Kvadratinės lygtys, jų sprendimo būdai ir kvadratinėmis lygtimis modeliuojami uždaviniai." } ] },
+            { "name": "Racionaliosios lygtys", "description": "Lygtys su trupmeniniais racionaliaisiais reiškiniais.",
+              "curriculum": [
+                { "grade": 10, "hours": 12, "description": "Racionaliųjų lygčių sprendimas, leistinosios nežinomojo reikšmės, situacijų modeliavimas racionaliosiomis lygtimis." },
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Lygtys ir jų sprendiniai, ekvivalentieji pertvarkiai, racionaliųjų lygčių sprendimas ir sprendinių atrinkimas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 4, "description": "Lygtys ir jų sprendiniai, ekvivalentieji ir neekvivalentieji pertvarkiai, sudėtingesnės racionaliosios lygtys." }
+              ] },
+            { "name": "Kvadratinės nelygybės", "description": "Antrojo laipsnio nelygybės.",
+              "curriculum": [ { "grade": 10, "hours": 10, "description": "Kvadratinių nelygybių sprendimas grafiniu ir keitimo būdais (taikant ir skaitmenines priemones)." } ] },
+            { "name": "Iracionaliosios lygtys", "description": "Lygtys, kuriose nežinomasis yra po šaknies ženklu.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Iracionaliųjų lygčių sprendimas keliant abi puses laipsniu ir gautų sprendinių patikrinimas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Sudėtingesnės iracionaliosios lygtys, pašalinių sprendinių atsiradimo priežastys ir jų atmetimas." }
+              ] },
+            { "name": "Rodiklinės lygtys", "description": "Lygtys, kurių nežinomasis yra laipsnio rodiklyje.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Rodiklinės lygtys, sprendžiamos suvedant jas į pavidalą a^f(x) = a^g(x) arba keičiant nežinomąjį." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Nesudėtingos lygtys, kurių nežinomasis yra laipsnio (laipsnių) rodiklyje, sprendžiamos įvairiais būdais (vienas pagrindas, keitinys, logaritmavimas)." }
+              ] },
+            { "name": "Logaritminės lygtys", "description": "Lygtys, kurių nežinomasis yra po logaritmo ženklu.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 6, "description": "Logaritminės lygtys log_a f(x) = b ir log_a f(x) = log_a g(x), paisant apibrėžimo srities." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Sudėtingesnės logaritminės lygtys, sprendžiamos taikant logaritmų savybes ir keitinius." }
+              ] },
+            { "name": "Lygtys su moduliais", "description": "Lygtys, kuriose nežinomasis yra po modulio ženklu.",
+              "curriculum": [ { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Lygtys su vienu ar keliais moduliais, sprendžiamos intervalų metodu ir remiantis modulio geometrine prasme." } ] },
+            { "name": "Tekstiniai uždaviniai", "description": "Tekstinių uždavinių sprendimas lygtimis ir jų sistemomis.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 10, "description": "Tekstinių uždavinių sprendimas sudarant lygtį, ją išsprendžiant ir atrenkant sąlygą atitinkančius sprendinius." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "Su procentais ir dydžių santykiais susiję uždaviniai (mišinių, džiovinimo ir kt.), sprendžiami lygtimis ir jų sistemomis." }
+              ] },
+            { "name": "Racionaliosios nelygybės", "description": "Nelygybės su racionaliaisiais reiškiniais.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 6, "description": "Racionaliųjų nelygybių sprendimas intervalų metodu." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "Sudėtingesnės racionaliosios nelygybės ir jų sistemos, sprendžiamos intervalų metodu." }
+              ] },
+            { "name": "Rodiklinės nelygybės", "description": "Nelygybės, kurių nežinomasis yra laipsnio rodiklyje.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Rodiklinės nelygybės, sprendžiamos remiantis rodiklinės funkcijos didėjimu ar mažėjimu." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Nesudėtingos nelygybės, kurių nežinomasis yra laipsnio rodiklyje, ir jų sprendimas keitiniais." }
+              ] },
+            { "name": "Logaritminės nelygybės", "description": "Nelygybės, kurių nežinomasis yra po logaritmo ženklu.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Logaritminės nelygybės log_a x ⋛ b ir log_a f(x) ⋛ log_a g(x), paisant apibrėžimo srities." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Nesudėtingos nelygybės, kurių nežinomasis yra logaritmo (logaritmų) reiškinyje, ir jų sistemos." }
+              ] },
+            { "name": "Nelygybės su moduliais", "description": "Nelygybės, kuriose nežinomasis yra po modulio ženklu.",
+              "curriculum": [ { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Nelygybės su moduliais, sprendžiamos intervalų metodu ir remiantis modulio geometrine prasme." } ] },
+            { "name": "Trigonometrinės lygtys", "description": "Trigonometriniai reiškiniai ir trigonometrinės lygtys.",
+              "curriculum": [
+                { "grade": 12, "course": "Bendrasis", "hours": 16, "description": "Trigonometrinės formulės ir reiškinių pertvarkymas, paprasčiausios trigonometrinės lygtys ir jų sprendinių formulės." },
+                { "grade": 12, "course": "Išplėstinis", "hours": 20, "description": "Trigonometrinių formulių įrodymas ir taikymas, sudėtingesnės trigonometrinės lygtys, sprendžiamos keitiniais ir skaidant dauginamaisiais." }
+              ] },
+            { "name": "Trigonometrinės nelygybės", "description": "Paprasčiausios trigonometrinės nelygybės.",
+              "curriculum": [ { "grade": 12, "course": "Išplėstinis", "hours": 4, "description": "Paprasčiausios trigonometrinės nelygybės, sprendžiamos vienetiniu apskritimu ir funkcijų grafikais." } ] }
+          ] },
+        { "name": "Tiesiniai ir netiesiniai sąryšiai",
+          "description": "Proporcingumas, tiesinis sąryšis, funkcijos ir jų grafikai.",
+          "children": [
+            { "name": "Tiesioginis proporcingumas", "description": "Tiesioginio proporcingumo sąryšis, santykis ir proporcija.",
+              "curriculum": [ { "grade": 6, "hours": 7, "description": "Tiesioginio proporcingumo sąryšis įvesties–išvesties lentelėse ir koordinačių plokštumoje, grafiko skaitymas ir braižymas, santykis ir proporcija." } ] },
+            { "name": "Atvirkštinis proporcingumas", "description": "Atvirkštinio proporcingumo sąryšis.",
+              "curriculum": [ { "grade": 7, "hours": 8, "description": "Atvirkštinio proporcingumo sąryšis lentelėse ir praktinėse situacijose (pvz., greitis ir laikas, kai kelias pastovus)." } ] },
+            { "name": "Tiesinis sąryšis", "description": "Tiesinio sąryšio atpažinimas ir taikymas.",
+              "curriculum": [ { "grade": 8, "hours": 4, "description": "Tiesinis sąryšis įvesties–išvesties lentelėse ir praktinėse situacijose (pvz., kaina iš pastoviosios ir kintamosios dalies), dar be funkcijos sąvokos." } ] },
+            { "name": "Funkcija", "description": "Funkcijos sąvoka, žymenys, savybės ir grafikai.",
+              "curriculum": [
+                { "grade": 9, "hours": 10, "description": "Funkcijos sąvoka, argumentas ir funkcijos reikšmė, funkcijos reiškimo būdai, grafikas." },
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Funkcijų sąvokos, terminai ir žymenys, apibrėžimo ir reikšmių sritis, grafikų eskizai, didėjimo, mažėjimo ir ženklo pastovumo intervalai." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 8, "description": "Funkcijų sąvokos ir žymenys, funkcijų savybės, tolydžios funkcijos samprata ir riba, grafikų eskizai." }
+              ] },
+            { "name": "Tiesinė ir kvadratinė funkcijos", "description": "Tiesinė ir kvadratinė funkcijos, jų grafikai.",
+              "curriculum": [ { "grade": 9, "hours": 12, "description": "Tiesinė funkcija y = kx + b ir kvadratinė funkcija y = ax² + bx + c, jų grafikai ir savybės." } ] },
+            { "name": "Laipsninė ir šaknies funkcijos", "description": "Funkcijos y = xⁿ ir y = ⁿ√x.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Laipsninės ir šaknies funkcijų grafikų eskizai, apibrėžimo ir reikšmių sritys, monotoniškumas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 4, "description": "Laipsninės ir šaknies funkcijų savybės ir grafikai, jų taikymas lygtims ir nelygybėms." }
+              ] },
+            { "name": "Rodiklinės ir logaritminės funkcijos", "description": "Funkcijos y = aˣ ir y = log_a x.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 4, "description": "Rodiklinės ir logaritminės funkcijų grafikų eskizai, savybės ir taikymas." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 4, "description": "Rodiklinės ir logaritminės funkcijų savybės, grafikai ir jų tarpusavio sąryšis." }
+              ] },
+            { "name": "Trigonometrinės funkcijos", "description": "Funkcijos y = sin x, y = cos x ir y = tg x.",
+              "curriculum": [
+                { "grade": 11, "course": "Bendrasis", "hours": 6, "description": "Trigonometrinių funkcijų grafikų eskizai, periodiškumas ir savybės." },
+                { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Trigonometrinių funkcijų savybės, periodiškumas ir grafikai, jų tyrinėjimas." }
+              ] }
+          ] },
+        { "name": "Funkcijos išvestinė",
+          "description": "Funkcijos išvestinė, jos radimas ir taikymas funkcijoms tirti.",
+          "curriculum": [
+            { "grade": 12, "course": "Bendrasis", "hours": 28, "description": "Išvestinės samprata, geometrinė ir fizikinė prasmė, išvestinių radimas, funkcijų (iki trečiojo laipsnio daugianarių) tyrimas, grafikų eskizai ir taikomieji uždaviniai." },
+            { "grade": 12, "course": "Išplėstinis", "hours": 44, "description": "Išvestinės samprata ir radimas, funkcijų savybių tyrimas naudojantis išvestine, didžiausios ir mažiausios reikšmės bei optimizavimo uždaviniai." }
+          ] },
+        { "name": "Pirmykštė funkcija ir integralas",
+          "description": "Pirmykštė funkcija, integralai ir jų taikymai.",
+          "curriculum": [
+            { "grade": 12, "course": "Išplėstinis", "hours": 24, "description": "Pirmykštė funkcija ir neapibrėžtinis integralas, apibrėžtinis integralas ir jo taikymai (pvz., plotams apskaičiuoti)." }
+          ] }
+      ] },
+      { "name": "Geometrija ir matavimai",
+        "description": "Matavimai ir matavimo vienetai, konstravimas ir transformacijos, plokščiosios ir erdvės figūros, trigonometrija geometrijoje; III–IV gimn. klasėse – vektoriai ir stereometrija.",
+        "children": [
+        { "name": "Matavimo skalės ir vienetai",
+          "description": "Dydžių matavimas, matavimo vienetai ir jų sąryšiai, „mato jausmas“.",
+          "curriculum": [
+            { "grade": 1, "description": "Dydžių palyginimas ir matavimas paprasčiausiais vienetais ir priemonėmis, įvertinimas „iš akies“ ir patikrinimas matuojant." },
+            { "grade": 2, "description": "Gretimų masės, laiko, ilgio ir tūrio vienetų sąryšiai; ploto sąvoka ir jo matavimas sąlyginiais vienetais." },
+            { "grade": 3, "description": "Ilgio, ploto, masės, talpos ir laiko vienetai bei jų sąryšiai, matavimas prietaisais ir rezultatų įvertinimas." },
+            { "grade": 4, "description": "Greičio vienetai (km/h, m/min, m/s), tūrio vienetai cm³ ir m³, statinio iš kubelių tūris, kelio, greičio ir laiko sąryšis." }
+          ],
+          "children": [
+            { "name": "Kelias, laikas, greitis", "description": "Judėjimo uždaviniai ir kelio formulė.",
+              "curriculum": [ { "grade": 5, "hours": 5, "description": "Dviejų kūnų judėjimas ta pačia ir priešingomis kryptimis, priešpriešinis judėjimas (ir pradedant ar baigiant skirtingu laiku), kelio formulė." } ] },
+            { "name": "Ilgis, plotas, tūris", "description": "Metrinė sistema ir matavimo vienetų sąryšiai.",
+              "curriculum": [ { "grade": 5, "hours": 4, "description": "Metrinė matavimo sistema, ilgio, ploto ir tūrio vienetų smulkinimas ir stambinimas, realių objektų dydžių įvertinimas." } ] }
+          ] },
+        { "name": "Konstravimas",
+          "description": "Padėtis erdvėje ir planai, simetrija ir kitos transformacijos, geometrinis braižymas.",
+          "curriculum": [
+            { "grade": 1, "description": "Objektų ir žmonių vietos bei padėties vienas kito atžvilgiu apibūdinimas ir vaizdavimas." },
+            { "grade": 2, "description": "Vietos planai, kelių žingsnių judėjimo instrukcijos (su pusės ar ketvirčio apskritimo posūkiais), ašies atžvilgiu simetriškos figūros." },
+            { "grade": 3, "description": "Ornamentai iš detalių, taikant simetriją tiesės atžvilgiu, posūkį ir postūmį horizontalia ar vertikalia kryptimi." },
+            { "grade": 4, "description": "Koordinačių plokštumos pirmasis ketvirtis: taško koordinatės, objekto judėjimas, posūkis, postūmis ir simetrija tiesės atžvilgiu." }
+          ],
+          "children": [
+            { "name": "Transformacijos", "description": "Simetrijos, posūkis, postūmis, panašumas ir vektoriai.",
+              "curriculum": [
+                { "grade": 5, "hours": 5, "description": "Centrinė simetrija, posūkis ir postūmis; trikampių ir keturkampių savybių tyrinėjimas taikant transformacijas." },
+                { "grade": 6, "hours": 7, "description": "Objekto vaizdo didinimas ir mažinimas, panašiosios figūros ir mastelis." },
+                { "grade": 7, "hours": 5, "description": "Figūrų lygumo pagrindimas transformacijų seka koordinačių plokštumoje." },
+                { "grade": 8, "hours": 4, "description": "Vektorius (kryptinė atkarpa), lygūs ir priešingi vektoriai, vektorių suma, skirtumas ir daugyba iš skaičiaus." },
+                { "grade": 9, "hours": 5, "description": "Transformacijų apibendrinimas ir taikymas sprendžiant geometrijos uždavinius." }
+              ] },
+            { "name": "Braižymas", "description": "Geometriniai brėžimo uždaviniai ir projektavimas.",
+              "curriculum": [
+                { "grade": 6, "hours": 5, "description": "Trikampių brėžimas pagal duotus elementus, trikampio egzistavimo taisyklė, trikampių lygumo požymiai." },
+                { "grade": 7, "hours": 5, "description": "Pagrindiniai braižymo uždaviniai: atkarpos vidurys, statmuo, kampo pusiaukampinė, atstumai; trikampio pusiaukampinės, pusiaukraštinės ir aukštinės." },
+                { "grade": 8, "hours": 4, "description": "Erdvės objekto projektavimas: vaizdai iš viršaus, priekio ir šono." }
+              ] }
+          ] },
+        { "name": "Figūros",
+          "description": "Plokščiosios ir erdvės figūros, jų savybės, matavimai, įrodymai ir trigonometrija.",
+          "curriculum": [
+            { "grade": 1, "description": "Taškas, tiesė, spindulys, atkarpa ir jų tarpusavio padėtis; erdvės figūrų (kubo, rutulio) atpažinimas aplinkoje." },
+            { "grade": 2, "description": "Uždara laužtė, kampas, daugiakampis, jo kampai ir kraštinės; stačiakampis gretasienis, kūgis, ritinys; teiginių formulavimas." },
+            { "grade": 3, "description": "Susikertančios ir nesusikertančios, lygiagrečios ir statmenos tiesės, jų pavyzdžiai aplinkoje." },
+            { "grade": 4, "description": "Trikampių rūšys pagal kampus ir kraštines; erdvės figūrų elementai (viršūnės, briaunos, sienos, pagrindai) ir išklotinės." }
+          ],
+          "children": [
+            { "name": "Plokščios figūros", "description": "Kampai, trikampiai, keturkampiai, apskritimas, geometriniai įrodymai.",
+              "curriculum": [
+                { "grade": 5, "hours": 7, "description": "Kampų rūšys, gretutiniai ir kryžminiai kampai, trikampių rūšys, trikampio ir keturkampio kampų suma; lygiagretainis, rombas, trapecija, deltoidas." },
+                { "grade": 6, "hours": 11, "description": "Panašiosios figūros, trikampių panašumo požymiai, nežinomų kraštinių radimas proporcijomis, mastelis, keturkampio kampų suma." },
+                { "grade": 7, "hours": 12, "description": "Apibrėžimai ir teoremos, atvirkštiniai teiginiai, kampai prie lygiagrečių tiesių ir kirstinės, keturkampių klasifikavimas." },
+                { "grade": 8, "hours": 10, "description": "Matematinis įrodymas, Pitagoro ir jai atvirkštinė teoremos, trikampio ir trapecijos vidurinės linijos, lygiašonio ir lygiakraščio trikampių savybės." },
+                { "grade": 9, "hours": 12, "description": "Apskritimo geometrija: centriniai ir įbrėžtiniai kampai, liestinės, kirstinės, stygos, skritulio išpjova ir nuopjova." },
+                { "grade": 10, "hours": 14, "description": "Įbrėžtiniai ir apibrėžtiniai daugiakampiai, į trikampį ir keturkampį įbrėžto bei apie juos apibrėžto apskritimo savybės." }
+              ] },
+            { "name": "Erdvės figūros", "description": "Briaunainiai ir sukiniai pagrindinėje mokykloje.",
+              "curriculum": [
+                { "grade": 5, "hours": 5, "description": "Stačiakampis gretasienis, kubas, prizmė, piramidė, ritinys, kūgis ir rutulys: atpažinimas, elementai ir išklotinės." },
+                { "grade": 7, "hours": 9, "description": "Stačioji ir taisyklingoji prizmė, taisyklingoji piramidė (aukštinė, apotema), ritinio ir kūgio elementai." },
+                { "grade": 8, "hours": 9, "description": "Pitagoro teoremos taikymas erdvės figūroms; prizmės, piramidės, ritinio, kūgio ir sferos paviršiaus plotas ir tūris." }
+              ] },
+            { "name": "Ilgio, ploto, tūrio skaičiavimai", "description": "Perimetro, ploto ir tūrio skaičiavimai.",
+              "curriculum": [
+                { "grade": 5, "hours": 7, "description": "Perimetro, ploto ir tūrio skaičiavimai, ir figūrų, sudarytų iš kelių žinomų figūrų; perimetro ir ploto sąvokų derinimas." },
+                { "grade": 7, "hours": 12, "description": "Trikampio, lygiagretainio ir trapecijos ploto formulės, apskritimo ilgis ir skritulio plotas, ritinio ir kūgio paviršiaus plotas, prizmės, piramidės, ritinio ir kūgio tūris." },
+                { "grade": 8, "hours": 5, "description": "Matematinio ir praktinio turinio ilgio, ploto ir tūrio uždaviniai, atstumas tarp taškų koordinačių plokštumoje." }
+              ] },
+            { "name": "Įvadas į trigonometriją", "description": "Trigonometriniai santykiai ir jų taikymas geometrijoje.",
+              "curriculum": [
+                { "grade": 9, "hours": 10, "description": "Smailiojo kampo sinusas, kosinusas ir tangentas stačiajame trikampyje, 30°, 45° ir 60° kampų reikšmės, taikomieji uždaviniai." },
+                { "grade": 10, "hours": 14, "description": "Vienetinis apskritimas ir posūkio kampas, bukojo kampo sinusas ir kosinusas, trikampio ploto formulė, sinusų ir kosinusų teoremos." }
+              ] },
+            { "name": "Tiesės, plokštumos, kampai erdvėje", "description": "Stereometrijos pagrindai.",
+              "curriculum": [
+                { "grade": 12, "course": "Bendrasis", "hours": 13, "description": "Stereometrijos aksiomos ir teoremos, tiesių ir plokštumų tarpusavio padėtys, atstumai ir kampai erdvėje, dvisienis kampas." },
+                { "grade": 12, "course": "Išplėstinis", "hours": 22, "description": "Stereometrijos aksiomos ir teoremos, statmenumo ir lygiagretumo požymiai, trijų statmenų teorema, atstumai ir kampai erdvėje." }
+              ] },
+            { "name": "Briaunainiai ir sukiniai", "description": "Erdvės kūnai, jų pjūviai, paviršiaus plotai ir tūriai.",
+              "curriculum": [
+                { "grade": 12, "course": "Bendrasis", "hours": 17, "description": "Prizmės, piramidės, ritiniai, kūgiai, sferos ir rutuliai: vaizdavimas, išklotinės, pjūviai, paviršiaus plotai ir tūriai." },
+                { "grade": 12, "course": "Išplėstinis", "hours": 20, "description": "Briaunainių ir sukinių elementai ir pjūviai, paviršiaus plotai ir tūriai, sudėtingesni skaičiavimo ir įrodymo uždaviniai." }
+              ] }
+          ] },
+        { "name": "Vektoriai",
+          "description": "Plokštumos vektoriai, veiksmai su jais ir vektoriai koordinačių plokštumoje.",
+          "children": [
+            { "name": "Plokštumos vektoriai. Veiksmai su vektoriais", "description": "Vektoriaus sąvoka ir veiksmai su vektoriais.",
+              "curriculum": [ { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Vektoriaus sąvoka, kolinearieji vektoriai, vektorių sudėtis, atimtis ir daugyba iš skaičiaus, vektoriaus išreiškimas kitais vektoriais." } ] },
+            { "name": "Vektoriai stačiakampėje koordinačių plokštumoje", "description": "Vektoriai koordinatėmis.",
+              "curriculum": [ { "grade": 11, "course": "Išplėstinis", "hours": 6, "description": "Vektoriaus koordinatės ir ilgis, veiksmai su vektoriais koordinatėmis, skaliarinė sandauga ir kampas tarp vektorių." } ] }
+          ] }
+      ] },
+      { "name": "Duomenys ir tikimybės",
+        "description": "Duomenų rinkimas, vaizdavimas ir interpretavimas, statistinės charakteristikos, atsitiktiniai įvykiai ir tikimybės; III–IV gimn. klasėse – taikomoji duomenų analizė, kombinatorika ir tikimybiniai modeliai.",
+        "children": [
+        { "name": "Duomenys ir interpretavimas",
+          "description": "Statistinių duomenų rinkimas, tvarkymas, vaizdavimas ir interpretavimas.",
+          "curriculum": [
+            { "grade": 1, "description": "Stebėjimo ar apklausos duomenų vaizdavimas piktograma ir stulpeline diagrama." },
+            { "grade": 2, "description": "Duomenų vaizdavimas piktograma, stulpeline diagrama ir dažnių lentele, diagramos ir lentelės duomenų siejimas." },
+            { "grade": 3, "description": "Klausimai apie artimą aplinką, duomenų rinkimas, sisteminimas ir vaizdavimas lentelėmis bei diagramomis." },
+            { "grade": 4, "description": "Su artima aplinka susijusių statistinių klausimų kėlimas, apklausos ar stebėjimo rezultatų pristatymas ir išvadų aptarimas." },
+            { "grade": 5, "hours": 4, "description": "Imtis ir imties vidurkis, statistiniai klausimai, kokybiniai ir kiekybiniai duomenys, dažnių lentelės ir diagramos." },
+            { "grade": 6, "hours": 6, "description": "Dvigubos stulpelinės ir linijinės diagramos, moda ir mediana, vidurkis iš dažnių lentelės, skaitmeninės priemonės." },
+            { "grade": 7, "hours": 6, "description": "Populiacija ir imtis, reprezentatyvi imtis ir atsitiktinė atranka, duomenų kintamumas, skritulinė diagrama." },
+            { "grade": 8, "hours": 7, "description": "Duomenų grupavimas į intervalus, histograma, kvartiliai ir stačiakampė diagrama, išskirtys, sukauptasis dažnis." },
+            { "grade": 9, "hours": 7, "description": "Tiesinės koreliacijos modelis, kintamųjų priklausomybė populiacijoje." },
+            { "grade": 10, "hours": 8, "description": "Duomenų išsibarstymas apie vidurkį, normalusis, simetriški ir asimetriški skirstiniai." }
+          ] },
+        { "name": "Tikimybės ir interpretavimas",
+          "description": "Atsitiktiniai įvykiai, jų tikėtinumas ir tikimybė.",
+          "curriculum": [
+            { "grade": 3, "description": "Teiginiai apie baigčių tikėtinumą, atsitiktinių įvykių palyginimas pagal tikėtinumą (labiau ar mažiau tikėtina)." },
+            { "grade": 4, "description": "Žaidimai su 2–6 baigtimis, hipotezės apie baigčių tikėtinumą ir jų patikrinimas eksperimentu, žaidimai su vienodomis galimybėmis laimėti." },
+            { "grade": 5, "hours": 4, "description": "Kasdieniai atsitiktiniai įvykiai ir paprasčiausi bandymai, baigties tikimybė P = m/n, kai n neviršija 10." },
+            { "grade": 6, "hours": 6, "description": "Įvykis, vieno ir dviejų etapų bandymai, galimybių medis ir lentelė, daugybos taisyklė, būtinasis, negalimasis ir priešingas įvykiai." },
+            { "grade": 7, "hours": 6, "description": "Priklausomų, nepriklausomų ir nesutaikomų įvykių tyrinėjimas konkrečiose situacijose (įvadinis kursas)." },
+            { "grade": 8, "hours": 6, "description": "Statistinė ir klasikinė tikimybė, sudėtingesnių bandymų įvykių tikimybių skaičiavimas." },
+            { "grade": 10, "hours": 10, "description": "Rinkinių sudarymas, kombinatorikos sudėties ir daugybos taisyklės, įvykių tikimybių skaičiavimas." },
+            { "grade": 12, "course": "Bendrasis", "hours": 14, "description": "Klasikinis tikimybinis bandymas, įvykio tikimybė, nesutaikomi ir nepriklausomi įvykiai bei jų tikimybių formulės." }
+          ] },
+        { "name": "Įvadas į taikomąją duomenų analizę",
+          "description": "Taikomoji duomenų analizė ir kombinatorikos pagrindai.",
+          "curriculum": [
+            { "grade": 12, "course": "Bendrasis", "hours": 18, "description": "Kombinatorika: rinkiniai ir jų skaičius, faktorialas, kombinatorinė daugybos taisyklė; taikomieji duomenų analizės uždaviniai." },
+            { "grade": 12, "course": "Išplėstinis", "hours": 10, "description": "Taikomosios duomenų analizės uždaviniai: duomenų rinkimas, apdorojimas ir išvadų pagrįstumas." }
+          ] },
+        { "name": "Rinkiniai: kėliniai, gretiniai, deriniai",
+          "description": "Kombinatorikos rinkiniai ir jų skaičius.",
+          "curriculum": [
+            { "grade": 12, "course": "Išplėstinis", "hours": 6, "description": "Kėliniai, gretiniai ir deriniai, jų skaičiaus formulės ir kombinatorikos uždaviniai." }
+          ] },
+        { "name": "Klasikiniai ir neklasikiniai tikimybiniai modeliai",
+          "description": "Tikimybiniai modeliai ir įvykių tikimybės.",
+          "curriculum": [
+            { "grade": 12, "course": "Išplėstinis", "hours": 16, "description": "Klasikinis ir neklasikiniai tikimybiniai modeliai, veiksmai su įvykiais, nesutaikomi ir nepriklausomi įvykiai ir jų tikimybės." }
+          ] },
+        { "name": "Atsitiktiniai dydžiai",
+          "description": "Atsitiktiniai dydžiai ir jų skaitinės charakteristikos.",
+          "curriculum": [
+            { "grade": 12, "course": "Išplėstinis", "hours": 8, "description": "Diskretieji atsitiktiniai dydžiai, jų skirstiniai, vidurkis ir dispersija." }
+          ] }
+      ] }
+    ]
+  }
 }

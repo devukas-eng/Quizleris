@@ -121,7 +121,7 @@ async function fill() {
     const meta = await loadMeta(pool);
     const mathId = [...meta.subjects.values()].find(s => s.name === 'Matematika').id;
     const gradesOf = new Map();
-    for (const topic of meta.adminData.topics) if (topic.grades.length) gradesOf.set(topic.id, topic.grades.map(([g]) => g));
+    for (const topic of meta.adminData.topics) if (topic.grades.length) gradesOf.set(topic.id, [...new Set(topic.grades.map(g => g.grade))]);
     const leaves = [...gradesOf.keys()].map(id => ({ id, subjectId: meta.topics.get(id).subject_id, grades: gradesOf.get(id) }));
     // The worst case for a newest-first listing: one topic imported first and never again, so all
     // its tasks are the oldest rows (real imports come topic by topic)

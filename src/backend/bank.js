@@ -75,6 +75,7 @@ const SCHEMA = [
         parent_id INT UNSIGNED NULL,
         parent_key INT UNSIGNED AS (IFNULL(parent_id, 0)) STORED,
         name VARCHAR(160) NOT NULL,
+        description TEXT NULL,
         sort_order SMALLINT NOT NULL DEFAULT 0,
         archived TINYINT(1) NOT NULL DEFAULT 0,
         UNIQUE KEY bank_topics_with_subject (id, subject_id),
@@ -82,16 +83,6 @@ const SCHEMA = [
         INDEX bank_topics_parent (parent_id, subject_id),
         CONSTRAINT bank_topics_subject_fk FOREIGN KEY (subject_id) REFERENCES bank_subjects (id),
         CONSTRAINT bank_topics_parent_fk FOREIGN KEY (parent_id, subject_id) REFERENCES bank_topics (id, subject_id)
-    ) ${TABLE_OPTIONS}`,
-    // The curriculum: in which grades a topic is taught, with the yearly plan's hours
-    `CREATE TABLE IF NOT EXISTS bank_topic_grades (
-        grade_id TINYINT UNSIGNED NOT NULL,
-        topic_id INT UNSIGNED NOT NULL,
-        hours SMALLINT UNSIGNED NULL,
-        PRIMARY KEY (grade_id, topic_id),
-        INDEX bank_topic_grades_topic (topic_id),
-        CONSTRAINT bank_topic_grades_grade_fk FOREIGN KEY (grade_id) REFERENCES bank_grades (id),
-        CONSTRAINT bank_topic_grades_topic_fk FOREIGN KEY (topic_id) REFERENCES bank_topics (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
     // Further classifiers (context, achievement, competence, tags…) need no schema change;
     // subject_id NULL means the classifier is for every subject
@@ -117,6 +108,24 @@ const SCHEMA = [
         INDEX bank_values_parent (parent_id, dimension_id),
         CONSTRAINT bank_values_dimension_fk FOREIGN KEY (dimension_id) REFERENCES bank_dimensions (id),
         CONSTRAINT bank_values_parent_fk FOREIGN KEY (parent_id, dimension_id) REFERENCES bank_values (id, dimension_id)
+    ) ${TABLE_OPTIONS}`,
+    // The curriculum: in which grades a topic is taught, with the yearly plan's hours and what is
+    // learned that year. course_value_id names a course (a classifier value such as Išplėstinis) where
+    // a grade has several; NULL is the grade's whole class.
+    `CREATE TABLE IF NOT EXISTS bank_topic_grades (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        topic_id INT UNSIGNED NOT NULL,
+        grade_id TINYINT UNSIGNED NOT NULL,
+        course_value_id INT UNSIGNED NULL,
+        course_key INT UNSIGNED AS (IFNULL(course_value_id, 0)) STORED,
+        hours SMALLINT UNSIGNED NULL,
+        description TEXT NULL,
+        UNIQUE KEY bank_topic_grades_once (grade_id, topic_id, course_key),
+        INDEX bank_topic_grades_topic (topic_id),
+        INDEX bank_topic_grades_course (course_value_id),
+        CONSTRAINT bank_topic_grades_grade_fk FOREIGN KEY (grade_id) REFERENCES bank_grades (id),
+        CONSTRAINT bank_topic_grades_topic_fk FOREIGN KEY (topic_id) REFERENCES bank_topics (id) ON DELETE CASCADE,
+        CONSTRAINT bank_topic_grades_course_fk FOREIGN KEY (course_value_id) REFERENCES bank_values (id)
     ) ${TABLE_OPTIONS}`,
     // Narrow on purpose: listings read only these columns, the question itself is in bank_item_content.
     // owner_id 0 is the shared bank, any other value a teacher's own tasks (users.id; no foreign key
@@ -249,9 +258,10 @@ async function migrate(pool, fresh) {
 }
 
 // --- SEED ---
-// Grades, achievement levels, subjects, the maths curriculum for grades 5–10 (updated 2022
-// general programme) and the classifiers it names. Each table is seeded only while empty, so edits
-// made by admins survive restarts.
+// Grades, achievement levels, subjects, the maths curriculum for grades 1–12 (updated 2022 general
+// programme and its implementation guides: topics, yearly-plan hours and what each grade and course
+// learns) and the classifiers it names. Each table is seeded only while empty, so edits made by
+// admins survive restarts.
 async function seedBank(pool) {
     const seed = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
     const isEmpty = async table => {
@@ -271,14 +281,7 @@ async function seedBank(pool) {
     }
     const [subjects] = await pool.query('SELECT id, name FROM bank_subjects');
     const subjectId = name => subjects.find(s => s.name === name)?.id ?? null;
-    if (await isEmpty('bank_topics')) {
-        await inTransaction(pool, async conn => {
-            for (const [subject, nodes] of Object.entries(seed.topics)) {
-                const id = subjectId(subject);
-                if (id) await insertTopics(conn, id, null, nodes);
-            }
-        });
-    }
+    // Classifiers first: the curriculum's courses (Bendrasis, Išplėstinis) are values of one
     if (await isEmpty('bank_dimensions')) {
         await inTransaction(pool, async conn => {
             for (const [index, dimension] of seed.dimensions.entries()) {
@@ -288,18 +291,34 @@ async function seedBank(pool) {
             }
         });
     }
+    if (await isEmpty('bank_topics')) {
+        const [courses] = await pool.query(
+            `SELECT v.id, v.name, d.subject_id FROM bank_values v JOIN bank_dimensions d ON d.id = v.dimension_id
+             WHERE d.name = 'Kursas'`);
+        await inTransaction(pool, async conn => {
+            for (const [subject, nodes] of Object.entries(seed.topics)) {
+                const id = subjectId(subject);
+                const courseOf = name => {
+                    const course = courses.find(c => c.name === name && (c.subject_id === id || c.subject_id === null));
+                    if (!course) throw new Error(`bank seed: no course "${name}" for ${subject}`);
+                    return course.id;
+                };
+                if (id) await insertTopics(conn, id, null, nodes, courseOf);
+            }
+        });
+    }
 }
 
-async function insertTopics(conn, subjectId, parentId, nodes) {
+async function insertTopics(conn, subjectId, parentId, nodes, courseOf) {
     for (const [index, node] of nodes.entries()) {
-        const [result] = await conn.query('INSERT INTO bank_topics (subject_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?)',
-            [subjectId, parentId, node.name, index]);
-        const grades = Object.entries(node.grades || {});
-        if (grades.length) {
-            await conn.query('INSERT INTO bank_topic_grades (grade_id, topic_id, hours) VALUES ?',
-                [grades.map(([grade, hours]) => [Number(grade), result.insertId, hours])]);
+        const [result] = await conn.query('INSERT INTO bank_topics (subject_id, parent_id, name, description, sort_order) VALUES (?, ?, ?, ?, ?)',
+            [subjectId, parentId, node.name, node.description ?? null, index]);
+        const rows = (node.curriculum || []).map(row =>
+            [row.grade, result.insertId, row.course ? courseOf(row.course) : null, row.hours ?? null, row.description ?? null]);
+        if (rows.length) {
+            await conn.query('INSERT INTO bank_topic_grades (grade_id, topic_id, course_value_id, hours, description) VALUES ?', [rows]);
         }
-        if (node.children) await insertTopics(conn, subjectId, result.insertId, node.children);
+        if (node.children) await insertTopics(conn, subjectId, result.insertId, node.children, courseOf);
     }
 }
 
@@ -365,8 +384,8 @@ async function loadMeta(pool) {
         pool.query('SELECT id, name, icon, sort_order, archived FROM bank_subjects ORDER BY sort_order, id'),
         pool.query('SELECT id, label FROM bank_grades ORDER BY id'),
         pool.query('SELECT id, name, color, sort_order FROM bank_difficulties ORDER BY sort_order, id'),
-        pool.query('SELECT id, subject_id, parent_id, name, sort_order, archived FROM bank_topics ORDER BY sort_order, id'),
-        pool.query('SELECT topic_id, grade_id, hours FROM bank_topic_grades ORDER BY grade_id'),
+        pool.query('SELECT id, subject_id, parent_id, name, description, sort_order, archived FROM bank_topics ORDER BY sort_order, id'),
+        pool.query('SELECT topic_id, grade_id, course_value_id, hours, description FROM bank_topic_grades ORDER BY grade_id, course_key'),
         pool.query('SELECT id, name, subject_id, sort_order FROM bank_dimensions ORDER BY sort_order, id'),
         pool.query('SELECT id, dimension_id, parent_id, name, sort_order FROM bank_values ORDER BY sort_order, id'),
         pool.query("SELECT subject_id, COUNT(*) AS n FROM bank_items WHERE owner_id = 0 AND status = 'published' GROUP BY subject_id")
@@ -375,7 +394,7 @@ async function loadMeta(pool) {
     const gradesOf = new Map();
     for (const row of topicGrades) {
         if (!gradesOf.has(row.topic_id)) gradesOf.set(row.topic_id, []);
-        gradesOf.get(row.topic_id).push([row.grade_id, row.hours]);
+        gradesOf.get(row.topic_id).push({ grade: row.grade_id, course: row.course_value_id, hours: row.hours, description: row.description });
     }
     const itemCounts = new Map(counts.map(row => [row.subject_id, Number(row.n)]));
     const topicChildren = childrenMap(topics);
@@ -388,7 +407,10 @@ async function loadMeta(pool) {
     }
 
     const subjectRows = subjects.map(s => ({ id: s.id, name: s.name, icon: s.icon, sortOrder: s.sort_order, archived: !!s.archived, items: itemCounts.get(s.id) || 0 }));
-    const topicRows = topics.map(t => ({ id: t.id, subjectId: t.subject_id, parentId: t.parent_id, name: t.name, sortOrder: t.sort_order, archived: !!t.archived, grades: gradesOf.get(t.id) || [] }));
+    const topicRows = topics.map(t => ({
+        id: t.id, subjectId: t.subject_id, parentId: t.parent_id, name: t.name, description: t.description,
+        sortOrder: t.sort_order, archived: !!t.archived, grades: gradesOf.get(t.id) || []
+    }));
     const shared = {
         grades: grades.map(g => ({ id: g.id, label: g.label })),
         difficulties: difficulties.map(d => ({ id: d.id, name: d.name, color: d.color, sortOrder: d.sort_order })),
@@ -964,12 +986,26 @@ async function countOf(pool, sql, args) {
     return Number(row.n);
 }
 
+/**
+ * A topic's curriculum rows: [{grade, course?, hours?, description?}] (or {grade: hours} for short),
+ * validated into [grade, course, hours, description]; a grade and course may appear once.
+ */
 function parseTopicGrades(value) {
-    const entries = Array.isArray(value) ? value : Object.entries(value && typeof value === 'object' ? value : {});
-    return entries.map(([grade, hours]) => {
-        const id = toId(grade);
-        if (!id || !meta.grades.has(id)) throw new BankError('Unknown grade');
-        return [id, core.clampInt(hours, 0, 999, null)];
+    const list = Array.isArray(value)
+        ? value
+        : Object.entries(value && typeof value === 'object' ? value : {}).map(([grade, hours]) => ({ grade, hours }));
+    const seen = new Set();
+    return list.map(entry => {
+        const row = entry && typeof entry === 'object' ? entry : {};
+        const grade = toId(row.grade);
+        if (!grade || !meta.grades.has(grade)) throw new BankError('Unknown grade');
+        const hasCourse = row.course != null && row.course !== '';
+        const course = hasCourse ? toId(row.course) : null;
+        if (hasCourse && (!course || !meta.values.has(course))) throw new BankError('Unknown course');
+        const key = `${grade}:${course || 0}`;
+        if (seen.has(key)) throw new BankError('A grade (with its course) is listed twice');
+        seen.add(key);
+        return [grade, course, core.clampInt(row.hours, 0, 999, null), optionalText(row.description, 2000)];
     });
 }
 
@@ -995,7 +1031,8 @@ function valueParent(dimensionId, rawParent, valueId = null) {
 async function replaceTopicGrades(conn, topicId, grades) {
     await conn.query('DELETE FROM bank_topic_grades WHERE topic_id = ?', [topicId]);
     if (grades.length) {
-        await conn.query('INSERT INTO bank_topic_grades (grade_id, topic_id, hours) VALUES ?', [grades.map(([grade, hours]) => [grade, topicId, hours])]);
+        await conn.query('INSERT INTO bank_topic_grades (grade_id, topic_id, course_value_id, hours, description) VALUES ?',
+            [grades.map(([grade, course, hours, description]) => [grade, topicId, course, hours, description])]);
     }
 }
 
@@ -1140,8 +1177,8 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         const parentId = topicParent(subjectId, body.parentId);
         const grades = parseTopicGrades(body.grades);
         const id = await inTransaction(pool, async conn => {
-            const [result] = await conn.query('INSERT INTO bank_topics (subject_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?)',
-                [subjectId, parentId, requiredText(body.name, 160),
+            const [result] = await conn.query('INSERT INTO bank_topics (subject_id, parent_id, name, description, sort_order) VALUES (?, ?, ?, ?, ?)',
+                [subjectId, parentId, requiredText(body.name, 160), optionalText(body.description, 2000),
                     nextOrder(meta.topics, t => t.subject_id === subjectId && (t.parent_id ?? null) === parentId)]);
             await replaceTopicGrades(conn, result.insertId, grades);
             return result.insertId;
@@ -1154,6 +1191,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         const topic = meta.topics.get(id);
         const columns = columnsFrom(body, {
             name: ['name', v => requiredText(v, 160)],
+            description: ['description', v => optionalText(v, 2000)],
             parentId: ['parent_id', v => topicParent(topic.subject_id, v, id)],
             sortOrder: ['sort_order', sortOrder],
             archived: ['archived', v => (v ? 1 : 0)]
@@ -1184,7 +1222,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             await inTransaction(pool, async conn => {
                 await conn.query('UPDATE bank_topics SET parent_id = ? WHERE parent_id = ?', [intoId, id]);
                 await conn.query('UPDATE bank_items SET topic_id = ? WHERE topic_id = ?', [intoId, id]);
-                await conn.query('INSERT IGNORE INTO bank_topic_grades (grade_id, topic_id, hours) SELECT grade_id, ?, hours FROM bank_topic_grades WHERE topic_id = ?', [intoId, id]);
+                // Grades the target already has keep its own row
+                await conn.query(
+                    `INSERT IGNORE INTO bank_topic_grades (grade_id, topic_id, course_value_id, hours, description)
+                     SELECT grade_id, ?, course_value_id, hours, description FROM bank_topic_grades WHERE topic_id = ?`, [intoId, id]);
                 await conn.query('DELETE FROM bank_topics WHERE id = ?', [id]);
             });
         } catch (error) {
