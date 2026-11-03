@@ -14,6 +14,7 @@ if (!process.argv.includes('--local') || !['127.0.0.1', 'localhost', '::1'].incl
     process.exit(1);
 }
 const ITEMS = Number(option('items') || 200000);
+const OLD_TOPIC_TASKS = 3000;
 const BATCH = 1000;
 const RUNS = 15;
 
@@ -110,7 +111,9 @@ async function addSyntheticTopics(meta) {
 
 async function fill() {
     // A fresh set of bank tables in this local test database (see the guard at the top)
-    for (const table of ['bank_item_values', 'bank_item_content', 'bank_items', 'bank_media', 'bank_topic_grades', 'bank_topics', 'bank_values', 'bank_dimensions', 'bank_subjects', 'bank_difficulties', 'bank_grades']) {
+    // Children before parents: the foreign keys would refuse it the other way round
+    for (const table of ['bank_item_media', 'bank_item_values', 'bank_item_content', 'bank_items', 'bank_media', 'bank_topic_grades',
+        'bank_values', 'bank_dimensions', 'bank_topics', 'bank_subjects', 'bank_difficulties', 'bank_grades', 'bank_settings']) {
         await pool.query(`DROP TABLE IF EXISTS ${table}`);
     }
     await ensureBankSchema(pool);
@@ -120,7 +123,10 @@ async function fill() {
     const gradesOf = new Map();
     for (const topic of meta.adminData.topics) if (topic.grades.length) gradesOf.set(topic.id, topic.grades.map(([g]) => g));
     const leaves = [...gradesOf.keys()].map(id => ({ id, subjectId: meta.topics.get(id).subject_id, grades: gradesOf.get(id) }));
-    const mathLeaves = leaves.filter(l => l.subjectId === mathId);
+    // The worst case for a newest-first listing: one topic imported first and never again, so all
+    // its tasks are the oldest rows (real imports come topic by topic)
+    const oldTopic = leaves.find(l => meta.topics.get(l.id).name === 'Skaičių aibės');
+    const mathLeaves = leaves.filter(l => l.subjectId === mathId && l !== oldTopic);
     const otherLeaves = leaves.filter(l => l.subjectId !== mathId);
     const valueIds = name => meta.adminData.dimensions.find(d => d.name === name).values.filter(v => v.parentId !== null || name !== 'Pasiekimas').map(v => v.id);
     const contexts = valueIds('Kontekstas');
@@ -134,15 +140,16 @@ async function fill() {
         const links = [];
         for (let n = first; n < Math.min(ITEMS, first + BATCH); n++) {
             const id = n + 1;
-            const isMath = rng() < 0.4;
-            const leaf = pick(isMath ? mathLeaves : otherLeaves);
+            const old = n < OLD_TOPIC_TASKS;
+            const isMath = old || rng() < 0.4;
+            const leaf = old ? oldTopic : pick(isMath ? mathLeaves : otherLeaves);
             const qtype = weighted(core.QTYPES, [50, 20, 8, 10, 10, 2]);
             const content = makeQuestion(qtype, isMath);
             items.push([
-                id, rng() < 0.85 ? 0 : int(1, 300), rng() < 0.08 ? 'template' : 'problem', qtype,
-                leaf.subjectId, pick(leaf.grades), rng() < 0.05 ? null : leaf.id,
+                id, old || rng() < 0.85 ? 0 : int(1, 300), rng() < 0.08 ? 'template' : 'problem', qtype,
+                leaf.subjectId, pick(leaf.grades), old || rng() >= 0.05 ? leaf.id : null,
                 rng() < 0.05 ? null : weighted(levels, [20, 35, 30, 15]),
-                weighted(['published', 'draft', 'archived'], [95, 4, 1]),
+                old ? 'published' : weighted(['published', 'draft', 'archived'], [95, 4, 1]),
                 core.previewText(content), core.searchText(content), rng() < 0.15 ? 1 : 0,
                 core.contentHash({ ...content, n }), Math.floor(Math.exp(rng() * 6)) - 1
             ]);
@@ -187,6 +194,9 @@ async function bench() {
     const scenarios = [
         ['Klasė + dalykas', { subject, grade: 7 }],
         ['Temos šaka (Algebra, 8 kl.)', { subject, grade: 8, topic: topic('Algebra') }],
+        ['Sena tema (3000 seniausių), 8 kl.', { subject, grade: 8, topic: topic('Skaičių aibės') }],
+        ['Sena tema be klasės', { subject, topic: topic('Skaičių aibės') }],
+        ['Sena sritis (Skaičiai ir skaičiavimai)', { subject, topic: topic('Skaičiai ir skaičiavimai') }],
         ['+ lygiai 2 ir 3', { subject, grade: 8, topic: topic('Algebra'), difficulty: '2,3' }],
         ['Populiariausi', { subject, grade: 7, sort: 'popular' }],
         ['Pagal sunkumą', { subject, grade: 7, sort: 'level' }],

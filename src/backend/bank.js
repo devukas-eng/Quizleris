@@ -20,22 +20,41 @@ const MAX_BULK = 100000;
 const BULK_CHUNK = 5000;
 const MAX_FETCH = 200;
 const MAX_SAMPLE = 50;
+// A safety cap on a teacher's own tasks until the Premium limits are set (see bankLimits)
+const MAX_PRIVATE_ITEMS = 10000;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_CONTENT_BYTES = 1024 * 1024; // the question JSON once its pictures are in bank_media
+const MEDIA_GRACE_HOURS = 24; // unused pictures are kept this long, so an import in progress never loses one
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
-const MEDIA_URL_RE = /^\/api\/media\/[0-9a-f]{64}$/;
+const MEDIA_URL_RE = /^\/api\/media\/([0-9a-f]{64})$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const SCHEMA_LOCK = 'quizleris_bank_schema';
 
 // --- SCHEMA ---
+// Always the latest schema: a fresh database gets exactly this, an older one is brought up to it by
+// MIGRATIONS. Parents come before the tables whose foreign keys point at them.
+//
+// Normal form: every table is in 3NF except three copies kept on purpose for fast filtering, each
+// pinned by a composite foreign key so it can never disagree with its source: a task's subject_id
+// (its topic's subject), a topic's subject_id (its parent's subject) and a value's dimension_id (its
+// parent's classifier). The question itself is one JSON document, like quizzes.quiz_data; the
+// columns derived from it (qtype, preview, search_text, has_image, content_hash) are only ever
+// written together with it.
+const ASCII = 'CHARACTER SET ascii COLLATE ascii_bin';
 const TABLE_OPTIONS = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 const SCHEMA = [
+    `CREATE TABLE IF NOT EXISTS bank_settings (
+        name VARCHAR(40) PRIMARY KEY,
+        value VARCHAR(255) NOT NULL
+    ) ${TABLE_OPTIONS}`,
     `CREATE TABLE IF NOT EXISTS bank_subjects (
         id SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(80) NOT NULL,
         icon VARCHAR(16) NULL,
         sort_order SMALLINT NOT NULL DEFAULT 0,
-        archived TINYINT(1) NOT NULL DEFAULT 0
+        archived TINYINT(1) NOT NULL DEFAULT 0,
+        UNIQUE KEY bank_subjects_name (name)
     ) ${TABLE_OPTIONS}`,
     `CREATE TABLE IF NOT EXISTS bank_grades (
         id TINYINT UNSIGNED PRIMARY KEY,
@@ -45,46 +64,66 @@ const SCHEMA = [
         id TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(40) NOT NULL,
         color CHAR(7) NULL,
-        sort_order SMALLINT NOT NULL DEFAULT 0
+        sort_order SMALLINT NOT NULL DEFAULT 0,
+        UNIQUE KEY bank_difficulties_name (name)
     ) ${TABLE_OPTIONS}`,
-    // parent_id NULL is a content area (turinio sritis); the depth is unlimited
+    // parent_id NULL is a content area (turinio sritis); the depth is unlimited. parent_key exists only
+    // so sibling names are unique at the top level too (a unique key treats every NULL as different).
     `CREATE TABLE IF NOT EXISTS bank_topics (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         subject_id SMALLINT UNSIGNED NOT NULL,
         parent_id INT UNSIGNED NULL,
+        parent_key INT UNSIGNED AS (IFNULL(parent_id, 0)) STORED,
         name VARCHAR(160) NOT NULL,
         sort_order SMALLINT NOT NULL DEFAULT 0,
         archived TINYINT(1) NOT NULL DEFAULT 0,
-        INDEX bank_topics_tree (subject_id, parent_id, sort_order)
+        UNIQUE KEY bank_topics_with_subject (id, subject_id),
+        UNIQUE KEY bank_topics_sibling_name (subject_id, parent_key, name),
+        INDEX bank_topics_parent (parent_id, subject_id),
+        CONSTRAINT bank_topics_subject_fk FOREIGN KEY (subject_id) REFERENCES bank_subjects (id),
+        CONSTRAINT bank_topics_parent_fk FOREIGN KEY (parent_id, subject_id) REFERENCES bank_topics (id, subject_id)
     ) ${TABLE_OPTIONS}`,
     // The curriculum: in which grades a topic is taught, with the yearly plan's hours
     `CREATE TABLE IF NOT EXISTS bank_topic_grades (
         grade_id TINYINT UNSIGNED NOT NULL,
         topic_id INT UNSIGNED NOT NULL,
-        hours SMALLINT NULL,
+        hours SMALLINT UNSIGNED NULL,
         PRIMARY KEY (grade_id, topic_id),
-        INDEX bank_topic_grades_topic (topic_id)
+        INDEX bank_topic_grades_topic (topic_id),
+        CONSTRAINT bank_topic_grades_grade_fk FOREIGN KEY (grade_id) REFERENCES bank_grades (id),
+        CONSTRAINT bank_topic_grades_topic_fk FOREIGN KEY (topic_id) REFERENCES bank_topics (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
-    // Further classifiers (context, achievement, competence, tags…) need no schema change
+    // Further classifiers (context, achievement, competence, tags…) need no schema change;
+    // subject_id NULL means the classifier is for every subject
     `CREATE TABLE IF NOT EXISTS bank_dimensions (
         id SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(60) NOT NULL,
         subject_id SMALLINT UNSIGNED NULL,
-        sort_order SMALLINT NOT NULL DEFAULT 0
+        subject_key SMALLINT UNSIGNED AS (IFNULL(subject_id, 0)) STORED,
+        sort_order SMALLINT NOT NULL DEFAULT 0,
+        UNIQUE KEY bank_dimensions_name (subject_key, name),
+        INDEX bank_dimensions_subject (subject_id),
+        CONSTRAINT bank_dimensions_subject_fk FOREIGN KEY (subject_id) REFERENCES bank_subjects (id)
     ) ${TABLE_OPTIONS}`,
     `CREATE TABLE IF NOT EXISTS bank_values (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         dimension_id SMALLINT UNSIGNED NOT NULL,
         parent_id INT UNSIGNED NULL,
+        parent_key INT UNSIGNED AS (IFNULL(parent_id, 0)) STORED,
         name VARCHAR(160) NOT NULL,
         sort_order SMALLINT NOT NULL DEFAULT 0,
-        INDEX bank_values_dimension (dimension_id, sort_order)
+        UNIQUE KEY bank_values_with_dimension (id, dimension_id),
+        UNIQUE KEY bank_values_sibling_name (dimension_id, parent_key, name),
+        INDEX bank_values_parent (parent_id, dimension_id),
+        CONSTRAINT bank_values_dimension_fk FOREIGN KEY (dimension_id) REFERENCES bank_dimensions (id),
+        CONSTRAINT bank_values_parent_fk FOREIGN KEY (parent_id, dimension_id) REFERENCES bank_values (id, dimension_id)
     ) ${TABLE_OPTIONS}`,
     // Narrow on purpose: listings read only these columns, the question itself is in bank_item_content.
-    // owner_id 0 is the shared bank, any other value a teacher's own tasks.
+    // owner_id 0 is the shared bank, any other value a teacher's own tasks (users.id; no foreign key
+    // because of the 0, so a deleted account's tasks are removed by cleanupBank instead).
     `CREATE TABLE IF NOT EXISTS bank_items (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        owner_id INT UNSIGNED NOT NULL DEFAULT 0,
+        owner_id INT NOT NULL DEFAULT 0,
         kind ENUM('problem', 'template') NOT NULL DEFAULT 'problem',
         qtype VARCHAR(20) NOT NULL,
         subject_id SMALLINT UNSIGNED NULL,
@@ -95,39 +134,68 @@ const SCHEMA = [
         preview VARCHAR(300) NOT NULL,
         search_text TEXT NOT NULL,
         has_image TINYINT(1) NOT NULL DEFAULT 0,
-        content_hash CHAR(40) NOT NULL,
+        content_hash CHAR(40) ${ASCII} NOT NULL,
         uses INT UNSIGNED NOT NULL DEFAULT 0,
         source VARCHAR(160) NULL,
-        created_by INT UNSIGNED NULL,
+        created_by INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY bank_items_dedupe (owner_id, content_hash),
+        INDEX bank_items_all_new (owner_id, status, id),
+        INDEX bank_items_subject_new (owner_id, status, subject_id, id),
+        INDEX bank_items_browse (owner_id, status, subject_id, grade_id, id),
         INDEX bank_items_topic (owner_id, status, subject_id, grade_id, topic_id, id),
         INDEX bank_items_level (owner_id, status, subject_id, grade_id, difficulty_id, id),
         INDEX bank_items_popular (owner_id, status, subject_id, grade_id, uses, id),
         INDEX bank_items_unsorted (owner_id, status, topic_id, subject_id, difficulty_id),
-        FULLTEXT INDEX bank_items_search (search_text)
+        INDEX bank_items_subject_ref (subject_id),
+        INDEX bank_items_grade_ref (grade_id),
+        INDEX bank_items_topic_ref (topic_id, subject_id),
+        INDEX bank_items_difficulty_ref (difficulty_id),
+        FULLTEXT INDEX bank_items_search (search_text),
+        CONSTRAINT bank_items_subject_fk FOREIGN KEY (subject_id) REFERENCES bank_subjects (id),
+        CONSTRAINT bank_items_grade_fk FOREIGN KEY (grade_id) REFERENCES bank_grades (id),
+        CONSTRAINT bank_items_topic_fk FOREIGN KEY (topic_id, subject_id) REFERENCES bank_topics (id, subject_id),
+        CONSTRAINT bank_items_difficulty_fk FOREIGN KEY (difficulty_id) REFERENCES bank_difficulties (id),
+        CONSTRAINT bank_items_topic_has_subject CHECK (topic_id IS NULL OR subject_id IS NOT NULL)
     ) ${TABLE_OPTIONS}`,
     // The question in the editor's own format (quiz_data.questions[i]); templates add "template"
     `CREATE TABLE IF NOT EXISTS bank_item_content (
         item_id INT UNSIGNED PRIMARY KEY,
-        content JSON NOT NULL
+        content JSON NOT NULL,
+        CONSTRAINT bank_item_content_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
     `CREATE TABLE IF NOT EXISTS bank_item_values (
         value_id INT UNSIGNED NOT NULL,
         item_id INT UNSIGNED NOT NULL,
         PRIMARY KEY (value_id, item_id),
-        INDEX bank_item_values_item (item_id)
+        INDEX bank_item_values_item (item_id),
+        CONSTRAINT bank_item_values_value_fk FOREIGN KEY (value_id) REFERENCES bank_values (id) ON DELETE CASCADE,
+        CONSTRAINT bank_item_values_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
     // Pictures by content hash: stored once however many tasks use them, served at /api/media/<sha256>
     `CREATE TABLE IF NOT EXISTS bank_media (
-        sha256 CHAR(64) PRIMARY KEY,
+        sha256 CHAR(64) ${ASCII} PRIMARY KEY,
         mime VARCHAR(40) NOT NULL,
         bytes INT UNSIGNED NOT NULL,
         data MEDIUMBLOB NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ${TABLE_OPTIONS}`,
+    // Which task shows which picture, so pictures no task uses any more can be found and deleted
+    `CREATE TABLE IF NOT EXISTS bank_item_media (
+        item_id INT UNSIGNED NOT NULL,
+        sha256 CHAR(64) ${ASCII} NOT NULL,
+        PRIMARY KEY (item_id, sha256),
+        INDEX bank_item_media_sha (sha256),
+        CONSTRAINT bank_item_media_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE,
+        CONSTRAINT bank_item_media_media_fk FOREIGN KEY (sha256) REFERENCES bank_media (sha256)
     ) ${TABLE_OPTIONS}`
 ];
+
+// Schema changes after the first release, in order, each applied once (the version is kept in
+// bank_settings). Never edit or reorder a released step: add a new function, and change SCHEMA to
+// match, since a fresh database gets SCHEMA directly and skips the list.
+const MIGRATIONS = [];
 
 class BankError extends Error {
     constructor(message, status = 400, extra = {}) {
@@ -136,6 +204,17 @@ class BankError extends Error {
         this.extra = extra;
     }
 }
+
+// Database refusals that mean the request does not fit the data, rather than a server fault. Keyed by
+// errno, which MariaDB and MySQL share except for a failed CHECK (4025 on MariaDB, 3819 on MySQL);
+// mysql2 names MariaDB-only numbers after unrelated MySQL errors.
+const DB_REFUSALS = {
+    1062: [409, 'Something with this name already exists here'],
+    1451: [409, 'Still in use'],
+    1452: [400, 'Unknown classifier'],
+    3819: [400, 'A topic needs its subject'],
+    4025: [400, 'A topic needs its subject']
+};
 
 async function inTransaction(pool, work) {
     const conn = await pool.getConnection();
@@ -150,6 +229,23 @@ async function inTransaction(pool, work) {
     } finally {
         conn.release();
     }
+}
+
+async function setSetting(pool, name, value) {
+    await pool.query('INSERT INTO bank_settings (name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)', [name, String(value)]);
+}
+
+async function migrate(pool, fresh) {
+    const [[row]] = await pool.query("SELECT value FROM bank_settings WHERE name = 'schema_version'");
+    // A fresh database already has the latest schema; one from before the list existed starts at 0
+    let version = row ? Number(row.value) : fresh ? MIGRATIONS.length : 0;
+    while (version < MIGRATIONS.length) {
+        await MIGRATIONS[version](pool);
+        version++;
+        await setSetting(pool, 'schema_version', version);
+        console.log(`[BANK] schema updated to version ${version}`);
+    }
+    await setSetting(pool, 'schema_version', version);
 }
 
 // --- SEED ---
@@ -229,6 +325,7 @@ const meta = {
     values: new Map(),
     topicChildren: new Map(),
     valueChildren: new Map(),
+    hiddenTopics: new Set(),
     levelIds: [],
     adminData: null,
     teacherData: null
@@ -284,11 +381,11 @@ async function loadMeta(pool) {
     const topicChildren = childrenMap(topics);
 
     // Teachers don't see archived subjects and topics, nor anything under an archived topic
-    const hidden = new Set();
-    for (const topic of topics) {
-        if (topic.archived) subtree(topicChildren, topic.id).forEach(id => hidden.add(id));
-    }
     const archivedSubjects = new Set(subjects.filter(s => s.archived).map(s => s.id));
+    const hiddenTopics = new Set();
+    for (const topic of topics) {
+        if (topic.archived || archivedSubjects.has(topic.subject_id)) subtree(topicChildren, topic.id).forEach(id => hiddenTopics.add(id));
+    }
 
     const subjectRows = subjects.map(s => ({ id: s.id, name: s.name, icon: s.icon, sortOrder: s.sort_order, archived: !!s.archived, items: itemCounts.get(s.id) || 0 }));
     const topicRows = topics.map(t => ({ id: t.id, subjectId: t.subject_id, parentId: t.parent_id, name: t.name, sortOrder: t.sort_order, archived: !!t.archived, grades: gradesOf.get(t.id) || [] }));
@@ -310,11 +407,12 @@ async function loadMeta(pool) {
         values: new Map(values.map(row => [row.id, row])),
         topicChildren,
         valueChildren: childrenMap(values),
+        hiddenTopics,
         levelIds: difficulties.map(d => d.id),
         adminData: withVersion({ subjects: subjectRows, topics: topicRows, ...shared }),
         teacherData: withVersion({
             subjects: subjectRows.filter(s => !s.archived),
-            topics: topicRows.filter(t => !hidden.has(t.id) && !archivedSubjects.has(t.subjectId)),
+            topics: topicRows.filter(t => !hiddenTopics.has(t.id)),
             ...shared
         }),
         loadedAt: Date.now()
@@ -357,9 +455,13 @@ function groupValues(ids) {
     return [...groups.values()].map(group => [...group]);
 }
 
-/** What core.buildFilter needs to list one owner's tasks (0 = the shared bank). */
-function contextFor(ownerId, status = 'published') {
-    return { ownerId, status, levelIds: meta.levelIds, topicSubtree: id => subtree(meta.topicChildren, id), groupValues };
+/**
+ * What core.buildFilter needs to list one owner's tasks (0 = the shared bank). For teachers a
+ * topic's subtree leaves out archived topics, as their tree does.
+ */
+function contextFor(ownerId, status = 'published', { teacher = false } = {}) {
+    const topicSubtree = id => subtree(meta.topicChildren, id).filter(topic => !teacher || !meta.hiddenTopics.has(topic));
+    return { ownerId, status, levelIds: meta.levelIds, topicSubtree, groupValues };
 }
 
 // What a user may do with the bank. Premium limits (template variants, whole-topic picks, the size
@@ -373,7 +475,8 @@ function listContext(user, params) {
     const mine = params.scope === 'mine';
     // Drafts and the archive are listed for whoever may edit that bank
     const mayEdit = mine ? bankLimits(user).writeMine : bankLimits(user).writeShared;
-    return contextFor(mine ? user.id : 0, mayEdit && STATUSES.includes(params.status) ? params.status : 'published');
+    const status = mayEdit && STATUSES.includes(params.status) ? params.status : 'published';
+    return contextFor(mine ? user.id : 0, status, { teacher: user.role !== 'admin' });
 }
 
 /** One page of a listing; the first page also carries the total and the facet counts. */
@@ -486,38 +589,65 @@ async function storeImage(conn, dataUrl) {
     if (!data.length || data.length > MAX_IMAGE_BYTES) throw new BankError('Picture too large');
     const sha = crypto.createHash('sha256').update(data).digest('hex');
     await conn.query('INSERT IGNORE INTO bank_media (sha256, mime, bytes, data) VALUES (?, ?, ?, ?)', [sha, header[1], data.length, data]);
-    return `/api/media/${sha}`;
+    return sha;
 }
 
-/** Moves embedded pictures (data URLs) into bank_media and points the question at them. */
+/**
+ * Moves embedded pictures (data URLs) into bank_media and points the question at them. Returns the
+ * pictures the question shows; ones it links to already must be in the bank.
+ */
 async function storeImages(conn, content) {
+    const used = new Set();
+    const linked = new Set();
     for (const [holder, key] of core.imageSlots(content)) {
         const value = holder[key];
         if (typeof value !== 'string') throw new BankError('Invalid picture');
-        if (!MEDIA_URL_RE.test(value)) holder[key] = await storeImage(conn, value);
+        const link = MEDIA_URL_RE.exec(value);
+        if (link) {
+            linked.add(link[1]);
+        } else {
+            const sha = await storeImage(conn, value);
+            holder[key] = `/api/media/${sha}`;
+            used.add(sha);
+        }
     }
+    if (linked.size) {
+        const [rows] = await conn.query('SELECT sha256 FROM bank_media WHERE sha256 IN (?)', [[...linked]]);
+        if (rows.length < linked.size) throw new BankError('Unknown picture');
+        linked.forEach(sha => used.add(sha));
+    }
+    return [...used];
 }
 
 /** Pictures stored, then the derived columns: list preview, search text, duplicate fingerprint. */
 async function derivedColumns(conn, content) {
-    await storeImages(conn, content);
+    const media = await storeImages(conn, content);
     const json = JSON.stringify(content);
     if (Buffer.byteLength(json, 'utf8') > MAX_CONTENT_BYTES) throw new BankError('Task too large');
     return {
         json,
+        media,
         preview: core.previewText(content),
         search: core.searchText(content),
         hash: core.contentHash(content),
-        hasImage: core.hasImage(content) ? 1 : 0
+        hasImage: media.length ? 1 : 0
     };
 }
 
-async function findDuplicate(conn, ownerId, hash) {
-    const [[row]] = await conn.query('SELECT id FROM bank_items WHERE owner_id = ? AND content_hash = ?', [ownerId, hash]);
-    return row?.id ?? null;
+async function linkMedia(conn, itemId, shas) {
+    await conn.query('DELETE FROM bank_item_media WHERE item_id = ?', [itemId]);
+    if (shas.length) await conn.query('INSERT INTO bank_item_media (item_id, sha256) VALUES ?', [shas.map(sha => [itemId, sha])]);
 }
 
-/** Inserts one prepared task; one already in this bank is reported as a duplicate instead. */
+async function findDuplicate(conn, ownerId, hash) {
+    const [[row]] = await conn.query('SELECT id, status FROM bank_items WHERE owner_id = ? AND content_hash = ?', [ownerId, hash]);
+    return row || null;
+}
+
+/**
+ * Inserts one prepared task. A task already in this bank is reported as a duplicate instead; one
+ * that was archived comes back.
+ */
 async function insertItem(conn, ownerId, userId, item) {
     const d = await derivedColumns(conn, item.content);
     try {
@@ -532,10 +662,16 @@ async function insertItem(conn, ownerId, userId, item) {
         if (item.values.length) {
             await conn.query('INSERT INTO bank_item_values (value_id, item_id) VALUES ?', [item.values.map(v => [v, result.insertId])]);
         }
+        await linkMedia(conn, result.insertId, d.media);
         return { id: result.insertId };
     } catch (error) {
         if (error.code !== 'ER_DUP_ENTRY') throw error;
-        return { id: await findDuplicate(conn, ownerId, d.hash), duplicate: true };
+        const existing = await findDuplicate(conn, ownerId, d.hash);
+        if (existing?.status === 'archived' && item.status !== 'archived') {
+            await conn.query('UPDATE bank_items SET status = ? WHERE id = ?', [item.status, existing.id]);
+            return { id: existing.id, duplicate: true, restored: true };
+        }
+        return { id: existing?.id ?? null, duplicate: true };
     }
 }
 
@@ -543,6 +679,10 @@ async function createItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
     const list = Array.isArray(body.items) ? body.items : [];
     if (!list.length || list.length > MAX_BATCH) throw new BankError(`Send 1–${MAX_BATCH} tasks at a time`);
+    if (ownerId !== 0 && user.role !== 'admin') {
+        const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM bank_items WHERE owner_id = ? AND status <> 'archived'", [ownerId]);
+        if (Number(n) + list.length > MAX_PRIVATE_ITEMS) throw new BankError(`Your own bank holds at most ${MAX_PRIVATE_ITEMS} tasks`, 403);
+    }
     const defaults = body.defaults && typeof body.defaults === 'object' ? body.defaults : {};
     const results = new Array(list.length);
     const failed = (index, error) => {
@@ -599,13 +739,15 @@ async function updateItem(pool, user, rawId, body) {
             );
         } catch (error) {
             if (error.code !== 'ER_DUP_ENTRY') throw error;
-            throw new BankError('The same task is already in the bank', 409, { duplicateId: await findDuplicate(conn, row.owner_id, d.hash) });
+            const existing = await findDuplicate(conn, row.owner_id, d.hash);
+            throw new BankError('The same task is already in the bank', 409, { duplicateId: existing?.id ?? null });
         }
         await conn.query('UPDATE bank_item_content SET content = ? WHERE item_id = ?', [d.json, row.id]);
         await conn.query('DELETE FROM bank_item_values WHERE item_id = ?', [row.id]);
         if (item.values.length) {
             await conn.query('INSERT INTO bank_item_values (value_id, item_id) VALUES ?', [item.values.map(v => [v, row.id])]);
         }
+        await linkMedia(conn, row.id, d.media);
     });
     return { id: row.id };
 }
@@ -630,7 +772,7 @@ async function targetIds(pool, ownerId, body) {
     if (body.filter && typeof body.filter === 'object') {
         const status = STATUSES.includes(body.filter.status) ? body.filter.status : 'published';
         const { where, args } = core.buildFilter(body.filter, contextFor(ownerId, status));
-        const [rows] = await pool.query(`SELECT i.id FROM bank_items i WHERE ${where.join(' AND ')} LIMIT ?`, [...args, MAX_BULK + 1]);
+        const [rows] = await pool.query(`SELECT i.id FROM ${core.FROM_ITEMS} WHERE ${where.join(' AND ')} LIMIT ?`, [...args, MAX_BULK + 1]);
         if (rows.length > MAX_BULK) throw new BankError(`Narrow the filter: at most ${MAX_BULK} tasks at once`);
         return rows.map(row => row.id);
     }
@@ -694,26 +836,22 @@ async function bulkUpdate(pool, user, body) {
     return { matched: ids.length };
 }
 
-/** Archives tasks (they stay out of listings); `purge` deletes ones already archived for good. */
+/**
+ * Archives tasks (they leave the listings); `purge` deletes ones already archived for good, with
+ * their content, classifier values and picture links (their pictures go in the hourly cleanup).
+ */
 async function archiveItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
     const ids = idList(body.ids ?? [], MAX_BULK);
     if (!ids.length) throw new BankError('Choose the tasks');
+    const sql = body.purge
+        ? "DELETE FROM bank_items WHERE owner_id = ? AND status = 'archived' AND id IN (?)"
+        : "UPDATE bank_items SET status = 'archived' WHERE owner_id = ? AND id IN (?)";
     let affected = 0;
     await inTransaction(pool, async conn => {
         for (const chunk of chunks(ids, BULK_CHUNK)) {
-            if (!body.purge) {
-                const [result] = await conn.query("UPDATE bank_items SET status = 'archived' WHERE owner_id = ? AND id IN (?)", [ownerId, chunk]);
-                affected += result.affectedRows;
-                continue;
-            }
-            const [rows] = await conn.query("SELECT id FROM bank_items WHERE owner_id = ? AND status = 'archived' AND id IN (?)", [ownerId, chunk]);
-            const gone = rows.map(row => row.id);
-            if (!gone.length) continue;
-            await conn.query('DELETE FROM bank_item_values WHERE item_id IN (?)', [gone]);
-            await conn.query('DELETE FROM bank_item_content WHERE item_id IN (?)', [gone]);
-            await conn.query('DELETE FROM bank_items WHERE id IN (?)', [gone]);
-            affected += gone.length;
+            const [result] = await conn.query(sql, [ownerId, chunk]);
+            affected += result.affectedRows;
         }
     });
     return body.purge ? { deleted: affected } : { archived: affected };
@@ -762,7 +900,7 @@ async function sampleItems(pool, user, body) {
     const ctx = listContext(user, params);
     const pick = async (extra, count) => {
         const { where, args } = core.buildFilter({ ...params, ...extra }, ctx);
-        const [rows] = await pool.query(`SELECT i.id FROM bank_items i WHERE ${where.join(' AND ')} ORDER BY RAND() LIMIT ?`, [...args, count]);
+        const [rows] = await pool.query(`SELECT i.id FROM ${core.FROM_ITEMS} WHERE ${where.join(' AND ')} ORDER BY RAND() LIMIT ?`, [...args, count]);
         return rows.map(row => row.id);
     };
     if (body.perLevel && typeof body.perLevel === 'object') {
@@ -885,6 +1023,8 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             if (result !== undefined) res.json(result);
         } catch (error) {
             if (error instanceof BankError) return res.status(error.status).json({ error: error.message, ...error.extra });
+            const refusal = DB_REFUSALS[error.errno];
+            if (refusal) return res.status(refusal[0]).json({ error: refusal[1] });
             console.error('[BANK]', error);
             res.status(500).json({ error: 'Internal server error' });
         }
@@ -957,8 +1097,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     }));
     router.delete('/bank/subjects/:id', requireAdmin, route(async req => {
         const id = known(meta.subjects, req.params.id, 'subject');
-        const used = await countOf(pool, 'SELECT (SELECT COUNT(*) FROM bank_items WHERE subject_id = ?) + (SELECT COUNT(*) FROM bank_topics WHERE subject_id = ?) AS n', [id, id]);
-        if (used) throw new BankError('The subject still has tasks or topics: archive it instead', 409);
+        const used = await countOf(pool,
+            `SELECT (SELECT COUNT(*) FROM bank_items WHERE subject_id = ?) + (SELECT COUNT(*) FROM bank_topics WHERE subject_id = ?)
+                  + (SELECT COUNT(*) FROM bank_dimensions WHERE subject_id = ?) AS n`, [id, id, id]);
+        if (used) throw new BankError('The subject still has tasks, topics or classifiers: archive it instead', 409);
         await pool.query('DELETE FROM bank_subjects WHERE id = ?', [id]);
         return changed({ id });
     }));
@@ -1028,10 +1170,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         if (meta.topicChildren.get(id)?.length) throw new BankError('Move or delete its subtopics first', 409);
         const used = await countOf(pool, 'SELECT COUNT(*) AS n FROM bank_items WHERE topic_id = ?', [id]);
         if (used) throw new BankError(`${used} task(s) are still in this topic`, 409, { used });
-        await inTransaction(pool, async conn => {
-            await conn.query('DELETE FROM bank_topic_grades WHERE topic_id = ?', [id]);
-            await conn.query('DELETE FROM bank_topics WHERE id = ?', [id]);
-        });
+        await pool.query('DELETE FROM bank_topics WHERE id = ?', [id]); // its grades go with it
         return changed({ id });
     }));
     // Merging moves the tasks, subtopics and grades into another topic of the same subject
@@ -1040,14 +1179,18 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         const intoId = known(meta.topics, req.body?.intoId, 'topic');
         const from = meta.topics.get(id);
         if (meta.topics.get(intoId).subject_id !== from.subject_id) throw new BankError('Both topics must belong to the same subject');
-        if (subtree(meta.topicChildren, id).includes(intoId)) throw new BankError('A topic cannot merge into one inside it');
-        await inTransaction(pool, async conn => {
-            await conn.query('UPDATE bank_topics SET parent_id = ? WHERE parent_id = ?', [intoId, id]);
-            await conn.query('UPDATE bank_items SET topic_id = ? WHERE topic_id = ?', [intoId, id]);
-            await conn.query('INSERT IGNORE INTO bank_topic_grades (grade_id, topic_id, hours) SELECT grade_id, ?, hours FROM bank_topic_grades WHERE topic_id = ?', [intoId, id]);
-            await conn.query('DELETE FROM bank_topic_grades WHERE topic_id = ?', [id]);
-            await conn.query('DELETE FROM bank_topics WHERE id = ?', [id]);
-        });
+        if (subtree(meta.topicChildren, id).includes(intoId)) throw new BankError('A topic cannot merge into itself or one inside it');
+        try {
+            await inTransaction(pool, async conn => {
+                await conn.query('UPDATE bank_topics SET parent_id = ? WHERE parent_id = ?', [intoId, id]);
+                await conn.query('UPDATE bank_items SET topic_id = ? WHERE topic_id = ?', [intoId, id]);
+                await conn.query('INSERT IGNORE INTO bank_topic_grades (grade_id, topic_id, hours) SELECT grade_id, ?, hours FROM bank_topic_grades WHERE topic_id = ?', [intoId, id]);
+                await conn.query('DELETE FROM bank_topics WHERE id = ?', [id]);
+            });
+        } catch (error) {
+            if (error.code !== 'ER_DUP_ENTRY') throw error;
+            throw new BankError('Both topics have a subtopic with the same name: merge those first', 409);
+        }
         return changed({ id: intoId });
     }));
 
@@ -1093,10 +1236,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     router.delete('/bank/values/:id', requireAdmin, route(async req => {
         const id = known(meta.values, req.params.id, 'value');
         if (meta.valueChildren.get(id)?.length) throw new BankError('Delete its sub-values first', 409);
-        await inTransaction(pool, async conn => {
-            await conn.query('DELETE FROM bank_item_values WHERE value_id = ?', [id]);
-            await conn.query('DELETE FROM bank_values WHERE id = ?', [id]);
-        });
+        await pool.query('DELETE FROM bank_values WHERE id = ?', [id]); // tasks lose this value with it
         return changed({ id });
     }));
 
@@ -1115,12 +1255,40 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     return router;
 }
 
-/** Creates the bank's tables, seeds the empty ones and loads the classifiers. */
+/** Creates or updates the bank's tables, seeds the empty ones and loads the classifiers. */
 async function ensureBankSchema(pool) {
-    for (const sql of SCHEMA) await pool.query(sql);
-    await seedBank(pool);
+    // One server process at a time (several may start together); the lock belongs to this connection
+    const lock = await pool.getConnection();
+    try {
+        const [[{ locked }]] = await lock.query('SELECT GET_LOCK(?, 30) AS locked', [SCHEMA_LOCK]);
+        if (Number(locked) !== 1) throw new Error('another server process is still setting up the task bank');
+        const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bank_items'");
+        const fresh = Number(n) === 0;
+        for (const sql of SCHEMA) await pool.query(sql);
+        await migrate(pool, fresh);
+        await seedBank(pool);
+        if (fresh) console.log('[BANK] created the task bank tables');
+    } finally {
+        await lock.query('SELECT RELEASE_LOCK(?)', [SCHEMA_LOCK]).catch(() => {});
+        lock.release();
+    }
     await loadMeta(pool);
     bankReady = true;
 }
 
-module.exports = { ensureBankSchema, createBankRouter, loadMeta, listItems, contextFor, bankLimits };
+/**
+ * Hourly upkeep: a deleted account's own tasks go with it, and pictures no task shows any more are
+ * deleted once older than `graceHours` (an import in progress may not have linked its new ones yet).
+ */
+async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
+    if (!bankReady) return;
+    const [tasks] = await pool.query('DELETE i FROM bank_items i LEFT JOIN users u ON u.id = i.owner_id WHERE i.owner_id <> 0 AND u.id IS NULL');
+    const [pictures] = await pool.query(
+        `DELETE m FROM bank_media m LEFT JOIN bank_item_media l ON l.sha256 = m.sha256
+         WHERE l.sha256 IS NULL AND m.created_at <= NOW() - INTERVAL ? HOUR`, [graceHours]);
+    if (tasks.affectedRows || pictures.affectedRows) {
+        console.log(`[CLEANUP] task bank: ${tasks.affectedRows} task(s) of deleted accounts, ${pictures.affectedRows} unused picture(s)`);
+    }
+}
+
+module.exports = { ensureBankSchema, createBankRouter, cleanupBank, loadMeta, listItems, contextFor, bankLimits };

@@ -24,6 +24,12 @@ describe('foldText', () => {
         expect(core.foldText('Raskite \\(\\frac{1}{2}x = 5\\)')).toBe('raskite 1 2 x 5');
         expect(core.foldText('<b>Kiek</b>&nbsp;yra 2+2?')).toBe('kiek yra 2 2');
     });
+
+    it('decodes numeric entities, and each entity only once', () => {
+        expect(core.plainText('7 &#183; 8 &#x2212; 1')).toBe('7 · 8 − 1');
+        expect(core.foldText('5 &#8722; 2')).toBe('5 2');
+        expect(core.plainText('&amp;lt;b&amp;gt;')).toBe('&lt;b&gt;');
+    });
 });
 
 describe('previewText', () => {
@@ -56,6 +62,11 @@ describe('contentHash', () => {
     it('tells different answers apart', () => {
         const other = { ...question, choices: [{ ...question.choices[0], isCorrect: false }, { ...question.choices[1], isCorrect: true }] };
         expect(core.contentHash(other)).not.toBe(core.contentHash(question));
+    });
+
+    it('keeps any other field called id (a template variable, say)', () => {
+        const template = vars => ({ type: 'numeric', prompt: '{id} + 1', template: { vars } });
+        expect(core.contentHash(template({ id: '1..9' }))).not.toBe(core.contentHash(template({ id: '1..5' })));
     });
 });
 
@@ -114,6 +125,11 @@ describe('buildFilter', () => {
         expect(core.buildFilter({ topic: 'none' }, ctx).where).toContain('i.topic_id IS NULL');
         expect(core.buildFilter(params, ctx, 'topic').where).not.toContain('i.topic_id IN (?)');
     });
+
+    it('lists nothing for a topic hidden from the user, never an empty IN ()', () => {
+        const hidden = { ...ctx, topicSubtree: () => [] };
+        expect(core.buildFilter({ topic: '2' }, hidden).args).toContainEqual([0]);
+    });
 });
 
 describe('buildListQuery', () => {
@@ -142,6 +158,28 @@ describe('buildListQuery', () => {
     it('rejects a cursor that does not fit', () => {
         expect(core.buildListQuery({ cursor: 'junk' }, ctx)).toBeNull();
         expect(core.buildListQuery({ sort: 'popular', cursor: core.encodeCursor([5]) }, ctx)).toBeNull();
+    });
+});
+
+describe('listIndex', () => {
+    it('gives every listing shape an index that holds its filter', () => {
+        expect(core.listIndex({ subject: '1', grade: '7' })).toBe('bank_items_browse');
+        expect(core.listIndex({ subject: '1', grade: '7', sort: 'popular' })).toBe('bank_items_popular');
+        expect(core.listIndex({ subject: '1', grade: '7', sort: 'level' })).toBe('bank_items_level');
+        expect(core.listIndex({ subject: '1', grade: '7', topic: '5' })).toBe('bank_items_topic');
+        expect(core.listIndex({ subject: '1', topic: '5' })).toBe('bank_items_unsorted');
+        expect(core.listIndex({ topic: 'none' })).toBe('bank_items_unsorted');
+        expect(core.listIndex({ subject: '1' })).toBe('bank_items_subject_new');
+        expect(core.listIndex({ subject: '1', sort: 'popular' })).toBe('bank_items_browse');
+        expect(core.listIndex({})).toBe('bank_items_all_new');
+        expect(core.listIndex({ subject: '1', grade: '7', q: 'x' })).toBe('bank_items_browse');
+    });
+
+    it('lets the full-text index or the classifier links lead', () => {
+        expect(core.listIndex({ subject: '1', grade: '7', q: 'lygtis' })).toBeNull();
+        expect(core.listIndex({ subject: '1', values: '9' })).toBeNull();
+        expect(core.buildListQuery({ subject: '1', grade: '7' }, ctx).sql).toContain('FROM bank_items i FORCE INDEX (bank_items_browse)');
+        expect(core.buildListQuery({ q: 'lygtis' }, ctx).sql).toContain('IGNORE INDEX');
     });
 });
 

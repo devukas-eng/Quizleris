@@ -28,7 +28,7 @@ for (const key of ['DB_USER', 'DB_PASS', 'DB_NAME']) {
 
 const pool = require('./src/backend/db.js');
 const { seedPremadeQuizzes } = require('./src/backend/premade.js');
-const { ensureBankSchema, createBankRouter } = require('./src/backend/bank.js');
+const { ensureBankSchema, createBankRouter, cleanupBank } = require('./src/backend/bank.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -768,6 +768,11 @@ async function purgeExpiredQuizzes() {
         await deleteOrphanAttempts();
     } catch (error) {
         console.error('[CLEANUP] failed:', error.code || error.message);
+    }
+    try {
+        await cleanupBank(pool);
+    } catch (error) {
+        console.error('[CLEANUP] task bank:', error.code || error.message);
     }
 }
 

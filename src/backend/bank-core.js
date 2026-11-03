@@ -15,13 +15,19 @@ const PAGE_DEFAULT = 50;
 const PAGE_MAX = 100;
 const MAX_ID = 4294967295;
 
-const ENTITIES = { '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
+const ENTITIES = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"' };
 
-/** Text of a rich prompt: tags dropped, the common entities decoded, whitespace collapsed. */
+function decodeEntity(entity, name) {
+    if (name[0] !== '#') return ENTITIES[name.toLowerCase()];
+    const code = name[1] === 'x' || name[1] === 'X' ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return code > 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : entity;
+}
+
+/** Text of a rich prompt: tags dropped, entities decoded (once), whitespace collapsed. */
 function plainText(value) {
     return String(value ?? '')
         .replace(/<[^>]*>/g, ' ')
-        .replace(/&(?:nbsp|amp|lt|gt|quot|#39);/g, entity => ENTITIES[entity])
+        .replace(/&(nbsp|amp|lt|gt|quot|#\d{1,7}|#x[0-9a-f]{1,6});/gi, decodeEntity)
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -67,7 +73,7 @@ function canonical(value) {
     if (value && typeof value === 'object') {
         const out = {};
         for (const key of Object.keys(value).sort()) {
-            if (key !== 'id' && value[key] !== undefined) out[key] = canonical(value[key]);
+            if (value[key] !== undefined) out[key] = canonical(value[key]);
         }
         return out;
     }
@@ -76,7 +82,12 @@ function canonical(value) {
 
 /** Same text, answers and pictures give the same fingerprint, whatever the IDs and spacing. */
 function contentHash(content) {
-    return crypto.createHash('sha1').update(JSON.stringify(canonical(content))).digest('hex');
+    // Only the question's and its choices' IDs differ between copies of one task
+    const question = { ...content, id: undefined };
+    if (Array.isArray(content.choices)) {
+        question.choices = content.choices.map(choice => (choice && typeof choice === 'object' ? { ...choice, id: undefined } : choice));
+    }
+    return crypto.createHash('sha1').update(JSON.stringify(canonical(question))).digest('hex');
 }
 
 /** Where a question keeps pictures: [holder, key] pairs for the question and each choice. */
@@ -169,7 +180,10 @@ function buildFilter(params, ctx, omit = null) {
     if (omit !== 'topic') {
         const topic = toId(params.topic);
         if (params.topic === 'none') add('i.topic_id IS NULL');
-        else if (topic) add('i.topic_id IN (?)', String(params.deep) === '0' ? [topic] : ctx.topicSubtree(topic));
+        else if (topic) {
+            const ids = String(params.deep) === '0' ? [topic] : ctx.topicSubtree(topic);
+            add('i.topic_id IN (?)', ids.length ? ids : [0]); // a topic hidden from this user lists nothing
+        }
     }
     if (omit !== 'difficulty') addNullableIn(add, 'i.difficulty_id', params.difficulty);
     if (omit !== 'kind' && KINDS.includes(params.kind)) add('i.kind = ?', params.kind);
@@ -199,6 +213,29 @@ function sortKey(sort, levelIds = []) {
 
 const LIST_COLUMNS = 'i.id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.status, i.has_image, i.uses';
 
+// Counting and picking leave the index to the optimizer, except the single-column ones that exist
+// for the foreign keys
+const FROM_ITEMS = 'bank_items i IGNORE INDEX (bank_items_subject_ref, bank_items_grade_ref, bank_items_topic_ref, bank_items_difficulty_ref)';
+
+/**
+ * The index a page of this shape reads. Left alone, the optimizer likes to walk an index in ID
+ * order and filter as it goes, which is fast only while matches are spread evenly. Tasks are
+ * imported topic by topic, so an old topic's tasks sit together and such a walk would cross every
+ * newer task first. Each shape gets an index that holds its filter (and, where it can, its order).
+ * A full-text search or classifier filter is left to the optimizer: those indexes lead best.
+ */
+function listIndex(params) {
+    if (searchTerms(params.q).fulltext || idList(params.values, 50).length) return null;
+    const subject = toId(params.subject);
+    const grade = toId(params.grade);
+    const sort = params.sort === 'popular' || params.sort === 'level' ? params.sort : 'new';
+    if (params.topic === 'none') return 'bank_items_unsorted';
+    if (toId(params.topic)) return subject && grade ? 'bank_items_topic' : 'bank_items_unsorted';
+    if (subject && grade) return { new: 'bank_items_browse', popular: 'bank_items_popular', level: 'bank_items_level' }[sort];
+    if (subject) return sort === 'new' ? 'bank_items_subject_new' : 'bank_items_browse';
+    return 'bank_items_all_new';
+}
+
 /**
  * The page query of a listing. A page continues from a cursor (the last row's sort key and ID)
  * instead of an OFFSET, so the thousandth page costs the same as the first. Returns null for a
@@ -220,8 +257,10 @@ function buildListQuery(params, ctx) {
         }
     }
     const order = key ? `${key.expr} ${key.desc ? 'DESC' : 'ASC'}, i.id DESC` : 'i.id DESC';
+    const index = listIndex(params);
+    const from = index ? `bank_items i FORCE INDEX (${index})` : FROM_ITEMS;
     return {
-        sql: `SELECT ${LIST_COLUMNS}${key ? `, ${key.expr} AS sort_key` : ''} FROM bank_items i WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`,
+        sql: `SELECT ${LIST_COLUMNS}${key ? `, ${key.expr} AS sort_key` : ''} FROM ${from} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`,
         args: [...args, limit + 1],
         limit,
         cursorOf: row => encodeCursor(key ? [Number(row.sort_key), row.id] : [row.id])
@@ -244,11 +283,11 @@ function wantedFacets(params) {
 function buildFacetQueries(params, ctx) {
     const base = buildFilter(params, ctx);
     return [
-        { name: 'total', sql: `SELECT COUNT(*) AS n FROM bank_items i WHERE ${base.where.join(' AND ')}`, args: base.args },
+        { name: 'total', sql: `SELECT COUNT(*) AS n FROM ${FROM_ITEMS} WHERE ${base.where.join(' AND ')}`, args: base.args },
         ...wantedFacets(params).map(name => {
             const column = FACET_COLUMNS[name];
             const { where, args } = buildFilter(params, ctx, name);
-            return { name, sql: `SELECT ${column} AS k, COUNT(*) AS n FROM bank_items i WHERE ${where.join(' AND ')} GROUP BY ${column}`, args };
+            return { name, sql: `SELECT ${column} AS k, COUNT(*) AS n FROM ${FROM_ITEMS} WHERE ${where.join(' AND ')} GROUP BY ${column}`, args };
         })
     ];
 }
@@ -270,8 +309,8 @@ function listItem(row) {
 }
 
 module.exports = {
-    QTYPES, KINDS, STATUSES,
+    QTYPES, KINDS, STATUSES, FROM_ITEMS,
     plainText, foldText, previewText, searchText, contentHash, imageSlots, hasImage,
     encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms,
-    buildFilter, buildListQuery, buildFacetQueries, listItem
+    buildFilter, listIndex, buildListQuery, buildFacetQueries, listItem
 };
