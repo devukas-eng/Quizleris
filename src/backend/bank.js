@@ -20,8 +20,9 @@ const MAX_BULK = 100000;
 const BULK_CHUNK = 5000;
 const MAX_FETCH = 200;
 const MAX_SAMPLE = 50;
-// A safety cap on a teacher's own tasks until the Premium limits are set (see bankLimits)
+// A safety cap on a teacher's own tasks and folders until the Premium limits are set (see bankLimits)
 const MAX_PRIVATE_ITEMS = 10000;
+const MAX_FOLDERS = 1000;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_CONTENT_BYTES = 1024 * 1024; // the question JSON once its pictures are in bank_media
 const MEDIA_GRACE_HOURS = 24; // unused pictures are kept this long, so an import in progress never loses one
@@ -127,6 +128,21 @@ const SCHEMA = [
         CONSTRAINT bank_topic_grades_topic_fk FOREIGN KEY (topic_id) REFERENCES bank_topics (id) ON DELETE CASCADE,
         CONSTRAINT bank_topic_grades_course_fk FOREIGN KEY (course_value_id) REFERENCES bank_values (id)
     ) ${TABLE_OPTIONS}`,
+    // A teacher's own folders for their own tasks (the shared bank is sorted by the topic tree).
+    // A subfolder always has its parent's owner; deleting a folder deletes its subfolders, after the
+    // route has moved their tasks up (a task's folder key would refuse otherwise).
+    `CREATE TABLE IF NOT EXISTS bank_folders (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        owner_id INT NOT NULL,
+        parent_id INT UNSIGNED NULL,
+        name VARCHAR(120) NOT NULL,
+        sort_order SMALLINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY bank_folders_with_owner (id, owner_id),
+        INDEX bank_folders_owner (owner_id, parent_id, sort_order),
+        INDEX bank_folders_parent (parent_id, owner_id),
+        CONSTRAINT bank_folders_parent_fk FOREIGN KEY (parent_id, owner_id) REFERENCES bank_folders (id, owner_id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
     // Narrow on purpose: listings read only these columns, the question itself is in bank_item_content.
     // owner_id 0 is the shared bank, any other value a teacher's own tasks (users.id; no foreign key
     // because of the 0, so a deleted account's tasks are removed by cleanupBank instead).
@@ -139,6 +155,7 @@ const SCHEMA = [
         grade_id TINYINT UNSIGNED NULL,
         topic_id INT UNSIGNED NULL,
         difficulty_id TINYINT UNSIGNED NULL,
+        folder_id INT UNSIGNED NULL,
         status ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'published',
         preview VARCHAR(300) NOT NULL,
         search_text TEXT NOT NULL,
@@ -161,11 +178,13 @@ const SCHEMA = [
         INDEX bank_items_grade_ref (grade_id),
         INDEX bank_items_topic_ref (topic_id, subject_id),
         INDEX bank_items_difficulty_ref (difficulty_id),
+        INDEX bank_items_folder (folder_id, owner_id, id),
         FULLTEXT INDEX bank_items_search (search_text),
         CONSTRAINT bank_items_subject_fk FOREIGN KEY (subject_id) REFERENCES bank_subjects (id),
         CONSTRAINT bank_items_grade_fk FOREIGN KEY (grade_id) REFERENCES bank_grades (id),
         CONSTRAINT bank_items_topic_fk FOREIGN KEY (topic_id, subject_id) REFERENCES bank_topics (id, subject_id),
         CONSTRAINT bank_items_difficulty_fk FOREIGN KEY (difficulty_id) REFERENCES bank_difficulties (id),
+        CONSTRAINT bank_items_folder_fk FOREIGN KEY (folder_id, owner_id) REFERENCES bank_folders (id, owner_id),
         CONSTRAINT bank_items_topic_has_subject CHECK (topic_id IS NULL OR subject_id IS NOT NULL)
     ) ${TABLE_OPTIONS}`,
     // The question in the editor's own format (quiz_data.questions[i]); templates add "template"
@@ -544,9 +563,10 @@ function mayEdit(user, ownerId) {
 /**
  * Validated column values of one task. Fields missing from `raw` come from `fallback` (the batch
  * defaults, or the stored task on an edit). A topic decides the subject; a new subject without a
- * topic drops a topic of the old subject.
+ * topic drops a topic of the old subject. `folders` holds the owner's folder IDs (null for the
+ * shared bank, which has none).
  */
-function prepareItem(raw, fallback) {
+function prepareItem(raw, fallback, folders) {
     if (!raw || typeof raw !== 'object') throw new BankError('Invalid task');
     const content = raw.content;
     if (!content || typeof content !== 'object' || Array.isArray(content) || !QTYPES.includes(content.type)) {
@@ -585,6 +605,9 @@ function prepareItem(raw, fallback) {
     const values = idList(pick('values') ?? [], 50);
     if (values.some(id => !meta.values.has(id))) throw new BankError('Unknown classifier value');
     const source = pick('source');
+    const rawFolder = pick('folderId');
+    const folderId = rawFolder == null || rawFolder === '' ? null : toId(rawFolder);
+    if (rawFolder != null && rawFolder !== '' && (!folderId || !folders?.has(folderId))) throw new BankError('Unknown folder');
 
     // The bank keeps the question without its quiz-specific ID or a bank reference
     const question = JSON.parse(JSON.stringify(content));
@@ -597,10 +620,18 @@ function prepareItem(raw, fallback) {
         topicId,
         gradeId: ref('gradeId', meta.grades, 'grade'),
         difficultyId: ref('difficultyId', meta.difficulties, 'difficulty'),
+        folderId,
         values,
         source: typeof source === 'string' && source.trim() ? source.trim().slice(0, 160) : null,
         content: question
     };
+}
+
+/** The owner's folder IDs, or null for the shared bank (owner 0), which has no folders. */
+async function folderIdsOf(db, ownerId) {
+    if (!ownerId) return null;
+    const [rows] = await db.query('SELECT id FROM bank_folders WHERE owner_id = ?', [ownerId]);
+    return new Set(rows.map(row => row.id));
 }
 
 async function storeImage(conn, dataUrl) {
@@ -674,10 +705,10 @@ async function insertItem(conn, ownerId, userId, item) {
     const d = await derivedColumns(conn, item.content);
     try {
         const [result] = await conn.query(
-            `INSERT INTO bank_items (owner_id, kind, qtype, subject_id, grade_id, topic_id, difficulty_id, status,
+            `INSERT INTO bank_items (owner_id, kind, qtype, subject_id, grade_id, topic_id, difficulty_id, folder_id, status,
                                      preview, search_text, has_image, content_hash, source, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [ownerId, item.kind, item.content.type, item.subjectId, item.gradeId, item.topicId, item.difficultyId, item.status,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [ownerId, item.kind, item.content.type, item.subjectId, item.gradeId, item.topicId, item.difficultyId, item.folderId, item.status,
                 d.preview, d.search, d.hasImage, d.hash, item.source, userId]
         );
         await conn.query('INSERT INTO bank_item_content (item_id, content) VALUES (?, ?)', [result.insertId, d.json]);
@@ -706,6 +737,7 @@ async function createItems(pool, user, body) {
         if (Number(n) + list.length > MAX_PRIVATE_ITEMS) throw new BankError(`Your own bank holds at most ${MAX_PRIVATE_ITEMS} tasks`, 403);
     }
     const defaults = body.defaults && typeof body.defaults === 'object' ? body.defaults : {};
+    const folders = await folderIdsOf(pool, ownerId);
     const results = new Array(list.length);
     const failed = (index, error) => {
         if (!(error instanceof BankError)) throw error;
@@ -713,7 +745,7 @@ async function createItems(pool, user, body) {
     };
     const prepared = list.map((raw, index) => {
         try {
-            return prepareItem(raw, defaults);
+            return prepareItem(raw, defaults, folders);
         } catch (error) {
             failed(index, error);
             return null;
@@ -736,7 +768,7 @@ async function createItems(pool, user, body) {
 async function loadEditable(pool, user, rawId) {
     const id = toId(rawId);
     const [[row]] = id
-        ? await pool.query('SELECT id, owner_id, kind, subject_id, grade_id, topic_id, difficulty_id, status, source FROM bank_items WHERE id = ?', [id])
+        ? await pool.query('SELECT id, owner_id, kind, subject_id, grade_id, topic_id, difficulty_id, folder_id, status, source FROM bank_items WHERE id = ?', [id])
         : [[]];
     if (!row || !mayEdit(user, row.owner_id)) throw new BankError('Task not found', 404);
     return row;
@@ -747,16 +779,16 @@ async function updateItem(pool, user, rawId, body) {
     const [links] = await pool.query('SELECT value_id FROM bank_item_values WHERE item_id = ?', [row.id]);
     const item = prepareItem(body, {
         kind: row.kind, status: row.status, subjectId: row.subject_id, gradeId: row.grade_id, topicId: row.topic_id,
-        difficultyId: row.difficulty_id, source: row.source, values: links.map(link => link.value_id)
-    });
+        difficultyId: row.difficulty_id, folderId: row.folder_id, source: row.source, values: links.map(link => link.value_id)
+    }, await folderIdsOf(pool, row.owner_id));
     await inTransaction(pool, async conn => {
         const d = await derivedColumns(conn, item.content);
         try {
             await conn.query(
-                `UPDATE bank_items SET kind = ?, qtype = ?, subject_id = ?, grade_id = ?, topic_id = ?, difficulty_id = ?, status = ?,
+                `UPDATE bank_items SET kind = ?, qtype = ?, subject_id = ?, grade_id = ?, topic_id = ?, difficulty_id = ?, folder_id = ?, status = ?,
                                        preview = ?, search_text = ?, has_image = ?, content_hash = ?, source = ?
                  WHERE id = ?`,
-                [item.kind, item.content.type, item.subjectId, item.gradeId, item.topicId, item.difficultyId, item.status,
+                [item.kind, item.content.type, item.subjectId, item.gradeId, item.topicId, item.difficultyId, item.folderId, item.status,
                     d.preview, d.search, d.hasImage, d.hash, item.source, row.id]
             );
         } catch (error) {
@@ -840,6 +872,12 @@ async function bulkUpdate(pool, user, body) {
         if (!STATUSES.includes(set.status)) throw new BankError('Invalid status');
         assign('status = ?', set.status);
     }
+    // Moving tasks between the owner's own folders (null takes them out of any folder)
+    if (set.folderId !== undefined) {
+        const folderId = set.folderId === null || set.folderId === '' ? null : toId(set.folderId);
+        if (set.folderId !== null && set.folderId !== '' && !(await folderIdsOf(pool, ownerId))?.has(folderId)) throw new BankError('Unknown folder');
+        assign('folder_id = ?', folderId);
+    }
     const addValues = idList(body.addValues ?? [], 20);
     const removeValues = idList(body.removeValues ?? [], 20);
     if ([...addValues, ...removeValues].some(id => !meta.values.has(id))) throw new BankError('Unknown classifier value');
@@ -885,7 +923,7 @@ async function fetchItems(pool, user, ids) {
     if (!ids.length) return [];
     const admin = user.role === 'admin';
     const [rows] = await pool.query(
-        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.status, i.uses, i.source, c.content
+        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, c.content
          FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
          WHERE i.id IN (?)${admin ? '' : " AND ((i.owner_id = 0 AND i.status = 'published') OR i.owner_id = ?)"}`,
         admin ? [ids] : [ids, user.id]
@@ -907,6 +945,7 @@ async function fetchItems(pool, user, ids) {
         gradeId: row.grade_id,
         topicId: row.topic_id,
         difficultyId: row.difficulty_id,
+        folderId: row.owner_id === user.id ? row.folder_id : null,
         status: row.status,
         uses: row.uses,
         source: row.source,
@@ -1111,6 +1150,68 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             await pool.query('UPDATE bank_items SET uses = uses + 1, updated_at = updated_at WHERE id IN (?) AND (owner_id = 0 OR owner_id = ?)', [ids, req.user.id]);
         }
         return { ok: true };
+    }));
+
+    // A teacher's own folders, with how many of their tasks each holds (archived ones not counted)
+    const folderOwner = user => {
+        if (!bankLimits(user).writeMine) throw new BankError('You may not change this bank', 403);
+        return user.id;
+    };
+    const ownFolders = async (db, ownerId) => {
+        const [rows] = await db.query('SELECT id, parent_id FROM bank_folders WHERE owner_id = ?', [ownerId]);
+        return { ids: new Set(rows.map(row => row.id)), children: childrenMap(rows) };
+    };
+    const folderParent = (folders, rawParent, folderId = null) => {
+        if (rawParent == null || rawParent === '') return null;
+        const parentId = toId(rawParent);
+        if (!parentId || !folders.ids.has(parentId)) throw new BankError('Unknown folder');
+        if (folderId && subtree(folders.children, folderId).includes(parentId)) throw new BankError('A folder cannot move inside itself');
+        return parentId;
+    };
+    router.get('/bank/folders', route(async req => {
+        const [rows] = await pool.query(
+            `SELECT f.id, f.parent_id, f.name, f.sort_order, COUNT(i.id) AS items
+             FROM bank_folders f LEFT JOIN bank_items i ON i.folder_id = f.id AND i.owner_id = f.owner_id AND i.status <> 'archived'
+             WHERE f.owner_id = ? GROUP BY f.id, f.parent_id, f.name, f.sort_order ORDER BY f.sort_order, f.id`, [folderOwner(req.user)]);
+        return { folders: rows.map(row => ({ id: row.id, parentId: row.parent_id, name: row.name, sortOrder: row.sort_order, items: Number(row.items) })) };
+    }));
+    router.post('/bank/folders', route(async req => {
+        const ownerId = folderOwner(req.user);
+        const folders = await ownFolders(pool, ownerId);
+        if (folders.ids.size >= MAX_FOLDERS) throw new BankError(`At most ${MAX_FOLDERS} folders`, 403);
+        const parentId = folderParent(folders, req.body?.parentId);
+        const [[{ next }]] = await pool.query(
+            'SELECT IFNULL(MAX(sort_order), -1) + 1 AS next FROM bank_folders WHERE owner_id = ? AND parent_id <=> ?', [ownerId, parentId]);
+        const [result] = await pool.query('INSERT INTO bank_folders (owner_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?)',
+            [ownerId, parentId, requiredText(req.body?.name, 120), Number(next)]);
+        return { id: result.insertId };
+    }));
+    router.patch('/bank/folders/:id', route(async req => {
+        const ownerId = folderOwner(req.user);
+        const folders = await ownFolders(pool, ownerId);
+        const id = toId(req.params.id);
+        if (!id || !folders.ids.has(id)) throw new BankError('Folder not found', 404);
+        await updateRow(pool, 'bank_folders', id, columnsFrom(req.body, {
+            name: ['name', v => requiredText(v, 120)],
+            parentId: ['parent_id', v => folderParent(folders, v, id)],
+            sortOrder: ['sort_order', sortOrder]
+        }));
+        return { id };
+    }));
+    // Deleting a folder keeps its tasks: they (and those of its subfolders) move to its parent
+    router.delete('/bank/folders/:id', route(async req => {
+        const ownerId = folderOwner(req.user);
+        const folders = await ownFolders(pool, ownerId);
+        const id = toId(req.params.id);
+        if (!id || !folders.ids.has(id)) throw new BankError('Folder not found', 404);
+        const [[{ parent_id: parentId }]] = await pool.query('SELECT parent_id FROM bank_folders WHERE id = ?', [id]);
+        const gone = subtree(folders.children, id);
+        const moved = await inTransaction(pool, async conn => {
+            const [result] = await conn.query('UPDATE bank_items SET folder_id = ? WHERE owner_id = ? AND folder_id IN (?)', [parentId, ownerId, gone]);
+            await conn.query('DELETE FROM bank_folders WHERE id = ?', [id]); // its subfolders go with it
+            return result.affectedRows;
+        });
+        return { deleted: gone.length, moved };
     }));
 
     router.post('/bank/items', route(req => createItems(pool, req.user, req.body || {})));
@@ -1318,12 +1419,14 @@ async function ensureBankSchema(pool) {
 }
 
 /**
- * Hourly upkeep: a deleted account's own tasks go with it, and pictures no task shows any more are
- * deleted once older than `graceHours` (an import in progress may not have linked its new ones yet).
+ * Hourly upkeep: a deleted account's own tasks and folders go with it, and pictures no task shows any
+ * more are deleted once older than `graceHours` (an import in progress may not have linked its new ones yet).
  */
 async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
     if (!bankReady) return;
     const [tasks] = await pool.query('DELETE i FROM bank_items i LEFT JOIN users u ON u.id = i.owner_id WHERE i.owner_id <> 0 AND u.id IS NULL');
+    // Top-level folders only: their subfolders go with them
+    await pool.query('DELETE f FROM bank_folders f LEFT JOIN users u ON u.id = f.owner_id WHERE f.parent_id IS NULL AND u.id IS NULL');
     const [pictures] = await pool.query(
         `DELETE m FROM bank_media m LEFT JOIN bank_item_media l ON l.sha256 = m.sha256
          WHERE l.sha256 IS NULL AND m.created_at <= NOW() - INTERVAL ? HOUR`, [graceHours]);

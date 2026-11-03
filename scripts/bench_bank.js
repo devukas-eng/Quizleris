@@ -112,7 +112,7 @@ async function addSyntheticTopics(meta) {
 async function fill() {
     // A fresh set of bank tables in this local test database (see the guard at the top)
     // Children before parents: the foreign keys would refuse it the other way round
-    for (const table of ['bank_item_media', 'bank_item_values', 'bank_item_content', 'bank_items', 'bank_media', 'bank_topic_grades',
+    for (const table of ['bank_item_media', 'bank_item_values', 'bank_item_content', 'bank_items', 'bank_folders', 'bank_media', 'bank_topic_grades',
         'bank_values', 'bank_dimensions', 'bank_topics', 'bank_subjects', 'bank_difficulties', 'bank_grades', 'bank_settings']) {
         await pool.query(`DROP TABLE IF EXISTS ${table}`);
     }

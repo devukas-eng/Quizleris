@@ -172,6 +172,9 @@ describe('listIndex', () => {
         expect(core.listIndex({ subject: '1' })).toBe('bank_items_subject_new');
         expect(core.listIndex({ subject: '1', sort: 'popular' })).toBe('bank_items_browse');
         expect(core.listIndex({})).toBe('bank_items_all_new');
+        expect(core.listIndex({ scope: 'mine', folder: '4' })).toBe('bank_items_folder');
+        expect(core.buildFilter({ folder: '4' }, ctx).where).toContain('i.folder_id = ?');
+        expect(core.buildFilter({ folder: 'none' }, ctx).where).toContain('i.folder_id IS NULL');
         expect(core.listIndex({ subject: '1', grade: '7', q: 'x' })).toBe('bank_items_browse');
     });
 

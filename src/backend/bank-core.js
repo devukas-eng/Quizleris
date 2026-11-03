@@ -185,6 +185,9 @@ function buildFilter(params, ctx, omit = null) {
             add('i.topic_id IN (?)', ids.length ? ids : [0]); // a topic hidden from this user lists nothing
         }
     }
+    // A teacher's own folder (only the owner's tasks are listed, so another's folder lists nothing)
+    if (params.folder === 'none') add('i.folder_id IS NULL');
+    else if (toId(params.folder)) add('i.folder_id = ?', toId(params.folder));
     if (omit !== 'difficulty') addNullableIn(add, 'i.difficulty_id', params.difficulty);
     if (omit !== 'kind' && KINDS.includes(params.kind)) add('i.kind = ?', params.kind);
     if (omit !== 'qtype') {
@@ -211,7 +214,7 @@ function sortKey(sort, levelIds = []) {
     return null; // newest first: the ID alone
 }
 
-const LIST_COLUMNS = 'i.id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.status, i.has_image, i.uses';
+const LIST_COLUMNS = 'i.id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.has_image, i.uses';
 
 // Counting and picking leave the index to the optimizer, except the single-column ones that exist
 // for the foreign keys
@@ -229,6 +232,7 @@ function listIndex(params) {
     const subject = toId(params.subject);
     const grade = toId(params.grade);
     const sort = params.sort === 'popular' || params.sort === 'level' ? params.sort : 'new';
+    if (toId(params.folder)) return 'bank_items_folder';
     if (params.topic === 'none') return 'bank_items_unsorted';
     if (toId(params.topic)) return subject && grade ? 'bank_items_topic' : 'bank_items_unsorted';
     if (subject && grade) return { new: 'bank_items_browse', popular: 'bank_items_popular', level: 'bank_items_level' }[sort];
@@ -302,6 +306,7 @@ function listItem(row) {
         gradeId: row.grade_id,
         topicId: row.topic_id,
         difficultyId: row.difficulty_id,
+        folderId: row.folder_id,
         status: row.status,
         hasImage: !!row.has_image,
         uses: row.uses
