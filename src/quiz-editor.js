@@ -6,7 +6,7 @@ import { t, updatePageLanguage } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
 import { openImportDialog } from "./import-dialog.js";
 import { initGlide } from "./glide.js";
-import { setupDragAndDrop } from "./admin-dragdrop.js";
+import { setupEditorDnd } from "./editor-dnd.js";
 import { captureFocusAndScroll, restoreFocusAndScroll, insertTextAtCursor, wrapSelectedInMathMode } from "./admin-math.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import "./rich-input.js";
@@ -145,6 +145,16 @@ function setupAdmin(callbacks) {
   setupSegmentedControl();
   setupQuizModeSegmentedControl();
   setupShuffleToggles();
+  setupEditorDnd({
+    panel: adminPanel,
+    list: adminQuestionsList,
+    move: moveQuestion,
+    insert: (questions, index) => insertQuestions(questions, index, { scroll: false }),
+    describe: (index) => ({
+      title: `${t("admin.question")} ${index + 1}`,
+      text: adminQuiz?.questions[index]?.prompt || ""
+    })
+  });
   refreshAdminToggleVisibility();
   document.addEventListener("quizleris-auth-changed", () => {
     refreshAdminToggleVisibility();
@@ -192,6 +202,62 @@ function toggleAdminMode() {
   } else {
     flushDraft();
   }
+  // The task bank opens and closes beside the editor
+  document.dispatchEvent(new window.CustomEvent("editor-mode", { detail: { open: adminMode } }));
+}
+
+function isEditorOpen() {
+  return adminMode;
+}
+
+const DEFAULT_TITLES = () => [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
+
+/**
+ * Adds questions at `index` (default: the end) as one undoable step; they glow in one after another.
+ * A quiz that was empty and still has its default title takes `title`. Returns the new cards.
+ */
+function insertQuestions(questions, index, { scroll = true, title } = {}) {
+  if (!adminQuiz) adminQuiz = blankQuiz();
+  saveStateForUndo();
+  updateQuizFromDOM();
+  const count = adminQuiz.questions.length;
+  const at = index == null ? count : Math.max(0, Math.min(Number(index), count));
+  adminQuiz.questions.splice(at, 0, ...questions);
+  if (count === 0 && title && (!adminQuiz.title?.trim() || DEFAULT_TITLES().includes(adminQuiz.title.trim()))) adminQuiz.title = title;
+  renderAdminForm();
+  triggerAutoSave();
+  const items = [...adminQuestionsList.querySelectorAll(".admin-question-item")].slice(at, at + questions.length);
+  if (scroll) items[0]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  items.forEach((el, i) => {
+    el.style.setProperty("--i", Math.min(i, 10));
+    el.classList.add("just-imported");
+    setTimeout(() => el.classList.remove("just-imported"), 2400);
+  });
+  return items;
+}
+
+/** Moves a question so it lands before the one now at `to` (to = length: the end). Returns its card. */
+function moveQuestion(from, to) {
+  if (!adminQuiz || to === from || to === from + 1) return null;
+  saveStateForUndo();
+  updateQuizFromDOM();
+  const [moved] = adminQuiz.questions.splice(from, 1);
+  const at = to > from ? to - 1 : to;
+  adminQuiz.questions.splice(at, 0, moved);
+  renderAdminForm();
+  triggerAutoSave();
+  const card = adminQuestionsList.querySelectorAll(".admin-question-item")[at] || null;
+  card?.classList.add("just-moved");
+  setTimeout(() => card?.classList.remove("just-moved"), 900);
+  return card;
+}
+
+/** A copy of one question as it stands in the editor (unsaved typing included). */
+function questionAt(index) {
+  if (!adminQuiz) return null;
+  updateQuizFromDOM();
+  const question = adminQuiz.questions[index];
+  return question ? JSON.parse(JSON.stringify(question)) : null;
 }
 // Opens the editor (if closed) and optionally loads one of the user's saved quizzes into it.
 async function openEditor(quizId) {
@@ -351,7 +417,6 @@ function renderAdminForm() {
     const qDiv = document.createElement("div");
     qDiv.className = `admin-question-item ${isCollapsed ? "collapsed" : ""} ${validationClass}`;
     qDiv.setAttribute("data-qidx", qIdx);
-    qDiv.setAttribute("draggable", "true");
 
     if (isCollapsed) {
       const shortType = getShortTypeLabel(q);
@@ -473,13 +538,6 @@ function renderAdminForm() {
       saveStateForUndo();
       updateQuizFromDOM();
       adminQuiz.questions.splice(qIdx, 1);
-      renderAdminForm();
-    });
-
-    setupDragAndDrop(qDiv, qIdx, adminQuiz, adminQuestionsList, () => {
-      saveStateForUndo();
-      updateQuizFromDOM();
-    }, () => {
       renderAdminForm();
     });
 
@@ -1281,23 +1339,8 @@ function openImport(options) {
       ? fetchProfile().then(({ user }) => user.role === "admin" || !!user.premium_active)
       : Promise.resolve(false)),
     resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900),
-    onImport: (questions, title) => {
-      saveStateForUndo();
-      const firstNew = adminQuiz.questions.length;
-      adminQuiz.questions.push(...questions);
-      const defaultTitles = [t("admin.newQuiz"), "New Quiz", "Naujas testas"];
-      if (firstNew === 0 && title && (!adminQuiz.title?.trim() || defaultTitles.includes(adminQuiz.title.trim()))) adminQuiz.title = title;
-      renderAdminForm();
-      triggerAutoSave();
-      // Bring the first imported question into view; the new ones glow in briefly
-      const items = [...adminQuestionsList.querySelectorAll(".admin-question-item")].slice(firstNew);
-      items[0]?.scrollIntoView({ behavior: "smooth", block: "start" });
-      items.forEach((el, i) => {
-        el.style.setProperty("--i", Math.min(i, 10));
-        el.classList.add("just-imported");
-        setTimeout(() => el.classList.remove("just-imported"), 2400);
-      });
-    }
+    // Imported questions go to the end; the first comes into view and the new ones glow in
+    onImport: (questions, title) => insertQuestions(questions, null, { title })
   });
 }
 
@@ -1966,8 +2009,12 @@ async function handleLocalDeleteClick() {
   await populateLocalSelector();
 }
 export {
+  insertQuestions,
+  isEditorOpen,
+  moveQuestion,
   openEditor,
   previewQuiz,
+  questionAt,
   refreshAdminToggleVisibility,
   refreshAdminUI,
   renderAdminForm,

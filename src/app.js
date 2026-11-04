@@ -9,6 +9,7 @@ import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
 import { syncCloudQuizzes } from "./sync.js";
+import { initBankWorkspace } from "./bank-workspace.js";
 
 function confirmLeaveQuiz() {
     return confirmDialog({
@@ -127,6 +128,8 @@ async function initApp() {
         const onAdmin = () => toggleAdminMode();
         // 1. Setup Dashboard (needs onHome)
         setupDashboard({ onHome });
+        // Before the editor's own listener: the task bank notes where the dashboard was
+        initBankWorkspace();
         document.addEventListener("open-editor", (e) => { openEditor(e.detail?.quizId); });
         // 2. Setup Menu (needs onAdmin only)
         setupMenu({ onAdmin });

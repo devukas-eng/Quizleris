@@ -1121,6 +1121,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         res.type(row.mime).send(row.data);
     }));
 
+    // What this user may do with the bank, answered for anyone signed in: the editor asks this
+    // first instead of provoking a refused request on every teacher's page while the bank is closed
+    router.get('/bank/access', ready, authenticateToken, (req, res) => res.json(bankLimits(req.user)));
+
     router.use('/bank', ready, authenticateToken, reader, async (req, res, next) => {
         try {
             await freshMeta(pool);

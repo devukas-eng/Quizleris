@@ -106,9 +106,12 @@ function setHeader(role) {
     document.getElementById("dashboard-logout-btn").textContent = t("profile.logout");
 }
 
+// The dashboard's place and look go along, so the task bank can glide it into its own column
 function openEditor(quizId) {
+    const win = dashboardModal.querySelector(".dash-window");
+    const from = win ? { rect: win.getBoundingClientRect(), node: win.cloneNode(true) } : null;
     dashboardModal.style.display = "none";
-    document.dispatchEvent(new window.CustomEvent("open-editor", { detail: { quizId } }));
+    document.dispatchEvent(new window.CustomEvent("open-editor", { detail: { quizId, from } }));
 }
 
 function profileCard(user, limits, quizCount) {
