@@ -11,7 +11,7 @@ async function initDB() {
                 username VARCHAR(50) NOT NULL UNIQUE,
                 email VARCHAR(100) NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
-                role ENUM('teacher', 'admin', 'student') DEFAULT 'teacher',
+                role ENUM('teacher', 'admin', 'student', 'creator') DEFAULT 'teacher',
                 subscription_tier ENUM('free', 'premium') DEFAULT 'free',
                 subscription_expires_at DATETIME NULL DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

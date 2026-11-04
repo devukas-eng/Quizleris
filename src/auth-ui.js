@@ -13,6 +13,8 @@ export function initAuthUI() {
                 <div id="auth-error-msg" style="color: #ff4d4d; background: rgba(255, 77, 77, 0.1); padding: 10px; border-radius: 8px; margin-bottom: 15px; display: none; font-size: 0.9em;"></div>
                 <input type="text" id="auth-username" class="input-field" placeholder="Naudotojo vardas" style="width: 100%; margin-bottom: 10px;" />
                 <input type="email" id="auth-email" class="input-field" placeholder="El. paštas (tik registracijai)" style="width: 100%; margin-bottom: 10px; display: none;" />
+                <input type="text" id="auth-invite" class="input-field" placeholder="Registracijos kodas" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16" style="width: 100%; margin-bottom: 4px; display: none; letter-spacing: 0.08em;" />
+                <p id="auth-invite-hint" style="display: none; margin: 0 0 10px; font-size: 0.8rem; color: var(--muted); text-align: left;">Registruotis galima tik su kodu, kurį gausite iš administratoriaus.</p>
                 <input type="password" id="auth-password" class="input-field" placeholder="Slaptažodis" style="width: 100%; margin-bottom: 20px;" />
                 <button id="auth-submit-btn" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Prisijungti</button>
                 <button id="auth-toggle-btn" class="btn" style="width: 100%; margin-bottom: 10px; background: transparent;">Neturite paskyros? Registruotis</button>
@@ -49,6 +51,8 @@ export function initAuthUI() {
         showError(null);
         document.getElementById("auth-title").textContent = isRegistering ? "Registracija" : "Prisijungti";
         document.getElementById("auth-email").style.display = isRegistering ? "block" : "none";
+        document.getElementById("auth-invite").style.display = isRegistering ? "block" : "none";
+        document.getElementById("auth-invite-hint").style.display = isRegistering ? "block" : "none";
         document.getElementById("auth-submit-btn").textContent = isRegistering ? "Registruotis" : "Prisijungti";
         document.getElementById("auth-toggle-btn").textContent = isRegistering ? "Turite paskyrą? Prisijungti" : "Neturite paskyros? Registruotis";
     });
@@ -58,9 +62,13 @@ export function initAuthUI() {
         const username = document.getElementById("auth-username").value.trim();
         const email = document.getElementById("auth-email").value.trim();
         const pass = document.getElementById("auth-password").value;
-        
+        const invite = document.getElementById("auth-invite").value.trim();
+
         if (!username || !pass || (isRegistering && !email)) {
             return showError("Visi laukai yra privalomi.");
+        }
+        if (isRegistering && !invite) {
+            return showError("Įveskite registracijos kodą. Jį gausite iš administratoriaus.");
         }
         
         try {
@@ -68,8 +76,9 @@ export function initAuthUI() {
             document.getElementById("auth-submit-btn").textContent = "Įkeliama…";
             
             if (isRegistering) {
-                await register(username, email, pass);
+                await register(username, email, pass, invite);
                 document.getElementById("auth-email").value = "";
+                document.getElementById("auth-invite").value = "";
                 document.getElementById("auth-password").value = "";
                 showError("Registracija sėkminga! Dabar galite prisijungti.");
                 errorBox.style.color = "#4dff88"; // green success message temporarily
@@ -83,7 +92,11 @@ export function initAuthUI() {
         } catch (e) {
             errorBox.style.color = "#ff4d4d"; // reset back to red error
             errorBox.style.background = "rgba(255, 77, 77, 0.1)";
-            showError("Klaida: " + (e.message || "Nepavyko prisijungti prie serverio."));
+            const inviteErrors = {
+                invite_required: "Įveskite registracijos kodą. Jį gausite iš administratoriaus.",
+                invite_invalid: "Šis registracijos kodas netinka arba jau panaudotas."
+            };
+            showError(inviteErrors[e.code] || "Klaida: " + (e.message || "Nepavyko prisijungti prie serverio."));
         } finally {
             document.getElementById("auth-submit-btn").disabled = false;
             document.getElementById("auth-submit-btn").textContent = isRegistering ? "Registruotis" : "Prisijungti";
@@ -134,7 +147,8 @@ function updateMenuAuthButton() {
         // Full label on wide screens, short one on phones (style.css swaps them)
         const full = document.createElement("span");
         full.className = "nav-auth-full";
-        full.textContent = currentUser.role === "admin" ? t("profile.adminTitle") : t("profile.teacherTitle");
+        full.textContent = currentUser.role === "admin" ? t("profile.adminTitle")
+            : currentUser.role === "creator" ? t("profile.creatorTitle") : t("profile.teacherTitle");
         const short = document.createElement("span");
         short.className = "nav-auth-short";
         short.textContent = t("profile.dashboardShort");

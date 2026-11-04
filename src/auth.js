@@ -2,7 +2,7 @@
 // The server enforces every write; these checks only decide what UI to show.
 import { getToken } from "./api.js";
 
-export const EDITOR_ROLES = new Set(["teacher", "admin"]);
+export const EDITOR_ROLES = new Set(["teacher", "creator", "admin"]);
 
 export function getStoredUser() {
     try {

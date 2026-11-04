@@ -108,6 +108,7 @@ export function initBankWorkspace() {
     document.addEventListener("quizleris-auth-changed", () => {
         meta = null;
         metaRequest = null;
+        limits = NO_ACCESS;
         bank.started = false;
         mine.started = false;
         hide();
@@ -156,6 +157,7 @@ function requestMeta() {
 async function loadMeta() {
     const access = await api.fetchAccess();
     if (!access.ok || !access.data.read) return { meta: null, offline: access.status <= 0 };
+    limits = { ...NO_ACCESS, ...access.data };
     const res = await api.fetchMeta();
     return { meta: res.ok ? prepareMeta(res.data) : null, offline: res.status <= 0 };
 }
@@ -198,12 +200,18 @@ function prepareMeta(data) {
     };
 }
 
+// What this user may do, as the server answered (/bank/access): teachers browse the shared bank;
+// staff (admins and creators) fill it; a bank of one's own needs writeMine. Only admins change the
+// classifier lists (the topic tree's edit mode).
+const NO_ACCESS = { read: false, writeShared: false, writeMine: false, staff: false };
+let limits = NO_ACCESS;
 const isAdmin = () => getStoredUser()?.role === "admin";
+const isStaff = () => !!limits.staff;
 
-// Teachers see only subjects with tasks; admins see every subject so they can fill it
+// Teachers see only subjects with tasks; staff see every subject so they can fill it
 function visibleSubjects() {
-    const admin = isAdmin();
-    return meta.subjects.filter(subject => admin || subject.items > 0);
+    const staff = isStaff();
+    return meta.subjects.filter(subject => staff || subject.items > 0);
 }
 
 // --- Showing and hiding beside the editor ---
@@ -224,11 +232,14 @@ function show(origin) {
     shown = true;
     if (builtLanguage !== getLanguage()) relabel();
     inQuiz = bankIdsInQuiz();
-    // Changing the shared bank is for admins; one's own tasks are everyone's to sort
-    const admin = isAdmin();
-    els.panel.querySelectorAll(".bank-admin-only, .bank-selbar-edit").forEach(el => { el.hidden = !admin; });
+    // Filling and classifying the shared bank is for staff, its classifier lists for admins;
+    // a teacher without a bank of their own browses, stars and reports
+    els.panel.querySelectorAll(".bank-staff-only, .bank-selbar-edit").forEach(el => { el.hidden = !limits.writeShared; });
+    els.panel.querySelectorAll(".bank-admin-only").forEach(el => { el.hidden = !isAdmin(); });
+    els.mine.querySelectorAll('[data-act="import-mine"], [data-act="new-folder"]').forEach(el => { el.hidden = !limits.writeMine; });
+    document.body.classList.toggle("bank-read-only", !limits.writeMine);
     const saveToBank = document.getElementById("admin-bank-save-btn");
-    if (saveToBank) saveToBank.hidden = false;
+    if (saveToBank) saveToBank.hidden = !limits.writeMine;
     document.body.classList.add("bank-workspace");
     setTab(prefs.tab === "mine" ? "mine" : "bank");
     if (!bank.started) startBank();
@@ -368,7 +379,7 @@ function build() {
             ${tabsHtml()}
             <header class="bank-head">
                 <h2 id="bank-title" class="bank-title">${icon("book")}<span data-i18n="bank.title">${t("bank.title")}</span></h2>
-                <button type="button" class="bank-icon-btn bank-admin-only" data-act="import" data-label="bank.importShared" title="${t("bank.importShared")}" aria-label="${t("bank.importShared")}" hidden>${icon("upload")}</button>
+                <button type="button" class="bank-icon-btn bank-staff-only" data-act="import" data-label="bank.importShared" title="${t("bank.importShared")}" aria-label="${t("bank.importShared")}" hidden>${icon("upload")}</button>
                 <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
             <label class="bank-search">${icon("search", 16)}<input type="search" data-search="bank" autocomplete="off" placeholder="${t("bank.search")}" data-i18n-placeholder="bank.search" aria-keyshortcuts="/"><kbd class="bank-kbd" aria-hidden="true">/</kbd></label>
@@ -798,7 +809,7 @@ function renderSuggestions() {
 
 // How many shared tasks have open reports: admins see the number, and with it the way to them
 async function refreshFlagged() {
-    if (getStoredUser()?.role !== "admin" || !els.flagged) return;
+    if (!isStaff() || !els.flagged) return;
     const res = await api.listItems({ flagged: 1, limit: 1, facets: "none" });
     if (!res.ok) return;
     flaggedCount = res.data.total ?? 0;
@@ -1248,7 +1259,7 @@ function addMineDropZone() {
     };
     addDropZone({
         el: els.mine,
-        accepts: payload => shown && (payload.kind === "question" || payload.kind === "folder"
+        accepts: payload => shown && limits.writeMine && (payload.kind === "question" || payload.kind === "folder"
             || (payload.kind === "tasks" && payload.source !== "topic")),
         over(payload, x, y, target) {
             const node = target.closest(".mine-folder");
@@ -1685,10 +1696,10 @@ function afterChange(mineScope) {
 }
 
 // Tasks into the bank from Word, PDF or text through the import dialog, or the quiz's own
-// questions (preset). Admins choose the shared bank or their own; everyone else fills their own.
+// questions (preset). Staff choose the shared bank or their own; everyone else fills their own.
 // The classification starts where the bank is open (subject, grade, topic, folder).
 function openBankImport({ scope, preset = null }) {
-    const admin = isAdmin();
+    const admin = limits.writeShared;
     const fields = classifyFields(meta, {
         subjects: meta.subjects.filter(subject => !subject.archived),
         subjectId: bank.subjectId,
@@ -1829,7 +1840,7 @@ function addTreeDropZone() {
     addDropZone({
         el: els.tree,
         accepts: payload => shown && !bank.flagged && payload.kind === "tasks"
-            && (payload.source === "mine" || (payload.source === "bank" && isAdmin())),
+            && ((payload.source === "mine" && limits.writeMine) || (payload.source === "bank" && limits.writeShared)),
         over(payload, x, y, target) {
             const node = target.closest(".bank-node");
             if (!node || node.dataset.topic === "all") {
@@ -1999,7 +2010,7 @@ function openSheet(aside, list, index, scope) {
             <div class="bank-sheet-actions">
                 <button type="button" class="btn btn-primary" data-act="add">${icon("plus", 16)}<span>${t("bank.add")}</span></button>
                 ${scope === "bank"
-                    ? `<button type="button" class="btn btn-secondary" data-act="save">${icon("folder", 16)}<span>${t("bank.saveMine")}</span></button>`
+                    ? (limits.writeMine ? `<button type="button" class="btn btn-secondary" data-act="save">${icon("folder", 16)}<span>${t("bank.saveMine")}</span></button>` : "")
                     : `<button type="button" class="btn btn-secondary" data-act="remove">${icon("trash", 16)}<span>${t("bank.remove")}</span></button>`}
             </div>
         </div>`;

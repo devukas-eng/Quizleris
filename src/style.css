@@ -4530,6 +4530,89 @@ math-virtual-keyboard::part(action-toolbar) {
     font-size: 1.35rem;
 }
 
+/* Registration codes (admins), opened from the header */
+.dash-invites-btn[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.dash-invites {
+    border: 1px solid var(--accent);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 20px;
+}
+
+.dash-invite-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 14px 0;
+}
+
+.dash-invite-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.dash-invite-form input[name="count"] {
+    width: 80px;
+}
+
+.dash-invite-form .input-field {
+    margin: 0;
+}
+
+.dash-invite-note {
+    flex: 1 1 200px;
+}
+
+.dash-invite-new {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    margin-bottom: 14px;
+}
+
+.dash-invite-new p {
+    margin: 0 0 8px;
+}
+
+.dash-invite-codes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.dash-invites code {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 1rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.dash-invite-codes code {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.25);
+    user-select: all;
+}
+
+.dash-invite-used {
+    opacity: 0.55;
+}
+
+.dash-invite-error {
+    color: var(--danger);
+    font-weight: 600;
+}
+
 .dash-close {
     width: 40px;
     min-width: 40px;
@@ -5002,7 +5085,13 @@ math-virtual-keyboard::part(action-toolbar) {
 }
 
 @media (max-width: 560px) {
-    .dash-header { padding: 16px; }
+    /* Title and close on the first row, the account buttons under them */
+    .dash-header { padding: 16px; flex-wrap: wrap; }
+    .dash-header h2 { flex: 1 1 calc(100% - 60px); }
+    .dash-close { order: 1; }
+    .dash-invites-btn, .dash-logout { order: 2; }
+    .dash-logout { margin-left: auto; }
+    .dash-invites-btn .dash-invites-label { display: none; }
     .dash-body { padding: 16px; }
     .dash-identity { flex-wrap: wrap; }
     .dash-quiz { flex-wrap: wrap; }

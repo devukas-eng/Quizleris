@@ -158,6 +158,15 @@ const requireAdmin = (req, res, next) => {
     next();
 };
 
+// --- REGISTRATION CODES ---
+// Accounts are by invitation: an admin generates single-use codes, each for a role. A creator
+// (kūrėjas) is in-house staff who fill the shared task bank; teachers browse it.
+const INVITE_ROLES = new Set(['teacher', 'creator']);
+const INVITE_LENGTH = 9; // 31^9 ≈ 2.6e13 codes, behind the auth rate limit (same alphabet as quiz codes)
+const MAX_INVITES_AT_ONCE = 50;
+// Typed codes may come with spaces, dashes or lower case ("k7m3-qxp2a")
+const normalizeInvite = (raw) => String(raw ?? '').toUpperCase().replace(/[\s-]/g, '');
+
 const DUMMY_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 12);
 
 // --- PLAN LIMITS ---
@@ -180,12 +189,13 @@ const QUIZ_ID_RE = /^[A-Za-z0-9_-]{1,50}$/;
 // them). Private quizzes stay unlisted but open for anyone with the code, just as with a share link.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{6}$`);
+const INVITE_RE = new RegExp(`^[${CODE_ALPHABET}]{${INVITE_LENGTH}}$`);
 // Older generated IDs (quiz_ + 32 random hex) are converted to codes on startup; until then (or if
 // the database user may not create the alias table) they are unguessable and open the same way
 const RANDOM_ID_RE = /^quiz_[0-9a-f]{32}$/;
 
-function generateCode() {
-    return Array.from(crypto.randomBytes(6), b => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+function generateCode(length = 6) {
+    return Array.from(crypto.randomBytes(length), b => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
 }
 
 // Converted quizzes keep their old ID as an alias, so old links and drafts still find them
@@ -229,6 +239,9 @@ app.post('/api/auth/register', async (req, res) => {
         if (typeof username !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
             return res.status(400).json({ error: 'All fields are required.' });
         }
+        const inviteCode = normalizeInvite(req.body.inviteCode);
+        if (!inviteCode) return res.status(400).json({ error: 'A registration code is required.', code: 'invite_required' });
+        if (!INVITE_RE.test(inviteCode)) return res.status(400).json({ error: 'This registration code is not valid.', code: 'invite_invalid' });
         if (!USERNAME_RE.test(username)) {
             return res.status(400).json({ error: 'Username must be 3–50 characters: letters, numbers, . _ -' });
         }
@@ -240,14 +253,33 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-        const [result] = await pool.query(
-            'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
-            [username, email.toLowerCase(), hashedPassword]
-        );
+        // The code is claimed first, in one statement, so two people can't both use it; if the
+        // account can't be made (name taken), the claim is undone and the code stays usable
+        const [claim] = await pool.query(
+            'UPDATE invite_codes SET used_at = NOW() WHERE code = ? AND used_at IS NULL', [inviteCode]);
+        if (claim.affectedRows !== 1) {
+            return res.status(400).json({ error: 'This registration code is not valid or was already used.', code: 'invite_invalid' });
+        }
+        let result;
+        try {
+            const [[invite]] = await pool.query('SELECT role FROM invite_codes WHERE code = ?', [inviteCode]);
+            [result] = await pool.query(
+                'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
+                [username, email.toLowerCase(), hashedPassword, INVITE_ROLES.has(invite?.role) ? invite.role : 'teacher']
+            );
+        } catch (error) {
+            await pool.query('UPDATE invite_codes SET used_at = NULL WHERE code = ? AND used_by IS NULL', [inviteCode]);
+            throw error;
+        }
+        await pool.query('UPDATE invite_codes SET used_by = ? WHERE code = ?', [result.insertId, inviteCode]);
         res.status(201).json({ message: 'User registered successfully!', userId: result.insertId });
     } catch (error) {
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(409).json({ error: 'Username or email already exists.' });
+        }
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            console.error('[REGISTER] the registration codes table is missing');
+            return res.status(503).json({ error: 'Registration is not available right now.' });
         }
         console.error('[REGISTER]', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -350,6 +382,56 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =>
         res.json(rows);
     } catch (error) {
         console.error('[ADMIN USERS]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Registration codes: the newest first, with who used each
+app.get('/api/admin/invites', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT i.code, i.role, i.note, i.created_at, i.used_at, u.username AS used_by
+            FROM invite_codes i LEFT JOIN users u ON u.id = i.used_by
+            ORDER BY i.created_at DESC, i.code LIMIT 300
+        `);
+        res.json({ invites: rows });
+    } catch (error) {
+        console.error('[ADMIN INVITES]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// New single-use codes for one role; `note` says whom they are for ("Jonaitė, 5 kl.")
+app.post('/api/admin/invites', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const role = INVITE_ROLES.has(req.body?.role) ? req.body.role : 'teacher';
+        const count = toInt(req.body?.count, 1, MAX_INVITES_AT_ONCE, 1);
+        const note = String(req.body?.note ?? '').replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+        const codes = [];
+        while (codes.length < count) {
+            const code = generateCode(INVITE_LENGTH);
+            try {
+                await pool.query('INSERT INTO invite_codes (code, role, note, created_by) VALUES (?, ?, ?, ?)', [code, role, note, req.user.id]);
+                codes.push(code);
+            } catch (error) {
+                if (error.code !== 'ER_DUP_ENTRY') throw error; // taken: draw another
+            }
+        }
+        res.status(201).json({ codes, role });
+    } catch (error) {
+        console.error('[ADMIN INVITES]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// An unused code can be withdrawn; a used one stays as the record of who joined with it
+app.delete('/api/admin/invites/:code', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [result] = await pool.query('DELETE FROM invite_codes WHERE code = ? AND used_at IS NULL', [normalizeInvite(req.params.code)]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'No unused code like that' });
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('[ADMIN INVITES]', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -703,12 +785,49 @@ async function convertLongIds() {
     if (converted > 0) console.log(`[SCHEMA] gave ${converted} quiz(zes) a short code`);
 }
 
+// users.role is an ENUM made before creators existed: add 'creator' to it (a VARCHAR column needs nothing)
+async function allowCreatorRole() {
+    const [[column]] = await pool.query(
+        `SELECT COLUMN_TYPE AS type, COLUMN_DEFAULT AS def FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`
+    );
+    const type = String(column?.type || '');
+    if (!type.toLowerCase().startsWith('enum(') || type.includes("'creator'")) return;
+    const values = [...type.matchAll(/'((?:[^']|'')*)'/g)].map(m => m[1]);
+    const list = [...values, 'creator'].map(v => pool.escape(v)).join(', ');
+    await pool.query(`ALTER TABLE users MODIFY role ENUM(${list}) DEFAULT ${pool.escape(String(column.def ?? 'teacher').replace(/^'|'$/g, ''))}`);
+    console.log('[SCHEMA] users.role allows creator');
+}
+
 async function ensureSchema() {
     try {
         await addColumnIfMissing('users', 'subscription_expires_at', 'DATETIME NULL DEFAULT NULL');
     } catch (error) {
         // Non-fatal: everything treats a missing column as "premium never expires"
         console.error('[SCHEMA] could not update schema:', error.code || error.message);
+    }
+    try {
+        await allowCreatorRole();
+    } catch (error) {
+        // Non-fatal: creator codes then fail to register, everything else works
+        console.error('[SCHEMA] could not add the creator role:', error.code || error.message);
+    }
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                code VARCHAR(16) PRIMARY KEY,
+                role VARCHAR(20) NOT NULL DEFAULT 'teacher',
+                note VARCHAR(120) NULL,
+                created_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                used_at DATETIME NULL,
+                used_by INT NULL,
+                INDEX invite_codes_created (created_at)
+            )
+        `);
+    } catch (error) {
+        // Without the table nobody can register (codes are required); signing in still works
+        console.error('[SCHEMA] could not create the registration codes table:', error.code || error.message);
     }
     try {
         const added = await seedPremadeQuizzes(pool);

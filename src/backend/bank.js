@@ -537,15 +537,20 @@ function contextFor(ownerId, status = 'published', { teacher = false } = {}) {
     return { ownerId, status, levelIds: meta.levelIds, topicSubtree, groupValues };
 }
 
-// What a user may do with the bank. Premium limits (template variants, whole-topic picks, the size
-// of a private bank) belong here once the bank has content.
+// Bank staff fill and correct the shared bank: admins, and creators (kūrėjai, in-house authors who
+// may do everything with tasks an admin may, but not change the classifier lists or user accounts)
+const isStaff = user => user.role === 'admin' || user.role === 'creator';
+
+// What a user may do with the bank. Every teacher may browse the shared bank and take tasks from
+// it; only staff change it. A private bank of one's own stays behind BANK_OPEN. Premium limits
+// (template variants, whole-topic picks, the size of a private bank) belong here.
 function bankLimits(user) {
-    const admin = user.role === 'admin';
-    return { read: admin || BANK_OPEN, writeShared: admin, writeMine: admin || BANK_OPEN };
+    const staff = isStaff(user);
+    return { read: staff || user.role === 'teacher', writeShared: staff, writeMine: staff || BANK_OPEN, staff };
 }
 
 function listContext(user, params) {
-    const teacher = user.role !== 'admin';
+    const teacher = !isStaff(user);
     // Starred tasks are shared ones the teacher bookmarked
     if (params.scope === 'favorites') return { ...contextFor(0, 'published', { teacher }), favoritesOf: user.id };
     const mine = params.scope === 'mine';
@@ -640,7 +645,8 @@ function writeScope(user, rawScope) {
 
 function mayEdit(user, ownerId) {
     if (user.role === 'admin') return true;
-    return ownerId !== 0 && ownerId === user.id && bankLimits(user).writeMine;
+    if (ownerId === 0) return isStaff(user);
+    return ownerId === user.id && bankLimits(user).writeMine;
 }
 
 /**
@@ -815,7 +821,7 @@ async function createItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
     const list = Array.isArray(body.items) ? body.items : [];
     if (!list.length || list.length > MAX_BATCH) throw new BankError(`Send 1–${MAX_BATCH} tasks at a time`);
-    if (ownerId !== 0 && user.role !== 'admin') {
+    if (ownerId !== 0 && !isStaff(user)) {
         const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM bank_items WHERE owner_id = ? AND status <> 'archived'", [ownerId]);
         if (Number(n) + list.length > MAX_PRIVATE_ITEMS) throw new BankError(`Your own bank holds at most ${MAX_PRIVATE_ITEMS} tasks`, 403);
     }
@@ -985,6 +991,8 @@ async function bulkUpdate(pool, user, body) {
  */
 async function archiveItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
+    // Creators archive shared tasks (which can be restored); deleting them for good is an admin's call
+    if (body.purge && ownerId === 0 && user.role !== 'admin') throw new BankError('Only an admin may delete shared tasks for good', 403);
     const ids = idList(body.ids ?? [], MAX_BULK);
     if (!ids.length) throw new BankError('Choose the tasks');
     const sql = body.purge
@@ -1005,10 +1013,15 @@ async function archiveItems(pool, user, body) {
 async function fetchItems(pool, user, ids) {
     if (!ids.length) return [];
     const admin = user.role === 'admin';
+    const staff = isStaff(user);
+    // Admins open any task; creators the whole shared bank (drafts and archive too) and their own;
+    // teachers the shared bank's published tasks and their own
+    const visible = admin ? '' : staff ? ' AND (i.owner_id = 0 OR i.owner_id = ?)'
+        : " AND ((i.owner_id = 0 AND i.status = 'published') OR i.owner_id = ?)";
     const [rows] = await pool.query(
         `SELECT i.id, i.owner_id, i.kind, i.qtype, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, c.content
          FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
-         WHERE i.id IN (?)${admin ? '' : " AND ((i.owner_id = 0 AND i.status = 'published') OR i.owner_id = ?)"}`,
+         WHERE i.id IN (?)${visible}`,
         admin ? [ids] : [ids, user.id]
     );
     if (!rows.length) return [];
@@ -1016,8 +1029,8 @@ async function fetchItems(pool, user, ids) {
     const [[links], [myReports], [openReports]] = await Promise.all([
         pool.query('SELECT item_id, value_id FROM bank_item_values WHERE item_id IN (?)', [found]),
         pool.query("SELECT item_id FROM bank_item_reports WHERE user_id = ? AND status = 'open' AND item_id IN (?)", [user.id, found]),
-        // Admins see the open reports of mistakes, with who sent them
-        admin
+        // Staff see the open reports of mistakes, with who sent them
+        staff
             ? pool.query(`SELECT r.id, r.item_id, r.reason, r.note, r.created_at, u.username FROM bank_item_reports r
                           LEFT JOIN users u ON u.id = r.user_id WHERE r.status = 'open' AND r.item_id IN (?) ORDER BY r.id`, [found])
             : [[]]
@@ -1049,7 +1062,7 @@ async function fetchItems(pool, user, ids) {
         source: row.source,
         values: valuesOf.get(row.id) || [],
         reportedByMe: reported.has(row.id),
-        ...(admin ? { reports: reportsOf.get(row.id) || [] } : {}),
+        ...(staff ? { reports: reportsOf.get(row.id) || [] } : {}),
         content: parseJson(row.content)
     }]));
     return ids.map(id => byId.get(id)).filter(Boolean);
@@ -1253,7 +1266,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         next();
     });
 
-    router.get('/bank/meta', route(req => (req.user.role === 'admin' ? meta.adminData : meta.teacherData)));
+    const requireStaff = (req, res, next) => (isStaff(req.user) ? next() : res.status(403).json({ error: 'Only bank staff may do this' }));
+
+    // Staff classify tasks, so they get every subject and topic, hidden ones too
+    router.get('/bank/meta', route(req => (isStaff(req.user) ? meta.adminData : meta.teacherData)));
 
     router.get('/bank/items', route(async req => {
         const result = await listItems(pool, req.query, listContext(req.user, req.query));
@@ -1292,6 +1308,8 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     };
     // With the counts of all one's tasks and of those in no folder, so the panel needs one request
     router.get('/bank/folders', route(async req => {
+        // A teacher without a bank of their own has no folders (their column still lists stars)
+        if (!bankLimits(req.user).writeMine) return { folders: [], total: 0, unfiled: 0 };
         const ownerId = folderOwner(req.user);
         const [[rows], [[counts]]] = await Promise.all([
             pool.query(
@@ -1389,8 +1407,8 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             throw error;
         }
     }));
-    // An admin closes a task's open reports: fixed, or nothing wrong after all
-    router.patch('/bank/items/:id/reports', requireAdmin, route(async req => {
+    // Staff close a task's open reports: fixed, or nothing wrong after all
+    router.patch('/bank/items/:id/reports', requireStaff, route(async req => {
         const id = toId(req.params.id);
         const status = ['resolved', 'dismissed'].includes(req.body?.status) ? req.body.status : null;
         if (!id || !status) throw new BankError('Say how the reports end');

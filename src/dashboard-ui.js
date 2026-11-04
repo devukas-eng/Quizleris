@@ -1,5 +1,5 @@
 import { getCurrentUser, showAuthModal, logoutUser } from "./auth-ui.js";
-import { fetchAllUsers, fetchProfile, deleteQuizFromCloud } from "./api.js";
+import { fetchAllUsers, fetchProfile, deleteQuizFromCloud, fetchInvites, createInvites, deleteInvite } from "./api.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import { shareStripHtml, wireCopyButtons } from "./share-links.js";
@@ -13,6 +13,7 @@ export function initDashboardUI() {
             <div class="dash-window" role="dialog" aria-modal="true" aria-labelledby="dashboard-title">
                 <div class="dash-header">
                     <h2 id="dashboard-title"></h2>
+                    <button id="dashboard-invites-btn" class="btn btn-secondary dash-invites-btn" hidden aria-expanded="false" aria-controls="dash-invites"></button>
                     <button id="dashboard-logout-btn" class="btn btn-secondary dash-logout"></button>
                     <button id="dashboard-modal-close-btn" class="btn btn-secondary btn-icon dash-close" aria-label="Close">&times;</button>
                 </div>
@@ -38,6 +39,7 @@ export function initDashboardUI() {
         logoutUser();
         closeDashboard();
     });
+    document.getElementById("dashboard-invites-btn").addEventListener("click", toggleInvites);
 
     document.addEventListener("open-dashboard", () => {
         if (!getCurrentUser()) {
@@ -69,7 +71,8 @@ async function renderDashboard() {
     cachedUser.subscription_tier = user.subscription_tier;
     setHeader(user.role);
 
-    body.innerHTML = profileCard(user, limits, quizzes.length) + quizzesSection(quizzes) +
+    body.innerHTML = (user.role === "admin" ? `<section class="dash-section dash-invites" id="dash-invites" hidden></section>` : "") +
+        profileCard(user, limits, quizzes.length) + quizzesSection(quizzes) +
         (user.role === "admin" ? `<section class="dash-section" id="dash-admin-users"><p class="dash-muted">${t("profile.loading")}</p></section>` : "");
 
     wireCopyButtons(body);
@@ -102,8 +105,136 @@ async function renderDashboard() {
 }
 
 function setHeader(role) {
-    document.getElementById("dashboard-title").textContent = role === "admin" ? t("profile.adminTitle") : t("profile.teacherTitle");
+    document.getElementById("dashboard-title").textContent = role === "admin" ? t("profile.adminTitle")
+        : role === "creator" ? t("profile.creatorTitle") : t("profile.teacherTitle");
     document.getElementById("dashboard-logout-btn").textContent = t("profile.logout");
+    const invitesBtn = document.getElementById("dashboard-invites-btn");
+    invitesBtn.hidden = role !== "admin";
+    // The label hides on phones (style.css), leaving the key
+    invitesBtn.innerHTML = `<span aria-hidden="true">🔑</span> <span class="dash-invites-label">${escapeHtml(t("invites.button"))}</span>`;
+    invitesBtn.title = t("invites.button");
+    invitesBtn.setAttribute("aria-label", t("invites.button"));
+    invitesBtn.setAttribute("aria-expanded", "false");
+}
+
+// --- Registration codes (admins): opened from the header button, above the profile ---
+
+function toggleInvites() {
+    const section = document.getElementById("dash-invites");
+    const btn = document.getElementById("dashboard-invites-btn");
+    if (!section) return; // the dashboard is still loading
+    const open = section.hidden;
+    section.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    if (!section.dataset.built) buildInvites(section);
+    loadInvites(section);
+    section.scrollIntoView({ block: "nearest" });
+}
+
+function buildInvites(section) {
+    section.dataset.built = "1";
+    section.innerHTML = `
+        <div class="dash-section-head"><h3>${t("invites.title")}</h3></div>
+        <p class="dash-muted">${t("invites.intro")}</p>
+        <form class="dash-invite-form">
+            <label>${t("invites.role")}
+                <select name="role" class="admin-select-compact">
+                    <option value="teacher">${t("invites.roleTeacher")}</option>
+                    <option value="creator">${t("invites.roleCreator")}</option>
+                </select>
+            </label>
+            <label>${t("invites.count")}
+                <input name="count" class="input-field" type="number" min="1" max="50" value="1" inputmode="numeric">
+            </label>
+            <label class="dash-invite-note">${t("invites.note")}
+                <input name="note" class="input-field" type="text" maxlength="120" placeholder="${escapeHtml(t("invites.notePlaceholder"))}">
+            </label>
+            <button type="submit" class="btn btn-primary">${t("invites.generate")}</button>
+        </form>
+        <div class="dash-invite-new" hidden></div>
+        <p class="dash-invite-error" role="alert" hidden></p>
+        <div class="dash-invite-list"><p class="dash-muted">${t("profile.loading")}</p></div>
+    `;
+    const form = section.querySelector("form");
+    const error = section.querySelector(".dash-invite-error");
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const submit = form.querySelector("button[type=submit]");
+        submit.disabled = true;
+        error.hidden = true;
+        const res = await createInvites(form.role.value, Number(form.count.value) || 1, form.note.value);
+        submit.disabled = false;
+        if (!res.ok) {
+            error.textContent = res.data.error || t("invites.failed");
+            error.hidden = false;
+            return;
+        }
+        form.note.value = "";
+        showNewCodes(section.querySelector(".dash-invite-new"), res.data.codes);
+        loadInvites(section);
+    });
+    section.querySelector(".dash-invite-list").addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-withdraw]");
+        if (!btn) return;
+        btn.disabled = true;
+        const res = await deleteInvite(btn.dataset.withdraw);
+        if (!res.ok) {
+            btn.disabled = false;
+            error.textContent = res.data.error || t("invites.failed");
+            error.hidden = false;
+            return;
+        }
+        loadInvites(section);
+    });
+}
+
+// Codes are shown in groups of three ("K7M-3QX-P2A") so they are easy to read out; any form works
+const groupCode = (code) => code.replace(/(.{3})(?=.)/g, "$1-");
+
+function showNewCodes(box, codes) {
+    box.hidden = false;
+    box.innerHTML = `
+        <p>${t("invites.new")}</p>
+        <div class="dash-invite-codes">${codes.map(c => `<code>${escapeHtml(groupCode(c))}</code>`).join("")}</div>
+        <button type="button" class="btn btn-secondary btn-compact">📋 ${t("invites.copyAll")}</button>
+    `;
+    const copy = box.querySelector("button");
+    copy.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(codes.map(groupCode).join("\n"));
+            copy.textContent = `✓ ${t("invites.copied")}`;
+        } catch {
+            // Clipboard refused (an old browser or no permission): the codes stay on screen to select
+            window.getSelection()?.selectAllChildren(box.querySelector(".dash-invite-codes"));
+        }
+    });
+}
+
+async function loadInvites(section) {
+    const list = section.querySelector(".dash-invite-list");
+    const res = await fetchInvites();
+    if (!res.ok) {
+        list.innerHTML = `<p class="dash-muted">${escapeHtml(res.data.error || t("invites.failed"))}</p>`;
+        return;
+    }
+    const invites = res.data.invites || [];
+    if (!invites.length) {
+        list.innerHTML = `<p class="dash-muted">${t("invites.empty")}</p>`;
+        return;
+    }
+    list.innerHTML = `
+        <div class="dash-table-wrap"><table class="dash-table">
+            <thead><tr><th>${t("invites.code")}</th><th>${t("invites.role")}</th><th>${t("invites.note")}</th><th>${t("invites.created")}</th><th>${t("invites.usedBy")}</th><th><span class="sr-only">${t("dashboard.actions")}</span></th></tr></thead>
+            <tbody>${invites.map(i => `<tr class="${i.used_at ? "dash-invite-used" : ""}">
+                <td><code>${escapeHtml(groupCode(i.code))}</code></td>
+                <td>${escapeHtml(t(`role.${i.role}`))}</td>
+                <td>${escapeHtml(i.note || "")}</td>
+                <td>${escapeHtml(formatDate(i.created_at))}</td>
+                <td>${i.used_at ? escapeHtml(`${i.used_by || "—"} · ${formatDate(i.used_at)}`) : `<span class="dash-muted">${t("invites.unused")}</span>`}</td>
+                <td>${i.used_at ? "" : `<button type="button" class="btn btn-secondary btn-icon btn-compact" data-withdraw="${escapeHtml(i.code)}" title="${t("invites.withdraw")}" aria-label="${t("invites.withdraw")}">✕</button>`}</td>
+            </tr>`).join("")}</tbody>
+        </table></div>`;
 }
 
 // The dashboard's place and look go along, so the task bank can glide it into its own column
@@ -121,6 +252,7 @@ function profileCard(user, limits, quizCount) {
     let planLabel = t("profile.planFree");
     let planClass = "free";
     if (isAdmin) { planLabel = t("profile.planAdmin"); planClass = "admin"; }
+    else if (user.role === "creator") { planLabel = t("profile.planCreator"); planClass = "admin"; }
     else if (user.premium_active) { planLabel = t("profile.planPremium"); planClass = "premium"; }
 
     let validity = "—";
@@ -234,7 +366,7 @@ async function renderAdminUsers(container) {
         html += `<tr>
             <td>${escapeHtml(u.email)}</td>
             <td>${escapeHtml(u.username)}</td>
-            <td>${escapeHtml(u.role)}</td>
+            <td>${escapeHtml(t(`role.${u.role}`) === `role.${u.role}` ? u.role : t(`role.${u.role}`))}</td>
             <td><span class="dash-chip ${u.subscription_tier === "premium" ? "public" : "private"}">${escapeHtml(u.subscription_tier)}</span></td>
             <td>${escapeHtml(formatDate(u.created_at))}</td>
         </tr>`;

@@ -28,16 +28,36 @@ export async function login(username, password) {
     return data.user;
 }
 
-export async function register(username, email, password) {
+export async function register(username, email, password, inviteCode) {
     const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password })
+        body: JSON.stringify({ username, email, password, inviteCode })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) throw Object.assign(new Error(data.error), { code: data.code });
     return data;
 }
+
+// --- Registration codes (admins) ---
+async function adminRequest(path, options = {}) {
+    try {
+        const res = await fetch(`${API_BASE}/admin/${path}`, {
+            ...options,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok, status: res.status, data };
+    } catch {
+        return { ok: false, status: 0, data: {} };
+    }
+}
+/** { ok, data: { invites: [{ code, role, note, created_at, used_at, used_by }] } } */
+export const fetchInvites = () => adminRequest('invites');
+/** New single-use codes: { ok, data: { codes: [...], role } } */
+export const createInvites = (role, count, note) =>
+    adminRequest('invites', { method: 'POST', body: JSON.stringify({ role, count, note }) });
+export const deleteInvite = (code) => adminRequest(`invites/${encodeURIComponent(code)}`, { method: 'DELETE' });
 
 export function logout() {
     setToken(null);
