@@ -6857,10 +6857,18 @@ body.pp-open {
     display: none;
 }
 
+/* The squeezed sizes (1100–1400px) are the floor; on bigger screens the gaps, both panels and the
+   editor between them grow with the window (at 1920: 19px gaps, 346px and 518px panels, a 980px
+   editor). From about 2030px all three are at their widest and stay together in the middle, so a
+   drag from the bank to the quiz stays short. */
 body.bank-workspace {
-    --bank-gap: 14px;
-    --bank-left: clamp(232px, 17vw, 292px);
-    --bank-right: clamp(340px, 26vw, 450px);
+    --bank-gap: clamp(14px, 1vw, 22px);
+    --bank-left: clamp(232px, 18vw, 360px);
+    --bank-right: clamp(340px, 27vw, 540px);
+    --bank-editor: 1040px;
+    /* From the window's edge to a panel: the gap, or half of the room the three leave over.
+       100% is the window's width wherever this is used (a fixed panel's side, the body's padding). */
+    --bank-edge: max(var(--bank-gap), (100% - var(--bank-left) - var(--bank-editor) - var(--bank-right)) / 2 - var(--bank-gap));
 }
 
 body.bank-workspace .bank-aside {
@@ -6881,28 +6889,44 @@ body.bank-workspace .bank-aside {
 }
 
 body.bank-workspace #bank-mine {
-    left: var(--bank-gap);
+    left: var(--bank-edge);
     width: var(--bank-left);
 }
 
 body.bank-workspace #bank-panel {
-    right: var(--bank-gap);
+    right: var(--bank-edge);
     width: var(--bank-right);
 }
 
-@media (min-width: 1100px) {
-    body.bank-workspace {
-        padding-right: calc(var(--bank-right) + var(--bank-gap) * 2);
+@media (min-width: 768px) {
+    /* The editor's card starts level with the panels (the logo row above it is hidden here) and
+       stays at the top: a short quiz is not centred on the page, so adding a question doesn't
+       shift it. */
+    body.bank-workspace.admin-mode-active {
+        justify-content: flex-start;
+        padding-top: var(--bank-gap);
     }
 
-    body.bank-workspace #app-root {
-        width: min(900px, 100%);
+    /* The editor takes the room beside the panels (all of it while the bank is a drawer). Two
+       classes outrank the start screen's narrow-card rule (#app-root:has(.hero-section…)),
+       which would otherwise hold it at 680px. */
+    body.bank-workspace.admin-mode-active #app-root {
+        width: min(var(--bank-editor), 100%);
+    }
+}
+
+/* The same gap on every side of the editor; scrolled to the end, it ends level with the panels */
+@media (min-width: 1100px) {
+    body.bank-workspace.admin-mode-active {
+        padding-right: calc(var(--bank-edge) + var(--bank-right) + var(--bank-gap));
+        padding-bottom: var(--bank-gap);
+        padding-left: var(--bank-gap);
     }
 }
 
 @media (min-width: 1400px) {
-    body.bank-workspace {
-        padding-left: calc(var(--bank-left) + var(--bank-gap) * 2);
+    body.bank-workspace.admin-mode-active {
+        padding-left: calc(var(--bank-edge) + var(--bank-left) + var(--bank-gap));
     }
 
     body.bank-workspace .bank-tabs {
@@ -6914,7 +6938,7 @@ body.bank-workspace #bank-panel {
 @media (max-width: 1399px) {
     body.bank-workspace #bank-mine {
         left: auto;
-        right: var(--bank-gap);
+        right: var(--bank-edge);
         width: var(--bank-right);
     }
 
