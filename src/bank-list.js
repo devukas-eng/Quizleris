@@ -34,10 +34,12 @@ function previewHtml(item) {
 /**
  * options:
  *   metaHtml(item) → HTML of the row's second line
- *   addLabel: the "+" button's label
- *   onOpen(item, index), onAdd(item, rowEl), onPointerDown(event, item, rowEl)
+ *   addLabel, starLabel: the "+" and star buttons' labels
+ *   starOf(item) → true / false, or null for no star (a teacher's own task)
+ *   onOpen(item, index), onAdd(item, rowEl), onStar(item, rowEl), onPointerDown(event, item, rowEl)
  *   emptyHtml(): what an empty listing shows
- *   onSelection(ids): selection changed (Ctrl/Cmd/Shift + click)
+ *   onSelection(ids): selection changed (Ctrl/Cmd/Shift + click; Esc clears)
+ * Rows are one Tab stop: arrow keys move, Enter opens, "+" adds, "*" stars.
  */
 export function createTaskList(container, options) {
     container.classList.add("bank-list");
@@ -81,7 +83,10 @@ export function createTaskList(container, options) {
                 <div class="bank-row-text"></div>
                 <div class="bank-row-meta"></div>
             </div>
-            <button type="button" class="bank-row-add" aria-label="${escapeHtml(options.addLabel)}" title="${escapeHtml(options.addLabel)}">
+            <button type="button" class="bank-row-star" tabindex="-1" aria-pressed="false" aria-label="${escapeHtml(options.starLabel)}" title="${escapeHtml(options.starLabel)}">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/></svg>
+            </button>
+            <button type="button" class="bank-row-add" tabindex="-1" aria-label="${escapeHtml(options.addLabel)}" title="${escapeHtml(options.addLabel)}">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             </button>`;
         return row;
@@ -105,6 +110,10 @@ export function createTaskList(container, options) {
             row.querySelector(".bank-row-meta").innerHTML = options.metaHtml(item);
         }
         row.classList.toggle("is-selected", selected.has(item.id));
+        // The star: shown for shared tasks only (null hides it)
+        const starred = options.starOf?.(item) ?? null;
+        row.dataset.star = starred === null ? "" : starred ? "on" : "off";
+        row.querySelector(".bank-row-star").setAttribute("aria-pressed", String(!!starred));
     }
 
     function render() {
@@ -183,6 +192,10 @@ export function createTaskList(container, options) {
             options.onAdd(item, row);
             return;
         }
+        if (e.target.closest(".bank-row-star")) {
+            options.onStar?.(item, row);
+            return;
+        }
         const index = Number(row.dataset.index);
         if (e.shiftKey && lastAnchor != null) {
             const [a, b] = lastAnchor < index ? [lastAnchor, index] : [index, lastAnchor];
@@ -209,6 +222,14 @@ export function createTaskList(container, options) {
         } else if (e.key === "+" || e.key === "Insert") {
             e.preventDefault();
             options.onAdd(item, row);
+        } else if (e.key === "*" && row.dataset.star) {
+            e.preventDefault();
+            options.onStar?.(item, row);
+        } else if (e.key === "Escape" && selected.size) {
+            e.preventDefault();
+            e.stopPropagation();
+            selected.clear();
+            changed();
         } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
             focusIndex(Number(row.dataset.index) + (e.key === "ArrowDown" ? 1 : -1));
@@ -218,7 +239,7 @@ export function createTaskList(container, options) {
     container.addEventListener("pointerdown", e => {
         const row = e.target.closest(".bank-row");
         const item = itemOf(row);
-        if (!item || e.target.closest(".bank-row-add")) return;
+        if (!item || e.target.closest(".bank-row-add, .bank-row-star")) return;
         options.onPointerDown(e, item, row);
     });
 
@@ -284,12 +305,14 @@ export function createTaskList(container, options) {
             return null;
         },
         /** After a language switch: new texts on the rows already made. */
-        relabel(addLabel) {
-            options.addLabel = addLabel;
+        relabel(addLabel, starLabel) {
+            Object.assign(options, { addLabel, starLabel });
             for (const row of [...rows.values(), ...spare]) {
-                const button = row.querySelector(".bank-row-add");
-                button.title = addLabel;
-                button.setAttribute("aria-label", addLabel);
+                for (const [selector, label] of [[".bank-row-add", addLabel], [".bank-row-star", starLabel]]) {
+                    const button = row.querySelector(selector);
+                    button.title = label;
+                    button.setAttribute("aria-label", label);
+                }
                 row.removeAttribute("data-id"); // the second line is written again
             }
             for (const [index, row] of rows) fill(row, index);

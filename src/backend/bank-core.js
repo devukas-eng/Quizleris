@@ -188,6 +188,9 @@ function buildFilter(params, ctx, omit = null) {
     // A teacher's own folder (only the owner's tasks are listed, so another's folder lists nothing)
     if (params.folder === 'none') add('i.folder_id IS NULL');
     else if (toId(params.folder)) add('i.folder_id = ?', toId(params.folder));
+    // One teacher's starred tasks; tasks with open reports of mistakes (admins)
+    if (ctx.favoritesOf) add('i.id IN (SELECT item_id FROM bank_favorites WHERE user_id = ?)', ctx.favoritesOf);
+    if (ctx.flagged) add("i.id IN (SELECT item_id FROM bank_item_reports WHERE status = 'open')");
     if (omit !== 'difficulty') addNullableIn(add, 'i.difficulty_id', params.difficulty);
     if (omit !== 'kind' && KINDS.includes(params.kind)) add('i.kind = ?', params.kind);
     if (omit !== 'qtype') {
@@ -229,6 +232,8 @@ const FROM_ITEMS = 'bank_items i IGNORE INDEX (bank_items_subject_ref, bank_item
  */
 function listIndex(params) {
     if (searchTerms(params.q).fulltext || idList(params.values, 50).length) return null;
+    // Starred or reported tasks are few: the optimizer reads them first and looks the tasks up
+    if (params.scope === 'favorites' || params.flagged !== undefined) return null;
     const subject = toId(params.subject);
     const grade = toId(params.grade);
     const sort = params.sort === 'popular' || params.sort === 'level' ? params.sort : 'new';
@@ -298,11 +303,13 @@ function buildFacetQueries(params, ctx) {
 
 /**
  * Whether a listing's total and facets can be worked out from grouped counts (countFromGroups):
- * not when it searches, filters by classifier values or names a folder, which the groups don't hold.
+ * not when it searches, filters by classifier values, names a folder, or lists starred or reported
+ * tasks, which the groups don't hold.
  */
 function groupCountable(params) {
     const search = searchTerms(params.q);
-    return !search.fulltext && !search.short.length && !idList(params.values, 50).length && params.folder === undefined;
+    return !search.fulltext && !search.short.length && !idList(params.values, 50).length && params.folder === undefined
+        && params.scope !== 'favorites' && params.flagged === undefined;
 }
 
 /**

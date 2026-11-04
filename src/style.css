@@ -6848,6 +6848,7 @@ body.pp-open {
    ========================================================================== */
 :root {
     --bank-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --bank-star: #e8a400;
 }
 
 .bank-aside,
@@ -7667,6 +7668,54 @@ body.bank-workspace #bank-panel {
     transform: scale(0.92);
 }
 
+/* Star: on shared tasks only (data-star is empty on one's own), gold once starred */
+.bank-row-star {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    margin-right: -4px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, color 0.15s ease, transform 0.18s var(--bank-ease);
+}
+
+.bank-row:hover .bank-row-star,
+.bank-row:focus-visible .bank-row-star {
+    opacity: 1;
+}
+
+.bank-row-star:hover {
+    color: var(--bank-star);
+    transform: scale(1.12);
+}
+
+.bank-row[data-star=""] .bank-row-star {
+    display: none;
+}
+
+.bank-row[data-star="on"] .bank-row-star,
+.bank-sheet-star.is-on {
+    color: var(--bank-star);
+    opacity: 1;
+}
+
+.bank-row[data-star="on"] .bank-row-star svg,
+.bank-sheet-star.is-on svg {
+    fill: currentColor;
+}
+
+.mine-folder[data-folder="favorites"] .mine-folder-ico {
+    color: var(--bank-star);
+}
+
 .bank-row.is-skeleton {
     cursor: default;
     pointer-events: none;
@@ -8026,6 +8075,160 @@ body.bank-workspace #bank-panel {
     border-top: 1px solid var(--border-color);
 }
 
+.bank-sheet-head .bank-icon-btn.is-on:disabled {
+    opacity: 1;
+    color: var(--danger-strong);
+}
+
+/* "What is wrong?": the report form under the task */
+.bank-report {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--danger-strong) 6%, var(--surface-solid));
+    animation: bank-rise 0.24s var(--bank-ease);
+}
+
+.bank-report[hidden] {
+    display: none;
+}
+
+.bank-report-title {
+    margin: 0;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.bank-report-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.bank-report-reasons .bank-chip {
+    height: 28px;
+    font-size: 0.76rem;
+}
+
+.bank-report-note {
+    width: 100%;
+    min-height: 54px;
+    padding: 8px 10px;
+    border: 1px solid var(--control-border);
+    border-radius: 10px;
+    background: var(--input-bg);
+    color: var(--text);
+    font: 0.86rem var(--font);
+    resize: vertical;
+}
+
+.bank-report-note:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.bank-report-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.bank-report-actions .btn {
+    min-height: 34px;
+    font-size: 0.84rem;
+}
+
+/* Admins: a task's open reports, above the task */
+.bank-reports {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--danger-strong) 40%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--danger-strong) 8%, transparent);
+    font-size: 0.84rem;
+}
+
+.bank-reports-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 6px;
+    color: var(--danger-strong);
+    font-weight: 700;
+}
+
+.bank-reports ul {
+    margin: 0 0 10px;
+    padding-left: 18px;
+}
+
+.bank-reports li span {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.bank-reports-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.bank-reports-actions .btn {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 0.8rem;
+}
+
+.bank-flagged {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid color-mix(in srgb, var(--danger-strong) 45%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--danger-strong);
+    font: 700 0.74rem var(--font);
+    cursor: pointer;
+}
+
+.bank-flagged[hidden] {
+    display: none;
+}
+
+.bank-flagged[aria-pressed="true"] {
+    background: var(--danger-strong);
+    color: #fff;
+}
+
+.bank-flag {
+    display: inline-flex;
+    color: var(--danger-strong);
+}
+
+/* While the reported tasks are listed, the other filters don't apply */
+.bank-aside.is-flagged :is(.bank-search, .bank-suggest, .bank-filters, .bank-topics, .bank-topic-info) {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.bank-kbd {
+    flex-shrink: 0;
+    padding: 0 6px;
+    border: 1px solid var(--control-border);
+    border-radius: 5px;
+    color: var(--muted);
+    font: 600 0.72rem var(--font);
+    line-height: 18px;
+}
+
+.bank-search:focus-within .bank-kbd {
+    display: none;
+}
+
 .bank-sheet-actions .btn {
     display: inline-flex;
     flex: 1;
@@ -8106,6 +8309,27 @@ body.bank-workspace #bank-panel {
 .bank-toast.is-error {
     background: var(--danger-strong);
     color: #fff;
+}
+
+.bank-toast:has(.bank-toast-action) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    pointer-events: auto;
+}
+
+.bank-toast-action {
+    padding: 4px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--surface-solid) 18%, transparent);
+    color: inherit;
+    font: 700 0.84rem var(--font);
+    cursor: pointer;
+}
+
+.bank-toast-action:hover {
+    background: color-mix(in srgb, var(--surface-solid) 30%, transparent);
 }
 
 .bank-toast.is-leaving {
@@ -8355,6 +8579,7 @@ body.is-dragging * {
     .bank-popover,
     .bank-topic-info,
     .bank-suggest,
+    .bank-report,
     .bank-row.is-skeleton .bank-row-text span,
     .editor-drop-marker.is-loading span,
     .admin-question-item.just-moved {

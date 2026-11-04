@@ -219,6 +219,25 @@ describe('countFromGroups', () => {
         expect(core.groupCountable({ subject: '1', q: 'x' })).toBe(false);
         expect(core.groupCountable({ values: '4' })).toBe(false);
         expect(core.groupCountable({ folder: 'none' })).toBe(false);
+        expect(core.groupCountable({ scope: 'favorites' })).toBe(false);
+        expect(core.groupCountable({ subject: '1', flagged: '1' })).toBe(false);
+    });
+});
+
+describe('starred and reported tasks', () => {
+    it('lists one teacher\'s stars and the tasks with open reports', () => {
+        const starred = core.buildFilter({ subject: '1' }, { ...ctx, favoritesOf: 42 });
+        expect(starred.where).toContain('i.id IN (SELECT item_id FROM bank_favorites WHERE user_id = ?)');
+        expect(starred.args).toContain(42);
+        expect(placeholders(starred.where)).toBe(starred.args.length);
+        const flagged = core.buildFilter({}, { ...ctx, flagged: true });
+        expect(flagged.where).toContain("i.id IN (SELECT item_id FROM bank_item_reports WHERE status = 'open')");
+        expect(placeholders(flagged.where)).toBe(flagged.args.length);
+    });
+
+    it('lets the optimizer start from the few starred or reported tasks', () => {
+        expect(core.listIndex({ scope: 'favorites', subject: '1', grade: '7' })).toBeNull();
+        expect(core.listIndex({ flagged: '1', subject: '1' })).toBeNull();
     });
 });
 

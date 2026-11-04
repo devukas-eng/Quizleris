@@ -24,6 +24,7 @@ const PAGE = 50;
 const MAX_SAMPLE = 50;      // the server's limit for one /sample
 const DASH_FRESH_MS = 1500; // how long after leaving the dashboard its glide still plays
 const SORTS = ["new", "popular", "level"];
+const REPORT_REASONS = ["answer", "wording", "classification", "duplicate", "other"];
 
 const wideQuery = window.matchMedia("(min-width: 1400px)");
 const roomyQuery = window.matchMedia("(min-width: 1100px)");
@@ -45,7 +46,9 @@ const ICONS = {
     image: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-8 8"/>',
     prev: '<path d="m15 6-6 6 6 6"/>',
     next: '<path d="m9 6 6 6-6 6"/>',
-    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>'
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    star: '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>',
+    flag: '<path d="M5 21V4.5"/><path d="M5 4.5h11l-2 4 2 4H5"/>'
 };
 const icon = (name, size = 18) =>
     `<svg class="bank-ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -79,9 +82,11 @@ let popover = null;
 let treeOpen = true; // the topic tree folds into its header once a topic without subtopics is chosen
 let builtLanguage = null;
 let inQuiz = new Set(); // bank tasks the open quiz already holds (their source.bankId)
+let favorites = new Set(); // the teacher's starred shared tasks
+let flaggedCount = 0; // shared tasks with open reports of mistakes (admins)
 const adding = new Set(); // tasks on their way into the quiz: a second click doesn't add them twice
 const els = {};
-const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, started: false };
+const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, flagged: false, started: false };
 const mine = { folders: [], folderId: "all", q: "", total: 0, unfiled: 0, listed: 0, started: false };
 
 export function initBankWorkspace() {
@@ -108,10 +113,21 @@ export function initBankWorkspace() {
     // Rows mark the tasks the quiz already holds
     document.addEventListener("quiz-questions-changed", () => {
         inQuiz = bankIdsInQuiz();
-        if (shown) {
-            bankList.refresh();
-            mineList.refresh();
-        }
+        if (!shown) return;
+        bankList.refresh();
+        mineList.refresh();
+        const item = sheet?.list.items[sheet.index];
+        if (item) sheet.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, sheet.scope === "mine");
+    });
+    // "/" jumps to the bank's search from anywhere but a text field
+    document.addEventListener("keydown", e => {
+        if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || !shown) return;
+        const target = e.target;
+        if (target.isContentEditable || target.closest?.("input, textarea, select, rich-input, math-field, [contenteditable]")) return;
+        e.preventDefault();
+        if (layoutMode() !== "wide") setTab("bank");
+        if (layoutMode() === "drawer") setDrawer(true);
+        els.panel.querySelector('[data-search="bank"]').focus();
     });
     // Known ahead, so the editor opens straight into its three columns
     if (isAdminAccessAllowed()) requestMeta();
@@ -201,6 +217,8 @@ function show(origin) {
     if (!bank.started) startBank();
     if (!mine.started) startMine();
     else reloadFolders();
+    loadFavorites();
+    refreshFlagged();
     animateIn(origin);
 }
 
@@ -330,7 +348,7 @@ function build() {
                 <h2 id="bank-title" class="bank-title">${icon("book")}<span data-i18n="bank.title">${t("bank.title")}</span></h2>
                 <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
-            <label class="bank-search">${icon("search", 16)}<input type="search" data-search="bank" autocomplete="off" placeholder="${t("bank.search")}" data-i18n-placeholder="bank.search"></label>
+            <label class="bank-search">${icon("search", 16)}<input type="search" data-search="bank" autocomplete="off" placeholder="${t("bank.search")}" data-i18n-placeholder="bank.search" aria-keyshortcuts="/"><kbd class="bank-kbd" aria-hidden="true">/</kbd></label>
             <div class="bank-suggest" hidden></div>
             <div class="bank-filters">
                 <div class="bank-filter-row">
@@ -349,7 +367,10 @@ function build() {
                 <div class="bank-fold"><div class="bank-fold-inner"><div class="bank-tree" role="tree" data-label="bank.topics" aria-label="${t("bank.topics")}"></div></div></div>
             </section>
             <div class="bank-topic-info" hidden></div>
-            <div class="bank-list-head"><span class="bank-total"></span></div>
+            <div class="bank-list-head">
+                <span class="bank-total"></span>
+                <button type="button" class="bank-flagged" hidden aria-pressed="false">${icon("flag", 14)}<span></span></button>
+            </div>
             <div class="shared-list"></div>
             ${selbarHtml()}
         </aside>
@@ -373,6 +394,7 @@ function build() {
         tree: inPanel(".bank-tree"),
         topicInfo: inPanel(".bank-topic-info"),
         bankTotal: inPanel(".bank-total"),
+        flagged: inPanel(".bank-flagged"),
         folders: els.mine.querySelector(".mine-folders"),
         mineTotal: els.mine.querySelector(".bank-total"),
         mineListEl: els.mine.querySelector(".mine-list")
@@ -380,20 +402,28 @@ function build() {
 
     bankList = createTaskList(inPanel(".shared-list"), {
         addLabel: t("bank.add"),
+        starLabel: t("bank.star"),
         metaHtml: item => rowMetaHtml(item, false),
         emptyHtml: res => emptyHtml(res, "bank"),
+        starOf: item => favorites.has(item.id),
         onOpen: (item, index) => openSheet(els.panel, bankList, index, "bank"),
         onAdd: (item, row) => addTasks([item.id], row),
+        onStar: item => toggleFavorite(item.id),
         onPointerDown: (e, item, row) => dragRows(e, item, row, bankList, "bank"),
         onSelection: ids => updateSelbar(els.panel, ids)
     });
+    // The left list shows one's own tasks, or the starred shared ones (which behave as bank tasks)
+    const starredView = () => mine.folderId === "favorites";
     mineList = createTaskList(els.mineListEl, {
         addLabel: t("bank.add"),
-        metaHtml: item => rowMetaHtml(item, true),
+        starLabel: t("bank.star"),
+        metaHtml: item => rowMetaHtml(item, !starredView()),
         emptyHtml: res => emptyHtml(res, "mine"),
-        onOpen: (item, index) => openSheet(els.mine, mineList, index, "mine"),
+        starOf: item => (starredView() ? favorites.has(item.id) : null),
+        onOpen: (item, index) => openSheet(els.mine, mineList, index, starredView() ? "bank" : "mine"),
         onAdd: (item, row) => addTasks([item.id], row),
-        onPointerDown: (e, item, row) => dragRows(e, item, row, mineList, "mine"),
+        onStar: item => toggleFavorite(item.id),
+        onPointerDown: (e, item, row) => dragRows(e, item, row, mineList, starredView() ? "bank" : "mine"),
         onSelection: ids => updateSelbar(els.mine, ids)
     });
 
@@ -416,8 +446,8 @@ function relabel() {
         if (el.hasAttribute("title")) el.title = text;
     });
     [...els.sort.options].forEach(option => { option.textContent = t(`bank.sort.${option.value}`); });
-    bankList.relabel(t("bank.add"));
-    mineList.relabel(t("bank.add"));
+    bankList.relabel(t("bank.add"), t("bank.star"));
+    mineList.relabel(t("bank.add"), t("bank.star"));
     if (bank.started) {
         renderFilters();
         renderTree();
@@ -498,8 +528,7 @@ function wireBank() {
     });
     els.subject.addEventListener("change", () => {
         bank.subjectId = Number(els.subject.value);
-        bank.topicId = null;
-        treeOpen = true;
+        restoreTopic();
         renderFold();
         renderSuggestions();
         prefs.subjectId = bank.subjectId;
@@ -524,6 +553,7 @@ function wireBank() {
         const topic = meta.topicsById.get(bank.topicId);
         if (grade && topic && !taughtIn(topic, grade) && !topicPath(topic.id).some(step => step.grades.some(row => row.grade === grade))) {
             bank.topicId = null;
+            rememberTopic();
             treeOpen = true;
             renderFold();
         }
@@ -544,6 +574,14 @@ function wireBank() {
     els.topicsHead.addEventListener("click", () => {
         treeOpen = !treeOpen;
         renderFold();
+    });
+    // Admins: every shared task with an open report, whatever the filters
+    els.flagged.addEventListener("click", () => {
+        bank.flagged = !bank.flagged;
+        els.flagged.setAttribute("aria-pressed", String(bank.flagged));
+        els.flagged.hidden = !flaggedCount && !bank.flagged;
+        els.panel.classList.toggle("is-flagged", bank.flagged);
+        reloadBank();
     });
     els.tree.addEventListener("click", e => {
         if (justDragged()) return;
@@ -580,9 +618,22 @@ function startBank() {
     bank.gradeId = meta.gradesById.has(prefs.gradeId) ? prefs.gradeId : null;
     bank.levels = new Set((prefs.levels || []).filter(id => meta.levelsById.has(id)));
     bank.sort = SORTS.includes(prefs.sort) ? prefs.sort : "new";
-    bank.topicId = null;
+    restoreTopic();
     renderFilters();
     reloadBank();
+}
+
+// The topic last chosen in this subject, if it still exists; a leaf opens with the tree folded
+function restoreTopic() {
+    const saved = prefs.topics?.[bank.subjectId];
+    const topic = meta.topicsById.get(saved);
+    bank.topicId = saved === "none" || topic?.subjectId === bank.subjectId ? saved : null;
+    treeOpen = bank.topicId === null || (typeof bank.topicId === "number" && meta.childrenOf(bank.topicId).length > 0);
+}
+
+function rememberTopic() {
+    prefs.topics = { ...prefs.topics, [bank.subjectId]: bank.topicId };
+    savePrefs();
 }
 
 function renderFilters() {
@@ -633,6 +684,12 @@ function listFilter() {
 }
 
 async function reloadBank() {
+    if (bank.flagged) {
+        const res = await bankList.reset((cursor, signal) =>
+            api.listItems({ flagged: 1, sort: bank.sort, limit: PAGE, cursor, facets: "none" }, signal));
+        if (res) els.bankTotal.textContent = res.ok ? t("bank.flaggedTotal").replace("{n}", res.data.total ?? 0) : "";
+        return;
+    }
     const filter = listFilter();
     renderTree();
     const res = await bankList.reset((cursor, signal) =>
@@ -681,6 +738,18 @@ function renderSuggestions() {
         ? `<span class="bank-suggest-label">${t("bank.topics")}:</span>${matches.map(topic =>
             `<button type="button" class="bank-chip" data-topic="${topic.id}" title="${escapeHtml(topicPath(topic.id).map(step => step.name).join(" › "))}">${escapeHtml(topic.name)}</button>`).join("")}`
         : "";
+}
+
+// How many shared tasks have open reports: admins see the number, and with it the way to them
+async function refreshFlagged() {
+    if (getStoredUser()?.role !== "admin" || !els.flagged) return;
+    const res = await api.listItems({ flagged: 1, limit: 1, facets: "none" });
+    if (!res.ok) return;
+    flaggedCount = res.data.total ?? 0;
+    els.flagged.hidden = !flaggedCount && !bank.flagged;
+    els.flagged.querySelector("span").textContent = flaggedCount;
+    els.flagged.title = t("bank.flaggedTitle");
+    els.flagged.setAttribute("aria-label", `${t("bank.flaggedTitle")}: ${flaggedCount}`);
 }
 
 // Whether a grade's curriculum has this topic or one of its subtopics
@@ -778,6 +847,7 @@ function renderTopicInfo() {
 
 function selectTopic(topicId) {
     bank.topicId = topicId;
+    rememberTopic();
     const branch = typeof topicId === "number" && meta.childrenOf(topicId).length > 0;
     if (branch) {
         const expanded = expandedTopics();
@@ -798,6 +868,7 @@ function toggleTopic(id) {
         // A branch holding the chosen topic stays open; folding it chooses the branch instead
         if (bank.topicId !== id && topicPath(bank.topicId).some(topic => topic.id === id)) {
             bank.topicId = id;
+            rememberTopic();
             saveExpanded(expanded);
             reloadBank();
             return;
@@ -882,7 +953,8 @@ function wireMine() {
     treeKeys(els.folders, ".mine-folder", node => toggleFolder(parseFolder(node.dataset.folder)));
 }
 
-const parseFolder = value => (value === "all" || value === "none" ? value : Number(value));
+const SPECIAL_FOLDERS = ["all", "favorites", "none"];
+const parseFolder = value => (SPECIAL_FOLDERS.includes(value) ? value : Number(value));
 const folderById = id => mine.folders.find(folder => folder.id === id) || null;
 
 function isInside(id, ancestorId) {
@@ -898,9 +970,40 @@ function folderLabel(folderId) {
 
 function startMine() {
     mine.started = true;
-    mine.folderId = typeof prefs.mineFolder === "number" || prefs.mineFolder === "none" ? prefs.mineFolder : "all";
+    mine.folderId = typeof prefs.mineFolder === "number" || SPECIAL_FOLDERS.includes(prefs.mineFolder) ? prefs.mineFolder : "all";
     reloadFolders();
     reloadMine();
+}
+
+async function loadFavorites() {
+    const res = await api.listFavorites();
+    if (!res.ok) return;
+    favorites = new Set(res.data.ids || []);
+    if (mine.started) renderFolders();
+    bankList.refresh();
+    mineList.refresh();
+}
+
+// A star goes on (or off) at once; if the server refuses, it comes back off with a notice
+async function toggleFavorite(id) {
+    if (justDragged()) return;
+    const on = !favorites.has(id);
+    const apply = state => {
+        if (state) favorites.add(id);
+        else favorites.delete(id);
+        bankList.refresh();
+        mineList.refresh();
+        renderFolders();
+        sheetStar();
+    };
+    apply(on);
+    const res = await api.setFavorite(id, on);
+    if (!res.ok) {
+        apply(!on);
+        toast(errorText(res), "error");
+    } else if (!on && mine.folderId === "favorites") {
+        reloadMine(); // unstarred: it leaves the starred list
+    }
 }
 
 async function reloadFolders() {
@@ -918,9 +1021,10 @@ async function reloadFolders() {
 }
 
 async function reloadMine() {
-    const folder = mine.folderId === "all" ? null : mine.folderId;
+    const starred = mine.folderId === "favorites";
+    const folder = mine.folderId === "all" || starred ? null : mine.folderId;
     const res = await mineList.reset((cursor, signal) =>
-        api.listItems({ scope: "mine", folder, q: mine.q.trim(), limit: PAGE, cursor, facets: "none" }, signal));
+        api.listItems({ scope: starred ? "favorites" : "mine", folder, q: mine.q.trim(), limit: PAGE, cursor, facets: "none" }, signal));
     if (!res) return;
     mine.listed = res.data.total ?? 0;
     els.mineTotal.textContent = res.ok ? countLabel(mine.listed) : "";
@@ -931,6 +1035,7 @@ function renderFolders() {
     const kids = parentId => mine.folders.filter(folder => (folder.parentId ?? null) === parentId);
     const rows = [
         folderHtml({ id: "all", name: t("bank.folderAll") }, 0, mine.total, null, "stack"),
+        folderHtml({ id: "favorites", name: t("bank.favorites") }, 0, favorites.size, null, "star"),
         folderHtml({ id: "none", name: t("bank.folderNone") }, 0, mine.unfiled, null, "inbox")
     ];
     const walk = (folder, depth) => {
@@ -1106,6 +1211,8 @@ function addMineDropZone() {
 }
 
 function folderTakes(payload, folderId) {
+    // Stars are for shared tasks: bank tasks dropped there are starred, nothing else is taken
+    if (folderId === "favorites") return payload.kind === "tasks" && payload.source === "bank";
     if (payload.kind === "folder") {
         return folderId === "all" || (typeof folderId === "number" && folderId !== payload.id && !isInside(folderId, payload.id));
     }
@@ -1114,6 +1221,18 @@ function folderTakes(payload, folderId) {
 }
 
 async function dropOnFolder(payload, folderId) {
+    if (folderId === "favorites") {
+        const fresh = payload.ids.filter(id => !favorites.has(id));
+        const results = await Promise.all(fresh.map(id => api.setFavorite(id, true)));
+        const starred = fresh.filter((id, i) => results[i].ok);
+        starred.forEach(id => favorites.add(id));
+        if (results.some(res => !res.ok)) toast(errorText(results.find(res => !res.ok)), "error");
+        toast(t("bank.starred").replace("{n}", payload.ids.length));
+        renderFolders();
+        bankList.refresh();
+        if (mine.folderId === "favorites") reloadMine();
+        return true;
+    }
     const target = typeof folderId === "number" ? folderId : null;
     if (payload.kind === "folder") {
         const res = await api.updateFolder(payload.id, { parentId: target });
@@ -1190,9 +1309,8 @@ async function saveToMine(ids) {
     }
 }
 
+// Removed at once, with a moment to take it back (the task is archived, so it can come back)
 async function removeMine(item) {
-    const ok = await confirmDialog({ title: t("bank.removeTitle"), message: item.preview, confirmText: t("bank.remove"), danger: true });
-    if (!ok) return;
     const res = await api.archiveItems([item.id]);
     if (!res.ok) {
         toast(errorText(res), "error");
@@ -1200,7 +1318,18 @@ async function removeMine(item) {
     }
     api.forgetItems([item.id]);
     closeSheet();
-    toast(t("bank.removed"));
+    toast(t("bank.removed"), "ok", {
+        label: t("bank.undo"),
+        run: async () => {
+            const back = await api.updateItems([item.id], { status: "published" });
+            if (!back.ok) {
+                toast(errorText(back), "error");
+                return;
+            }
+            await reloadFolders();
+            reloadMine();
+        }
+    });
     await reloadFolders();
     reloadMine();
 }
@@ -1444,11 +1573,25 @@ function openSheet(aside, list, index, scope) {
         <div class="bank-sheet-card" role="dialog" aria-label="${t("bank.preview")}" tabindex="-1">
             <div class="bank-sheet-head">
                 <div class="bank-sheet-meta"></div>
+                ${scope === "bank" ? `
+                <button type="button" class="bank-icon-btn bank-sheet-star" data-act="star" aria-pressed="false" aria-label="${t("bank.star")}" title="${t("bank.star")}">${icon("star")}</button>
+                <button type="button" class="bank-icon-btn" data-act="report" aria-label="${t("bank.report")}" title="${t("bank.report")}">${icon("flag")}</button>` : ""}
                 <button type="button" class="bank-icon-btn" data-act="prev" aria-label="${t("bank.prev")}" title="${t("bank.prev")}">${icon("prev")}</button>
                 <button type="button" class="bank-icon-btn" data-act="next" aria-label="${t("bank.next")}" title="${t("bank.next")}">${icon("next")}</button>
                 <button type="button" class="bank-icon-btn" data-act="close" aria-label="${t("bank.close")}" title="${t("bank.close")}">${icon("close")}</button>
             </div>
             <div class="bank-sheet-body"></div>
+            <form class="bank-report" hidden>
+                <p class="bank-report-title">${t("bank.reportTitle")}</p>
+                <div class="bank-report-reasons" role="radiogroup" aria-label="${t("bank.reportTitle")}">
+                    ${REPORT_REASONS.map(reason => `<button type="button" class="bank-chip" role="radio" aria-checked="false" data-reason="${reason}">${t(`bank.reason.${reason}`)}</button>`).join("")}
+                </div>
+                <textarea class="bank-report-note" rows="2" maxlength="500" placeholder="${t("bank.reportNote")}" aria-label="${t("bank.reportNote")}"></textarea>
+                <div class="bank-report-actions">
+                    <button type="submit" class="btn btn-primary" disabled>${t("bank.reportSend")}</button>
+                    <button type="button" class="btn btn-secondary" data-act="report-cancel">${t("bank.cancel")}</button>
+                </div>
+            </form>
             <div class="bank-sheet-actions">
                 <button type="button" class="btn btn-primary" data-act="add">${icon("plus", 16)}<span>${t("bank.add")}</span></button>
                 ${scope === "bank"
@@ -1457,9 +1600,10 @@ function openSheet(aside, list, index, scope) {
             </div>
         </div>`;
     aside.appendChild(el);
-    sheet = { el, aside, list, index, scope };
+    sheet = { el, aside, list, index, scope, full: null };
     el.addEventListener("click", onSheetClick);
     el.addEventListener("keydown", onSheetKey);
+    el.querySelector(".bank-report").addEventListener("submit", sendReport);
     requestAnimationFrame(() => el.classList.add("is-open"));
     el.querySelector(".bank-sheet-card").focus({ preventScroll: true });
     showSheetItem();
@@ -1469,20 +1613,145 @@ async function showSheetItem() {
     const current = sheet;
     const item = current.list.items[current.index];
     if (!item) return;
+    current.full = null;
     current.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, current.scope === "mine");
     current.el.querySelector('[data-act="prev"]').disabled = current.index <= 0;
     current.el.querySelector('[data-act="next"]').disabled = current.index >= current.list.items.length - 1;
+    closeReportForm();
+    sheetStar();
     const body = current.el.querySelector(".bank-sheet-body");
     body.classList.add("is-loading");
+    if (bank.flagged && current.scope === "bank") api.forgetItems([item.id]); // reviewing reports: always fresh
     const [full] = await api.loadItems([item.id]);
     if (sheet !== current || current.list.items[current.index] !== item) return;
+    current.full = full;
     body.classList.remove("is-loading");
-    body.innerHTML = full ? questionHtml(full.content) : `<p class="bank-muted">${t("bank.loadFailed")}</p>`;
+    body.innerHTML = full ? reportsHtml(full) + questionHtml(full.content) : `<p class="bank-muted">${t("bank.loadFailed")}</p>`;
     typeset(body);
     body.scrollTop = 0;
+    sheetReportButton();
+}
+
+function sheetStar() {
+    const button = sheet?.el.querySelector('[data-act="star"]');
+    const item = sheet?.list.items[sheet.index];
+    if (!button || !item) return;
+    const on = favorites.has(item.id);
+    button.classList.toggle("is-on", on);
+    button.setAttribute("aria-pressed", String(on));
+}
+
+// Already reported by this teacher: the flag says so instead of offering the form again
+function sheetReportButton() {
+    const button = sheet?.el.querySelector('[data-act="report"]');
+    if (!button || !sheet.full) return;
+    const done = !!sheet.full.reportedByMe;
+    button.disabled = done;
+    button.classList.toggle("is-on", done);
+    const label = t(done ? "bank.reported" : "bank.report");
+    button.title = label;
+    button.setAttribute("aria-label", label);
+}
+
+// Admins see a task's open reports above it, with what to do about them
+function reportsHtml(full) {
+    if (!full.reports?.length) return "";
+    const date = value => new Date(value).toLocaleDateString(getLanguage() === "lt" ? "lt-LT" : "en-GB");
+    return `<section class="bank-reports">
+        <p class="bank-reports-title">${icon("flag", 15)}${escapeHtml(t("bank.reportsOpen").replace("{n}", full.reports.length))}</p>
+        <ul>${full.reports.map(report => `<li><b>${escapeHtml(t(`bank.reason.${report.reason}`))}</b>${report.note ? ` „${escapeHtml(report.note)}“` : ""}
+            <span>· ${escapeHtml(report.user || "—")} · ${escapeHtml(date(report.createdAt))}</span></li>`).join("")}</ul>
+        <div class="bank-reports-actions">
+            <button type="button" class="btn btn-primary" data-act="resolve">${t("bank.resolve")}</button>
+            <button type="button" class="btn btn-secondary" data-act="dismiss">${t("bank.dismiss")}</button>
+            <button type="button" class="btn btn-secondary" data-act="archive">${t("bank.archiveTask")}</button>
+        </div>
+    </section>`;
+}
+
+function openReportForm() {
+    const form = sheet?.el.querySelector(".bank-report");
+    if (!form || !sheet.full || sheet.full.reportedByMe) return;
+    form.hidden = false;
+    form.querySelector("[data-reason]").focus();
+}
+
+function closeReportForm() {
+    const form = sheet?.el.querySelector(".bank-report");
+    if (!form) return;
+    form.hidden = true;
+    form.reset();
+    form.querySelectorAll("[data-reason]").forEach(chip => {
+        chip.classList.remove("is-on");
+        chip.setAttribute("aria-checked", "false");
+    });
+    form.querySelector('[type="submit"]').disabled = true;
+}
+
+async function sendReport(e) {
+    e.preventDefault();
+    const current = sheet;
+    const form = e.target;
+    const reason = form.querySelector('[data-reason][aria-checked="true"]')?.dataset.reason;
+    if (!current?.full || !reason) return;
+    const submit = form.querySelector('[type="submit"]');
+    submit.disabled = true;
+    const res = await api.reportItem(current.full.id, reason, form.querySelector(".bank-report-note").value);
+    if (res.ok || res.status === 409) {
+        current.full.reportedByMe = true;
+        api.forgetItems([current.full.id]); // fetched again next time, with the report
+        toast(t(res.ok ? "bank.reportThanks" : "bank.reportedAlready"));
+        if (sheet === current) {
+            closeReportForm();
+            sheetReportButton();
+        }
+        refreshFlagged();
+    } else {
+        submit.disabled = false;
+        toast(errorText(res), "error");
+    }
+}
+
+// An admin's answer to a task's reports: fixed, nothing wrong, or the task taken out of the bank
+async function closeTaskReports(action) {
+    const current = sheet;
+    const id = current?.full?.id;
+    if (!id) return;
+    if (action === "archive") {
+        const ok = await confirmDialog({ title: t("bank.archiveTitle"), message: t("bank.archiveBody"), confirmText: t("bank.archiveTask"), danger: true });
+        if (!ok) return;
+        const res = await api.archiveItems([id], "shared");
+        if (!res.ok) {
+            toast(errorText(res), "error");
+            return;
+        }
+    }
+    const res = await api.closeReports(id, action === "dismiss" ? "dismissed" : "resolved");
+    if (!res.ok) {
+        toast(errorText(res), "error");
+        return;
+    }
+    api.forgetItems([id]);
+    toast(t(action === "archive" ? "bank.archived" : "bank.reportsClosed"));
+    refreshFlagged();
+    if (action === "archive" || bank.flagged) {
+        closeSheet();
+        reloadBank();
+    } else if (sheet === current) {
+        showSheetItem();
+    }
 }
 
 function onSheetClick(e) {
+    const reason = e.target.closest("[data-reason]");
+    if (reason && sheet) {
+        reason.parentElement.querySelectorAll("[data-reason]").forEach(chip => {
+            chip.classList.toggle("is-on", chip === reason);
+            chip.setAttribute("aria-checked", String(chip === reason));
+        });
+        sheet.el.querySelector('.bank-report [type="submit"]').disabled = false;
+        return;
+    }
     const button = e.target.closest("[data-act]");
     if (!button || !sheet) return;
     const item = sheet.list.items[sheet.index];
@@ -1498,14 +1767,22 @@ function onSheetClick(e) {
     } else if (act === "add") addTasks([item.id], sheet.list.rowOf(item.id));
     else if (act === "save") saveToMine([item.id]);
     else if (act === "remove") removeMine(item);
+    else if (act === "star") toggleFavorite(item.id);
+    else if (act === "report") openReportForm();
+    else if (act === "report-cancel") closeReportForm();
+    else if (act === "resolve" || act === "dismiss" || act === "archive") closeTaskReports(act);
 }
 
 function onSheetKey(e) {
     if (!sheet) return;
+    const typing = e.target.matches?.("textarea, input");
     if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        closeSheet();
+        if (!sheet.el.querySelector(".bank-report").hidden) closeReportForm();
+        else closeSheet();
+    } else if (typing) {
+        // arrows move the caret in the note, not to another task
     } else if ((e.key === "ArrowDown" || e.key === "ArrowRight") && sheet.index < sheet.list.items.length - 1) {
         e.preventDefault();
         sheet.index++;
@@ -1563,6 +1840,7 @@ function typeset(el) {
 // A row's second line; in the bank the chosen topic is not repeated on every row
 function rowMetaHtml(item, mineScope) {
     const parts = [];
+    if (bank.flagged && !mineScope) parts.push(`<span class="bank-flag" title="${t("bank.flaggedTitle")}">${icon("flag", 12)}</span>`);
     if (inQuiz.has(item.id)) parts.push(`<span class="bank-in-quiz">${icon("check", 12)}${escapeHtml(t("bank.inQuiz"))}</span>`);
     const level = meta?.levelsById.get(item.difficultyId);
     if (level) parts.push(`<span class="bank-pill" style="--lvl:${escapeHtml(level.color || "var(--muted)")}"><i aria-hidden="true"></i>${escapeHtml(level.name)}</span>`);
@@ -1579,6 +1857,9 @@ function rowMetaHtml(item, mineScope) {
 
 function emptyHtml(res, scope) {
     if (!res?.ok) return `<p>${t("bank.loadFailed")}</p>`;
+    if (scope === "mine" && mine.folderId === "favorites" && !mine.q.trim()) {
+        return `<div class="bank-empty-ico">${icon("star", 30)}</div><p><b>${t("bank.favoritesEmpty")}</b></p><p>${t("bank.favoritesHint")}</p>`;
+    }
     if (scope === "mine") {
         return mine.q.trim() || mine.folderId !== "all"
             ? `<p><b>${t("bank.empty")}</b></p>`
@@ -1608,15 +1889,29 @@ function errorText(res) {
     return res.data?.error ? `${t("bank.saveFailed")}: ${res.data.error}` : t("bank.saveFailed");
 }
 
-function toast(message, tone = "ok") {
+// A short notice at the bottom; with an action (Undo) it stays longer and its button takes it away
+function toast(message, tone = "ok", action = null) {
     if (!els.toasts) return;
     const el = document.createElement("div");
     el.className = `bank-toast is-${tone}`;
     el.setAttribute("role", tone === "error" ? "alert" : "status");
     el.textContent = message;
-    els.toasts.appendChild(el);
-    setTimeout(() => {
+    const leave = () => {
+        if (el.classList.contains("is-leaving")) return;
         el.classList.add("is-leaving");
         setTimeout(() => el.remove(), 300);
-    }, tone === "error" ? 4200 : 2400);
+    };
+    if (action) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "bank-toast-action";
+        button.textContent = action.label;
+        button.addEventListener("click", () => {
+            leave();
+            action.run();
+        }, { once: true });
+        el.appendChild(button);
+    }
+    els.toasts.appendChild(el);
+    setTimeout(leave, action ? 6500 : tone === "error" ? 4200 : 2400);
 }

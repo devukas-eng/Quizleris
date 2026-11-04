@@ -45,6 +45,11 @@ export const updateItems = (ids, set, scope = "mine") =>
 export const archiveItems = (ids, scope = "mine") =>
     request("/items", { method: "DELETE", body: { scope, ids } });
 
+export const listFavorites = () => request("/favorites");
+export const setFavorite = (id, on) => request(`/favorites/${id}`, { method: on ? "PUT" : "DELETE" });
+export const reportItem = (id, reason, note) => request(`/items/${id}/reports`, { method: "POST", body: { reason, note } });
+export const closeReports = (id, status) => request(`/items/${id}/reports`, { method: "PATCH", body: { status } });
+
 export const listFolders = () => request("/folders");
 export const createFolder = (name, parentId = null) => request("/folders", { method: "POST", body: { name, parentId } });
 export const updateFolder = (id, fields) => request(`/folders/${id}`, { method: "PATCH", body: fields });

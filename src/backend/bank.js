@@ -23,6 +23,9 @@ const MAX_SAMPLE = 50;
 // A safety cap on a teacher's own tasks and folders until the Premium limits are set (see bankLimits)
 const MAX_PRIVATE_ITEMS = 10000;
 const MAX_FOLDERS = 1000;
+const MAX_FAVORITES = 2000;
+const MAX_OPEN_REPORTS = 30; // a teacher's reports waiting for an admin: enough for real mistakes, not for spam
+const REPORT_REASONS = ['answer', 'wording', 'classification', 'duplicate', 'other'];
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_CONTENT_BYTES = 1024 * 1024; // the question JSON once its pictures are in bank_media
 const MEDIA_GRACE_HOURS = 24; // unused pictures are kept this long, so an import in progress never loses one
@@ -217,6 +220,35 @@ const SCHEMA = [
         INDEX bank_item_media_sha (sha256),
         CONSTRAINT bank_item_media_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE,
         CONSTRAINT bank_item_media_media_fk FOREIGN KEY (sha256) REFERENCES bank_media (sha256)
+    ) ${TABLE_OPTIONS}`,
+    // A teacher's starred tasks of the shared bank: bookmarks, the task itself stays where it is.
+    // user_id is users.id without a foreign key, like owner_id; cleanupBank removes a deleted account's
+    `CREATE TABLE IF NOT EXISTS bank_favorites (
+        user_id INT NOT NULL,
+        item_id INT UNSIGNED NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, item_id),
+        INDEX bank_favorites_item (item_id),
+        CONSTRAINT bank_favorites_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
+    // Mistakes teachers found in shared tasks, for admins to fix or dismiss. open_key is 1 only while a
+    // report is open, so a teacher has at most one open report per task, and any number of closed ones.
+    // Reports outlive their author's account: they are about the task.
+    `CREATE TABLE IF NOT EXISTS bank_item_reports (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        item_id INT UNSIGNED NOT NULL,
+        user_id INT NOT NULL,
+        reason ENUM('answer', 'wording', 'classification', 'duplicate', 'other') NOT NULL,
+        note VARCHAR(500) NULL,
+        status ENUM('open', 'resolved', 'dismissed') NOT NULL DEFAULT 'open',
+        open_key TINYINT UNSIGNED AS (IF(status = 'open', 1, NULL)) STORED,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        closed_at DATETIME NULL DEFAULT NULL,
+        closed_by INT NULL,
+        UNIQUE KEY bank_item_reports_once (item_id, user_id, open_key),
+        INDEX bank_item_reports_open (status, item_id),
+        INDEX bank_item_reports_user (user_id, status),
+        CONSTRAINT bank_item_reports_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`
 ];
 
@@ -513,11 +545,16 @@ function bankLimits(user) {
 }
 
 function listContext(user, params) {
+    const teacher = user.role !== 'admin';
+    // Starred tasks are shared ones the teacher bookmarked
+    if (params.scope === 'favorites') return { ...contextFor(0, 'published', { teacher }), favoritesOf: user.id };
     const mine = params.scope === 'mine';
     // Drafts and the archive are listed for whoever may edit that bank
     const mayEdit = mine ? bankLimits(user).writeMine : bankLimits(user).writeShared;
     const status = mayEdit && STATUSES.includes(params.status) ? params.status : 'published';
-    return contextFor(mine ? user.id : 0, status, { teacher: user.role !== 'admin' });
+    const ctx = contextFor(mine ? user.id : 0, status, { teacher });
+    if (!mine && !teacher && params.flagged === '1') ctx.flagged = true;
+    return ctx;
 }
 
 // The shared bank's published tasks counted by subject, grade, topic, difficulty, kind and type.
@@ -975,11 +1012,26 @@ async function fetchItems(pool, user, ids) {
         admin ? [ids] : [ids, user.id]
     );
     if (!rows.length) return [];
-    const [links] = await pool.query('SELECT item_id, value_id FROM bank_item_values WHERE item_id IN (?)', [rows.map(row => row.id)]);
+    const found = rows.map(row => row.id);
+    const [[links], [myReports], [openReports]] = await Promise.all([
+        pool.query('SELECT item_id, value_id FROM bank_item_values WHERE item_id IN (?)', [found]),
+        pool.query("SELECT item_id FROM bank_item_reports WHERE user_id = ? AND status = 'open' AND item_id IN (?)", [user.id, found]),
+        // Admins see the open reports of mistakes, with who sent them
+        admin
+            ? pool.query(`SELECT r.id, r.item_id, r.reason, r.note, r.created_at, u.username FROM bank_item_reports r
+                          LEFT JOIN users u ON u.id = r.user_id WHERE r.status = 'open' AND r.item_id IN (?) ORDER BY r.id`, [found])
+            : [[]]
+    ]);
     const valuesOf = new Map();
     for (const link of links) {
         if (!valuesOf.has(link.item_id)) valuesOf.set(link.item_id, []);
         valuesOf.get(link.item_id).push(link.value_id);
+    }
+    const reported = new Set(myReports.map(row => row.item_id));
+    const reportsOf = new Map();
+    for (const report of openReports) {
+        if (!reportsOf.has(report.item_id)) reportsOf.set(report.item_id, []);
+        reportsOf.get(report.item_id).push({ id: report.id, reason: report.reason, note: report.note, user: report.username, createdAt: report.created_at });
     }
     const byId = new Map(rows.map(row => [row.id, {
         id: row.id,
@@ -996,6 +1048,8 @@ async function fetchItems(pool, user, ids) {
         uses: row.uses,
         source: row.source,
         values: valuesOf.get(row.id) || [],
+        reportedByMe: reported.has(row.id),
+        ...(admin ? { reports: reportsOf.get(row.id) || [] } : {}),
         content: parseJson(row.content)
     }]));
     return ids.map(id => byId.get(id)).filter(Boolean);
@@ -1187,9 +1241,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     // comes back as an empty 304), and a shared cache such as the CDN never stores them
     router.use('/bank', (req, res, next) => {
         res.set('Cache-Control', 'private, no-cache');
-        // A finished write that may touch the shared bank's counts has them counted again
-        const reads = req.path === '/items/fetch' || req.path === '/sample' || req.path === '/used' || req.path.startsWith('/folders');
-        if (req.method !== 'GET' && !reads && req.body?.scope !== 'mine') {
+        // A finished write that may touch the shared bank's counts has them counted again (reading
+        // tasks, counting uses, folders, stars and reports change no counts)
+        const countsStay = /^\/(items\/fetch|sample|used|folders|favorites)(\/|$)|\/reports$/.test(req.path);
+        if (req.method !== 'GET' && !countsStay && req.body?.scope !== 'mine') {
             res.on('finish', () => {
                 sharedWrites++;
                 recountShared(pool);
@@ -1290,6 +1345,58 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             return result.affectedRows;
         });
         return { deleted: gone.length, moved };
+    }));
+
+    // Stars: a teacher's bookmarks into the shared bank (tasks taken out of it drop off the list)
+    const sharedTask = async rawId => {
+        const id = toId(rawId);
+        const [[row]] = id ? await pool.query("SELECT id FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'published'", [id]) : [[]];
+        if (!row) throw new BankError('Task not found', 404);
+        return row.id;
+    };
+    router.get('/bank/favorites', route(async req => {
+        const [rows] = await pool.query(
+            `SELECT f.item_id FROM bank_favorites f JOIN bank_items i ON i.id = f.item_id
+             WHERE f.user_id = ? AND i.owner_id = 0 AND i.status = 'published' ORDER BY f.created_at DESC LIMIT ?`, [req.user.id, MAX_FAVORITES]);
+        return { ids: rows.map(row => row.item_id) };
+    }));
+    router.put('/bank/favorites/:id', route(async req => {
+        const id = await sharedTask(req.params.id);
+        const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM bank_favorites WHERE user_id = ?', [req.user.id]);
+        if (Number(n) >= MAX_FAVORITES) throw new BankError(`At most ${MAX_FAVORITES} starred tasks`, 403);
+        await pool.query('INSERT IGNORE INTO bank_favorites (user_id, item_id) VALUES (?, ?)', [req.user.id, id]);
+        return { ok: true };
+    }));
+    router.delete('/bank/favorites/:id', route(async req => {
+        const id = toId(req.params.id);
+        if (id) await pool.query('DELETE FROM bank_favorites WHERE user_id = ? AND item_id = ?', [req.user.id, id]);
+        return { ok: true };
+    }));
+
+    // Mistakes teachers found in shared tasks: one open report per teacher and task
+    router.post('/bank/items/:id/reports', route(async req => {
+        const id = await sharedTask(req.params.id);
+        const reason = REPORT_REASONS.includes(req.body?.reason) ? req.body.reason : null;
+        if (!reason) throw new BankError('Choose what is wrong');
+        const [[{ n }]] = await pool.query("SELECT COUNT(*) AS n FROM bank_item_reports WHERE user_id = ? AND status = 'open'", [req.user.id]);
+        if (Number(n) >= MAX_OPEN_REPORTS) throw new BankError('Too many reports waiting: an admin will look at them first', 429);
+        try {
+            const [result] = await pool.query('INSERT INTO bank_item_reports (item_id, user_id, reason, note) VALUES (?, ?, ?, ?)',
+                [id, req.user.id, reason, optionalText(req.body?.note, 500)]);
+            return { id: result.insertId };
+        } catch (error) {
+            if (error.errno === 1062) throw new BankError('You already reported this task', 409);
+            throw error;
+        }
+    }));
+    // An admin closes a task's open reports: fixed, or nothing wrong after all
+    router.patch('/bank/items/:id/reports', requireAdmin, route(async req => {
+        const id = toId(req.params.id);
+        const status = ['resolved', 'dismissed'].includes(req.body?.status) ? req.body.status : null;
+        if (!id || !status) throw new BankError('Say how the reports end');
+        const [result] = await pool.query(
+            "UPDATE bank_item_reports SET status = ?, closed_at = NOW(), closed_by = ? WHERE item_id = ? AND status = 'open'", [status, req.user.id, id]);
+        return { closed: result.affectedRows };
     }));
 
     router.post('/bank/items', route(req => createItems(pool, req.user, req.body || {})));
@@ -1506,6 +1613,7 @@ async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
     const [tasks] = await pool.query('DELETE i FROM bank_items i LEFT JOIN users u ON u.id = i.owner_id WHERE i.owner_id <> 0 AND u.id IS NULL');
     // Top-level folders only: their subfolders go with them
     await pool.query('DELETE f FROM bank_folders f LEFT JOIN users u ON u.id = f.owner_id WHERE f.parent_id IS NULL AND u.id IS NULL');
+    await pool.query('DELETE f FROM bank_favorites f LEFT JOIN users u ON u.id = f.user_id WHERE u.id IS NULL');
     const [pictures] = await pool.query(
         `DELETE m FROM bank_media m LEFT JOIN bank_item_media l ON l.sha256 = m.sha256
          WHERE l.sha256 IS NULL AND m.created_at <= NOW() - INTERVAL ? HOUR`, [graceHours]);
