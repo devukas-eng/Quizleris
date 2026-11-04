@@ -225,14 +225,22 @@
     </section>
   </div>
   <img id="app-logo" src="spresk_transparent.png" alt="spresk.lt">
-  <div id="language-toggle-container" style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px; align-items: center;">
+  <div id="language-toggle-container">
     <!-- Prisijungti Button -->
-    <button id="nav-auth-btn" class="btn btn-primary" style="font-size:0.82rem; padding:6px 14px;">Prisijungti</button>
-    <!-- Apple-like Theme Picker Button -->
-    <button id="theme-btn" title="Select Theme">
-      <span class="theme-btn-bubble" id="theme-btn-bubble"></span>
-      <span id="theme-btn-label">Šviesus fonas</span>
-    </button>
+    <button id="nav-auth-btn" class="btn btn-primary">Prisijungti</button>
+    <!-- Apple-like Theme Picker Button; on phones it opens the bubble row below instead of the popup -->
+    <div class="theme-picker-wrap">
+      <button id="theme-btn" title="Select Theme" aria-expanded="false">
+        <span class="theme-btn-bubble" id="theme-btn-bubble"></span>
+        <span id="theme-btn-label">Šviesus fonas</span>
+      </button>
+      <div id="theme-row" role="listbox" aria-label="Tema">
+        <button type="button" class="theme-row-item" data-theme="emerald" role="option" style="background: linear-gradient(135deg, #1B9B7E 50%, #ffffff 50%);"></button>
+        <button type="button" class="theme-row-item" data-theme="slate-dark" role="option" style="background: linear-gradient(135deg, #38bdf8 50%, #0f172a 50%);"></button>
+        <button type="button" class="theme-row-item" data-theme="solar" role="option" style="background: linear-gradient(135deg, #ff9100 50%, #120e0a 50%);"></button>
+        <button type="button" class="theme-row-item" data-theme="cyberpunk" role="option" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></button>
+      </div>
+    </div>
     <!-- Dual Language Flag Pills -->
     <div class="lang-pills">
       <button id="lang-lt-btn" class="lang-pill" title="Lietuvių kalba">

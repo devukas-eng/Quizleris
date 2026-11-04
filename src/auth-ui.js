@@ -131,7 +131,14 @@ function updateMenuAuthButton() {
     if (!btn) return;
     
     if (currentUser) {
-        btn.textContent = currentUser.role === "admin" ? t("profile.adminTitle") : t("profile.teacherTitle");
+        // Full label on wide screens, short one on phones (style.css swaps them)
+        const full = document.createElement("span");
+        full.className = "nav-auth-full";
+        full.textContent = currentUser.role === "admin" ? t("profile.adminTitle") : t("profile.teacherTitle");
+        const short = document.createElement("span");
+        short.className = "nav-auth-short";
+        short.textContent = t("profile.dashboardShort");
+        btn.replaceChildren(full, short);
         btn.onclick = () => {
             // Trigger Dashboard Open Event
             document.dispatchEvent(new window.CustomEvent("open-dashboard"));

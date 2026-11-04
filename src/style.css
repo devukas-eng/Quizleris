@@ -1664,12 +1664,41 @@ body {
     transform: scale(1.05);
 }
 
+/* Header controls (top right): sign-in, theme picker, language flags */
+#language-toggle-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+#nav-auth-btn {
+    font-size: 0.82rem;
+    padding: 6px 14px;
+    white-space: nowrap;
+}
+
+/* The signed-in button carries a full and a short dashboard label; phones show the short one */
+.nav-auth-short {
+    display: none;
+}
+
 @media (max-width: 768px) {
     #app-logo {
         position: absolute !important;
         height: 32px;
         top: 10px;
         left: 15px;
+    }
+
+    /* Same row as the logo: 32px tall at the same top, so both sit on one centre line */
+    #language-toggle-container {
+        top: 10px;
+        right: 15px;
+        height: 32px;
     }
 
     #quiz-back-btn,
@@ -2469,9 +2498,14 @@ kbd {
    LANGUAGE FLAG PILLS
    ═══════════════════════════════════════════════════════════ */
 
+/* Folded to the current flag, which sits on the right under the highlight; opening it
+   (hover, or a tap on that flag) widens the pill leftwards to show the other flag */
 .lang-pills {
     display: inline-flex;
     align-items: center;
+    justify-content: flex-end;
+    width: 38px;
+    overflow: hidden;
     background: var(--btn-bg, rgba(255,255,255,0.6));
     border: 1px solid var(--border-color, rgba(0,0,0,0.08));
     border-radius: 999px;
@@ -2480,6 +2514,20 @@ kbd {
     position: relative;
     box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     backdrop-filter: blur(8px);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 601px) {
+    .lang-pills.open,
+    .lang-pills:has(.lang-pill:focus-visible) {
+        width: 66px;
+    }
+}
+
+@media (hover: hover) and (min-width: 601px) {
+    .lang-pills:hover {
+        width: 66px;
+    }
 }
 
 .lang-pills::before {
@@ -2487,22 +2535,19 @@ kbd {
     position: absolute;
     top: 4px;
     bottom: 4px;
-    left: 4px;
+    right: 4px;
     width: 28px;
     background: var(--accent);
     border-radius: 50%;
-    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.4s ease;
+    transition: background-color 0.4s ease;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     z-index: 0;
-}
-
-.lang-pills:has(#lang-en-btn.active)::before {
-    transform: translateX(28px);
 }
 
 .lang-pill {
     position: relative;
     z-index: 1;
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2530,6 +2575,10 @@ kbd {
     flex-shrink: 0;
 }
 
+.lang-pill.active {
+    order: 1;
+}
+
 .lang-pill.active .flag {
     transform: scale(1.15);
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
@@ -2537,6 +2586,122 @@ kbd {
 
 .lang-pill:not(.active):hover .flag {
     transform: scale(1.05);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PHONE HEADER: sign-in, theme bubble, current flag
+   The 600px edge matches phoneHeader in app.js.
+   ═══════════════════════════════════════════════════════════ */
+
+.theme-picker-wrap {
+    position: relative;
+    display: flex;
+}
+
+/* Phones only: a row of theme bubbles under the theme button */
+#theme-row {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    #language-toggle-container {
+        right: 12px;
+        gap: 6px;
+    }
+
+    .nav-auth-full {
+        display: none;
+    }
+
+    .nav-auth-short {
+        display: inline;
+    }
+
+    /* The theme button shrinks to its bubble */
+    #theme-btn {
+        padding: 6px;
+    }
+
+    #theme-btn-label {
+        display: none;
+    }
+
+    /* The row starts under the button and grows to the left */
+    #theme-row {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        display: flex;
+        flex-direction: row-reverse;
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    #theme-row.open {
+        pointer-events: auto;
+    }
+
+    .theme-row-item {
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 40%;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+        cursor: pointer;
+        opacity: 0;
+        transform: translateX(16px) scale(0.6);
+        transition: opacity 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #theme-row.open .theme-row-item {
+        opacity: 1;
+        transform: none;
+    }
+
+    /* On opening, each bubble follows a beat after the one to its right */
+    #theme-row.open .theme-row-item:nth-child(2) { transition-delay: 45ms; }
+    #theme-row.open .theme-row-item:nth-child(3) { transition-delay: 90ms; }
+    #theme-row.open .theme-row-item:nth-child(4) { transition-delay: 135ms; }
+
+    .theme-row-item.active {
+        box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.22);
+    }
+
+    /* Flags: the pill keeps the current one; the other drops down under it */
+    .lang-pills {
+        overflow: visible;
+    }
+
+    .lang-pills .lang-pill:not(.active) {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: -1px;
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+        background: var(--btn-bg, #fff) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        opacity: 0;
+        transform: translateY(-10px) scale(0.7);
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .lang-pills.open .lang-pill:not(.active) {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+    }
+}
+
+/* Narrowest phones: a slightly smaller logo keeps clear of the controls */
+@media (max-width: 340px) {
+    #app-logo {
+        height: 28px;
+        top: 12px;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════

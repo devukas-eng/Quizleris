@@ -85,6 +85,13 @@ async function initApp() {
             document.querySelectorAll('.theme-picker-item').forEach(item => {
                 item.classList.toggle('active', item.dataset.theme === theme);
             });
+            document.querySelectorAll('.theme-row-item').forEach(item => {
+                const active = item.dataset.theme === theme;
+                item.classList.toggle('active', active);
+                item.setAttribute('aria-selected', String(active));
+                item.title = getThemeLabel(item.dataset.theme);
+                item.setAttribute('aria-label', item.title);
+            });
         }
 
         function setTheme(theme) {
@@ -95,35 +102,49 @@ async function initApp() {
             logEvent('theme', 'change', { theme });
         }
 
+        // Phones (same width as style.css's phone header) open a row of theme bubbles under the
+        // button instead of the popup
+        const phoneHeader = window.matchMedia('(max-width: 600px)');
+        const themeRow = document.getElementById('theme-row');
+
         let popupOpen = false;
         function openThemePopup() {
             if (!themeBtn || !themePopup) return;
-            const rect = themeBtn.getBoundingClientRect();
-            themePopup.style.top = (rect.bottom + 8) + 'px';
-            themePopup.style.right = (window.innerWidth - rect.right) + 'px';
-            themePopup.style.left = 'auto';
-            themePopup.classList.add('open');
+            if (phoneHeader.matches && themeRow) {
+                themeRow.classList.add('open');
+            } else {
+                const rect = themeBtn.getBoundingClientRect();
+                themePopup.style.top = (rect.bottom + 8) + 'px';
+                themePopup.style.right = (window.innerWidth - rect.right) + 'px';
+                themePopup.style.left = 'auto';
+                themePopup.classList.add('open');
+            }
+            themeBtn.setAttribute('aria-expanded', 'true');
             popupOpen = true;
         }
         function closeThemePopup() {
-            if (!themePopup) return;
-            themePopup.classList.remove('open');
+            themePopup?.classList.remove('open');
+            themeRow?.classList.remove('open');
+            themeBtn?.setAttribute('aria-expanded', 'false');
             popupOpen = false;
         }
 
         if (themeBtn) {
             themeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                closeLangMenu();
                 if (popupOpen) closeThemePopup();
                 else openThemePopup();
             });
         }
 
-        document.querySelectorAll('.theme-picker-item').forEach(item => {
+        document.querySelectorAll('.theme-picker-item, .theme-row-item').forEach(item => {
             item.addEventListener('click', () => {
                 setTheme(item.dataset.theme);
                 closeThemePopup();
             });
+        });
+        document.querySelectorAll('.theme-picker-item').forEach(item => {
             item.addEventListener('mouseenter', () => { applyTheme(item.dataset.theme); });
             item.addEventListener('mouseleave', () => { applyTheme(currentTheme); });
         });
@@ -237,6 +258,11 @@ async function initApp() {
         const langLtBtn = document.getElementById('lang-lt-btn');
         const langEnBtn = document.getElementById('lang-en-btn');
 
+        // Looked up on each call: the theme button calls this, possibly before this point has run
+        function closeLangMenu() {
+            document.querySelector('.lang-pills')?.classList.remove('open');
+        }
+
         function updateLangPillUI(lang) {
             if (langLtBtn) langLtBtn.classList.toggle('active', lang === 'lt');
             if (langEnBtn) langEnBtn.classList.toggle('active', lang === 'en');
@@ -262,8 +288,23 @@ async function initApp() {
             try { refreshAdminUI(); } catch (e) { console.error('Admin Refresh Error', e); }
         }
 
-        if (langLtBtn) langLtBtn.addEventListener('click', () => switchLanguage('lt'));
-        if (langEnBtn) langEnBtn.addEventListener('click', () => switchLanguage('en'));
+        // The pill shows only the current flag. Tapping it opens the other one (it drops down on
+        // phones and widens sideways elsewhere; desktops also widen on hover), tapping that switches.
+        [langLtBtn, langEnBtn].forEach(btn => {
+            btn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeThemePopup();
+                const lang = btn === langLtBtn ? 'lt' : 'en';
+                if (lang === getLanguage()) {
+                    document.querySelector('.lang-pills')?.classList.toggle('open');
+                    return;
+                }
+                closeLangMenu();
+                switchLanguage(lang);
+            });
+        });
+        document.querySelector('.lang-pills')?.addEventListener('mouseleave', closeLangMenu);
+        window.addEventListener('click', closeLangMenu);
 
         // Init lang pill state
         updateLangPillUI(getLanguage());
