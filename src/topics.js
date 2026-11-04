@@ -137,7 +137,7 @@ function renderTopicsContent(container) {
 
     container.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
-            <h1 style="font-size: 2.2rem; margin: 0; background: linear-gradient(135deg, var(--accent), #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${t('topics.title') || 'Premade Quizzes'}</h1>
+            <h1 style="font-size: 2.2rem; margin: 0; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${t('topics.title') || 'Premade Quizzes'}</h1>
             <button id="topics-back-btn" class="btn btn-secondary" style="font-size: 0.95rem; padding: 8px 16px;">${t('admin.backToMenu') || 'Back'}</button>
         </div>
 
@@ -262,35 +262,35 @@ function openPlayModeModal(bundle) {
     overlay.className = "modal-overlay active";
 
     overlay.innerHTML = `
-        <div class="modal-window play-mode-modal fade-in" style="max-width: 600px; padding: 24px; border-radius: 16px; background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+        <div class="modal-window play-mode-modal fade-in" style="max-width: 600px; padding: 24px; border-radius: 16px; background: var(--surface-solid); color: var(--text); backdrop-filter: blur(16px); border: 1px solid var(--border-color); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
                 <h2 style="margin: 0; font-size: 1.5rem; color: var(--accent);">${bundle.title}</h2>
-                <button id="modal-close-btn" style="background: none; border: none; color: white; font-size: 1.8rem; cursor: pointer; line-height: 1;">&times;</button>
+                <button id="modal-close-btn" aria-label="Close" style="background: none; border: none; color: var(--muted); font-size: 1.8rem; cursor: pointer; line-height: 1;">&times;</button>
             </div>
             
             ${highScoreHtml}
 
             <div class="mode-options-grid" style="display: flex; flex-direction: column; gap: 12px; margin: 20px 0;">
-                <div class="mode-card active" data-mode="practice" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid var(--accent); background: rgba(27, 155, 126, 0.1); transition: all 0.2s;">
+                <div class="mode-card active" data-mode="practice" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
                         <span style="font-size: 1.5rem;">📖</span>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: white;">${modePracticeTitle}</h3>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">${modePracticeTitle}</h3>
                     </div>
                     <p style="margin: 0; font-size: 0.85rem; color: var(--muted);">${t('modal.practiceDesc') || 'Best for learning: instant feedback and answers.'}</p>
                 </div>
 
-                <div class="mode-card" data-mode="time-attack" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); transition: all 0.2s;">
+                <div class="mode-card" data-mode="time-attack" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid var(--border-color); background: transparent; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
                         <span style="font-size: 1.5rem;">⏱️</span>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: white;">${modeTimeAttackTitle}</h3>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">${modeTimeAttackTitle}</h3>
                     </div>
                     <p style="margin: 0; font-size: 0.85rem; color: var(--muted);">${t('modal.timeAttackDesc') || 'Exciting mode: tight 15s limit per question!'}</p>
                 </div>
 
-                <div class="mode-card" data-mode="exam" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); transition: all 0.2s;">
+                <div class="mode-card" data-mode="exam" style="cursor: pointer; padding: 16px; border-radius: 10px; border: 2px solid var(--border-color); background: transparent; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
                         <span style="font-size: 1.5rem;">📝</span>
-                        <h3 style="margin: 0; font-size: 1.1rem; color: white;">${modeExamTitle}</h3>
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text);">${modeExamTitle}</h3>
                     </div>
                     <p style="margin: 0; font-size: 0.85rem; color: var(--muted);">${t('modal.examDesc') || 'Formal exam: results after full submission only.'}</p>
                 </div>
@@ -312,12 +312,12 @@ function openPlayModeModal(bundle) {
         card.onclick = () => {
             cards.forEach(c => {
                 c.classList.remove("active");
-                c.style.borderColor = "rgba(255,255,255,0.08)";
-                c.style.background = "rgba(255,255,255,0.02)";
+                c.style.borderColor = "var(--border-color)";
+                c.style.background = "transparent";
             });
             card.classList.add("active");
             card.style.borderColor = "var(--accent)";
-            card.style.background = "rgba(27, 155, 126, 0.1)";
+            card.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";
             selectedMode = card.dataset.mode;
         };
     });

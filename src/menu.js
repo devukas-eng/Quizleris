@@ -133,7 +133,7 @@ export function renderStudentJoin(quizToJoin) {
     joinContainer.innerHTML = `
         <div class="join-card">
              <div style="margin-bottom: 24px;">
-                <span style="background: var(--accent); color: #000; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">
+                <span style="background: var(--accent); color: var(--on-accent); padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">
                     ${t('join.joinQuiz')}
                 </span>
              </div>
