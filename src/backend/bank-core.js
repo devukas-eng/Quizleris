@@ -296,6 +296,54 @@ function buildFacetQueries(params, ctx) {
     ];
 }
 
+/**
+ * Whether a listing's total and facets can be worked out from grouped counts (countFromGroups):
+ * not when it searches, filters by classifier values or names a folder, which the groups don't hold.
+ */
+function groupCountable(params) {
+    const search = searchTerms(params.q);
+    return !search.fulltext && !search.short.length && !idList(params.values, 50).length && params.folder === undefined;
+}
+
+/**
+ * The total and facet counts of a listing from grouped counts instead of the table. `groups` are
+ * { subject, grade, topic, difficulty, kind, qtype, n } for every combination present (null for an
+ * empty column), already of the listed owner and status. Applies the same filters as buildFilter,
+ * and gives the same answer as buildFacetQueries.
+ */
+function countFromGroups(groups, params, ctx) {
+    const subject = toId(params.subject);
+    const grade = toId(params.grade);
+    const topic = toId(params.topic);
+    let topics = null; // no topic filter
+    if (params.topic === 'none') topics = 'none';
+    else if (topic) topics = new Set(String(params.deep) === '0' ? [topic] : ctx.topicSubtree(topic));
+    const levelParts = String(params.difficulty ?? '').split(',').filter(Boolean);
+    const levels = new Set(idList(levelParts, 50));
+    const levelNone = levelParts.includes('none');
+    const kind = KINDS.includes(params.kind) ? params.kind : null;
+    const types = String(params.qtype ?? '').split(',').filter(t => QTYPES.includes(t));
+    const tests = {
+        topic: topics === null ? null : topics === 'none' ? g => g.topic === null : g => topics.has(g.topic),
+        difficulty: levels.size || levelNone ? g => (g.difficulty === null ? levelNone : levels.has(g.difficulty)) : null,
+        kind: kind ? g => g.kind === kind : null,
+        qtype: types.length ? g => types.includes(g.qtype) : null
+    };
+    const passes = (g, omit) => (!subject || g.subject === subject) && (!grade || g.grade === grade)
+        && Object.entries(tests).every(([name, test]) => name === omit || !test || test(g));
+    const facets = Object.fromEntries(wantedFacets(params).map(name => [name, {}]));
+    let total = 0;
+    for (const g of groups) {
+        if (passes(g)) total += g.n;
+        for (const [name, counts] of Object.entries(facets)) {
+            if (!passes(g, name)) continue;
+            const key = g[name] ?? 'none';
+            counts[key] = (counts[key] || 0) + g.n;
+        }
+    }
+    return { total, facets };
+}
+
 function listItem(row) {
     return {
         id: row.id,
@@ -316,6 +364,6 @@ function listItem(row) {
 module.exports = {
     QTYPES, KINDS, STATUSES, FROM_ITEMS,
     plainText, foldText, previewText, searchText, contentHash, imageSlots, hasImage,
-    encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms,
+    encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms, groupCountable, countFromGroups,
     buildFilter, listIndex, buildListQuery, buildFacetQueries, listItem
 };

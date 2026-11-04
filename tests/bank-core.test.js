@@ -186,6 +186,42 @@ describe('listIndex', () => {
     });
 });
 
+describe('countFromGroups', () => {
+    const g = (subject, grade, topic, difficulty, n, kind = 'problem', qtype = 'numeric') => ({ subject, grade, topic, difficulty, kind, qtype, n });
+    const groups = [
+        g(1, 7, 2, 1, 5), g(1, 7, 20, 2, 3), g(1, 7, null, null, 2), g(1, 8, 2, 3, 4),
+        g(1, 7, 2, 1, 6, 'template'), g(1, 7, 3, 1, 1, 'problem', 'text'), g(2, 7, 9, 1, 50)
+    ];
+
+    it('totals the matching groups and counts each facet without its own filter', () => {
+        const { total, facets } = core.countFromGroups(groups, { subject: '1', grade: '7', topic: '2', difficulty: '1', kind: 'problem' }, ctx);
+        expect(total).toBe(5); // topic 2 or its subtopic 20, difficulty 1, problems only
+        expect(facets.topic).toEqual({ 2: 5, 3: 1 });
+        expect(facets.difficulty).toEqual({ 1: 5, 2: 3 });
+    });
+
+    it('treats "none" as an empty column and a hidden topic as nothing', () => {
+        expect(core.countFromGroups(groups, { subject: '1', topic: 'none' }, ctx).total).toBe(2);
+        expect(core.countFromGroups(groups, { subject: '1', difficulty: '3,none' }, ctx).total).toBe(6);
+        expect(core.countFromGroups(groups, { subject: '1', topic: '2' }, { ...ctx, topicSubtree: () => [] }).total).toBe(0);
+        expect(core.countFromGroups(groups, { subject: '1', topic: '2', deep: '0' }, ctx).total).toBe(15);
+    });
+
+    it('filters kinds and types and counts only the facets asked for', () => {
+        const result = core.countFromGroups(groups, { qtype: 'text,bogus', facets: 'qtype,kind' }, ctx);
+        expect(result.total).toBe(1);
+        expect(result.facets).toEqual({ qtype: { numeric: 70, text: 1 }, kind: { problem: 1 } });
+    });
+
+    it('is used only where groups hold the answer', () => {
+        expect(core.groupCountable({ subject: '1', grade: '7', topic: '2' })).toBe(true);
+        expect(core.groupCountable({ subject: '1', q: 'lygtis' })).toBe(false);
+        expect(core.groupCountable({ subject: '1', q: 'x' })).toBe(false);
+        expect(core.groupCountable({ values: '4' })).toBe(false);
+        expect(core.groupCountable({ folder: 'none' })).toBe(false);
+    });
+});
+
 describe('buildFacetQueries', () => {
     const names = params => core.buildFacetQueries(params, ctx).map(q => q.name);
 

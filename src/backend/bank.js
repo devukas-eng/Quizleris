@@ -520,19 +520,65 @@ function listContext(user, params) {
     return contextFor(mine ? user.id : 0, status, { teacher: user.role !== 'admin' });
 }
 
+// The shared bank's published tasks counted by subject, grade, topic, difficulty, kind and type.
+// Listings take their totals and tree counts from these instead of counting rows on every click.
+// They are counted at start and again in the background after each change to the shared bank
+// (sharedWrites), so a listing never waits for a count: just after a change it may show the
+// previous counts for about a second. Only a listing in the first moments after a start waits.
+const sharedGroups = { list: null, bySubject: null, version: -1, loading: null };
+let sharedWrites = 0;
+
+function recountShared(pool) {
+    if (sharedGroups.loading || sharedGroups.version === sharedWrites) return;
+    const version = sharedWrites;
+    sharedGroups.loading = pool.query(
+        `SELECT subject_id AS subject, grade_id AS grade, topic_id AS topic, difficulty_id AS difficulty, kind, qtype, COUNT(*) AS n
+         FROM bank_items WHERE owner_id = 0 AND status = 'published'
+         GROUP BY subject_id, grade_id, topic_id, difficulty_id, kind, qtype ORDER BY NULL`
+    ).then(([rows]) => {
+        const list = rows.map(row => ({ ...row, n: Number(row.n) }));
+        const bySubject = new Map();
+        for (const group of list) {
+            if (!bySubject.has(group.subject)) bySubject.set(group.subject, []);
+            bySubject.get(group.subject).push(group);
+        }
+        Object.assign(sharedGroups, { list, bySubject, version });
+        return true;
+    }).catch(error => {
+        // Never thrown on: a background count has nobody waiting. The next listing tries again.
+        console.error('[BANK] could not count the shared bank:', error.code || error.message);
+        return false;
+    }).then(counted => {
+        sharedGroups.loading = null;
+        if (counted) recountShared(pool); // changed again while counting
+    });
+}
+
+async function sharedCounts(pool) {
+    recountShared(pool);
+    if (!sharedGroups.list) await sharedGroups.loading;
+    if (!sharedGroups.list) throw new Error('The shared bank could not be counted');
+    return sharedGroups;
+}
+
 /** One page of a listing; the first page also carries the total and the facet counts. */
 async function listItems(pool, params, ctx) {
     const page = core.buildListQuery(params, ctx);
     if (!page) return null;
-    const facetQueries = params.cursor ? [] : core.buildFacetQueries(params, ctx);
-    const [[rows], ...facetResults] = await Promise.all([
+    const grouped = !params.cursor && ctx.ownerId === 0 && ctx.status === 'published' && core.groupCountable(params);
+    const facetQueries = params.cursor || grouped ? [] : core.buildFacetQueries(params, ctx);
+    const [[rows], groups, ...facetResults] = await Promise.all([
         pool.query(page.sql, page.args),
+        grouped ? sharedCounts(pool) : null,
         ...facetQueries.map(q => pool.query(q.sql, q.args))
     ]);
     const more = rows.length > page.limit;
     if (more) rows.length = page.limit;
     const result = { items: rows.map(core.listItem), nextCursor: more ? page.cursorOf(rows[rows.length - 1]) : null };
-    if (facetQueries.length) {
+    if (groups) {
+        const subject = core.toId(params.subject);
+        Object.assign(result, core.countFromGroups(subject ? groups.bySubject.get(subject) || [] : groups.list, params, ctx));
+    } else if (facetQueries.length) {
         result.facets = {};
         facetQueries.forEach((query, i) => {
             const [facetRows] = facetResults[i];
@@ -1086,12 +1132,14 @@ const REORDERABLE = {
 
 // --- ROUTES ---
 let bankReady = false;
+let serving = false; // the API is mounted (a server, not a script)
 
 /**
  * The bank's API under /api: /bank/* for signed-in users the bank is open to, and the public
  * /media/<sha256> pictures (content-addressed, so they are cached for good).
  */
 function createBankRouter({ pool, authenticateToken, requireAdmin }) {
+    serving = true;
     const router = express.Router();
     const route = handler => async (req, res) => {
         try {
@@ -1123,7 +1171,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
 
     // What this user may do with the bank, answered for anyone signed in: the editor asks this
     // first instead of provoking a refused request on every teacher's page while the bank is closed
-    router.get('/bank/access', ready, authenticateToken, (req, res) => res.json(bankLimits(req.user)));
+    router.get('/bank/access', ready, authenticateToken, (req, res) => res.set('Cache-Control', 'private, no-cache').json(bankLimits(req.user)));
 
     router.use('/bank', ready, authenticateToken, reader, async (req, res, next) => {
         try {
@@ -1133,6 +1181,21 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             console.error('[BANK] classifiers:', error.code || error.message);
             res.status(503).json({ error: 'The task bank is not available' });
         }
+    });
+
+    // Answers depend on who asks: browsers keep them privately and check back (an unchanged answer
+    // comes back as an empty 304), and a shared cache such as the CDN never stores them
+    router.use('/bank', (req, res, next) => {
+        res.set('Cache-Control', 'private, no-cache');
+        // A finished write that may touch the shared bank's counts has them counted again
+        const reads = req.path === '/items/fetch' || req.path === '/sample' || req.path === '/used' || req.path.startsWith('/folders');
+        if (req.method !== 'GET' && !reads && req.body?.scope !== 'mine') {
+            res.on('finish', () => {
+                sharedWrites++;
+                recountShared(pool);
+            });
+        }
+        next();
     });
 
     router.get('/bank/meta', route(req => (req.user.role === 'admin' ? meta.adminData : meta.teacherData)));
@@ -1172,12 +1235,23 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         if (folderId && subtree(folders.children, folderId).includes(parentId)) throw new BankError('A folder cannot move inside itself');
         return parentId;
     };
+    // With the counts of all one's tasks and of those in no folder, so the panel needs one request
     router.get('/bank/folders', route(async req => {
-        const [rows] = await pool.query(
-            `SELECT f.id, f.parent_id, f.name, f.sort_order, COUNT(i.id) AS items
-             FROM bank_folders f LEFT JOIN bank_items i ON i.folder_id = f.id AND i.owner_id = f.owner_id AND i.status <> 'archived'
-             WHERE f.owner_id = ? GROUP BY f.id, f.parent_id, f.name, f.sort_order ORDER BY f.sort_order, f.id`, [folderOwner(req.user)]);
-        return { folders: rows.map(row => ({ id: row.id, parentId: row.parent_id, name: row.name, sortOrder: row.sort_order, items: Number(row.items) })) };
+        const ownerId = folderOwner(req.user);
+        const [[rows], [[counts]]] = await Promise.all([
+            pool.query(
+                `SELECT f.id, f.parent_id, f.name, f.sort_order, COUNT(i.id) AS items
+                 FROM bank_folders f LEFT JOIN bank_items i ON i.folder_id = f.id AND i.owner_id = f.owner_id AND i.status = 'published'
+                 WHERE f.owner_id = ? GROUP BY f.id, f.parent_id, f.name, f.sort_order ORDER BY f.sort_order, f.id`, [ownerId]),
+            pool.query(
+                "SELECT COUNT(*) AS total, IFNULL(SUM(folder_id IS NULL), 0) AS unfiled FROM bank_items WHERE owner_id = ? AND status = 'published'",
+                [ownerId])
+        ]);
+        return {
+            folders: rows.map(row => ({ id: row.id, parentId: row.parent_id, name: row.name, sortOrder: row.sort_order, items: Number(row.items) })),
+            total: Number(counts.total),
+            unfiled: Number(counts.unfiled)
+        };
     }));
     router.post('/bank/folders', route(async req => {
         const ownerId = folderOwner(req.user);
@@ -1420,6 +1494,7 @@ async function ensureBankSchema(pool) {
     }
     await loadMeta(pool);
     bankReady = true;
+    if (serving) recountShared(pool); // counted before the first listing asks (the server only, not scripts)
 }
 
 /**

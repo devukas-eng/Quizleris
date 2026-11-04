@@ -9,9 +9,9 @@
 // Widths: three columns from 1400px; below that one side panel with "Bank | Mine" tabs; below
 // 1100px a drawer opened with a button; on phones the drawer fills the screen.
 import * as api from "./bank-api.js";
-import { armDrag, addDropZone, justDragged } from "./bank-drag.js";
+import { armDrag, addDropZone, allowTouchDrag, justDragged } from "./bank-drag.js";
 import { createTaskList } from "./bank-list.js";
-import { insertQuestions, questionAt, isEditorOpen } from "./quiz-editor.js";
+import { insertQuestions, questionAt, isEditorOpen, bankIdsInQuiz } from "./quiz-editor.js";
 import { isAdminAccessAllowed, getStoredUser } from "./auth.js";
 import { confirmDialog } from "./dialog.js";
 import { escapeHtml } from "./dom.js";
@@ -65,6 +65,7 @@ function savePrefs() {
     }
 }
 
+let initialized = false;
 let meta = null;
 let metaAt = 0;
 let metaRequest = null;
@@ -76,11 +77,16 @@ let mineList = null;
 let sheet = null;
 let popover = null;
 let treeOpen = true; // the topic tree folds into its header once a topic without subtopics is chosen
+let builtLanguage = null;
+let inQuiz = new Set(); // bank tasks the open quiz already holds (their source.bankId)
+const adding = new Set(); // tasks on their way into the quiz: a second click doesn't add them twice
 const els = {};
 const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, started: false };
-const mine = { folders: [], folderId: "all", q: "", total: 0, unfiled: 0, started: false };
+const mine = { folders: [], folderId: "all", q: "", total: 0, unfiled: 0, listed: 0, started: false };
 
 export function initBankWorkspace() {
+    if (initialized) return;
+    initialized = true;
     document.addEventListener("open-editor", e => {
         const from = e.detail?.from;
         dashOrigin = from ? { ...from, at: performance.now() } : null;
@@ -99,8 +105,18 @@ export function initBankWorkspace() {
     });
     wideQuery.addEventListener("change", onLayoutChange);
     roomyQuery.addEventListener("change", onLayoutChange);
+    // Rows mark the tasks the quiz already holds
+    document.addEventListener("quiz-questions-changed", () => {
+        inQuiz = bankIdsInQuiz();
+        if (shown) {
+            bankList.refresh();
+            mineList.refresh();
+        }
+    });
     // Known ahead, so the editor opens straight into its three columns
     if (isAdminAccessAllowed()) requestMeta();
+    // This code loads on demand: the editor may already be open by the time it arrives
+    if (isEditorOpen()) onEditorOpen();
 }
 
 // --- Classifiers and access ---
@@ -178,6 +194,8 @@ async function onEditorOpen() {
 function show(origin) {
     build();
     shown = true;
+    if (builtLanguage !== getLanguage()) relabel();
+    inQuiz = bankIdsInQuiz();
     document.body.classList.add("bank-workspace");
     setTab(prefs.tab === "mine" ? "mine" : "bank");
     if (!bank.started) startBank();
@@ -228,6 +246,7 @@ function animateIn(origin) {
 
 // A column slides in from its side, its parts following one after another
 function slideIn(el, dir, delay) {
+    if (reduceMotion.matches) return;
     el.animate([{ opacity: 0, transform: `translateX(${dir * 28}px)` }, { opacity: 1, transform: "none" }],
         { duration: 520, delay, easing: EASE, fill: "backwards" });
     [...el.children].forEach((child, i) => child.animate(
@@ -284,7 +303,7 @@ function selbarHtml() {
     return `<div class="bank-selbar" hidden>
         <span class="bank-selbar-count"></span>
         <button type="button" class="btn btn-primary bank-selbar-add">${icon("plus", 16)}<span data-i18n="bank.addSelected">${t("bank.addSelected")}</span></button>
-        <button type="button" class="bank-icon-btn bank-selbar-clear" title="${t("bank.clearSelection")}" aria-label="${t("bank.clearSelection")}">${icon("close", 16)}</button>
+        <button type="button" class="bank-icon-btn bank-selbar-clear" data-label="bank.clearSelection" title="${t("bank.clearSelection")}" aria-label="${t("bank.clearSelection")}">${icon("close", 16)}</button>
     </div>`;
 }
 
@@ -296,11 +315,11 @@ function build() {
             ${tabsHtml()}
             <header class="bank-head">
                 <h2 id="bank-mine-title" class="bank-title">${icon("folder")}<span data-i18n="bank.mine">${t("bank.mine")}</span></h2>
-                <button type="button" class="bank-icon-btn" data-act="new-folder" title="${t("bank.newFolder")}" aria-label="${t("bank.newFolder")}">${icon("folderPlus")}</button>
-                <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" aria-label="${t("bank.close")}">${icon("close")}</button>
+                <button type="button" class="bank-icon-btn" data-act="new-folder" data-label="bank.newFolder" title="${t("bank.newFolder")}" aria-label="${t("bank.newFolder")}">${icon("folderPlus")}</button>
+                <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
             <label class="bank-search">${icon("search", 16)}<input type="search" data-search="mine" autocomplete="off" placeholder="${t("bank.searchMine")}" data-i18n-placeholder="bank.searchMine"></label>
-            <nav class="mine-folders" role="tree" aria-label="${t("bank.folders")}"></nav>
+            <nav class="mine-folders" role="tree" data-label="bank.folders" aria-label="${t("bank.folders")}"></nav>
             <div class="bank-list-head"><span class="bank-total"></span></div>
             <div class="mine-list"></div>
             ${selbarHtml()}
@@ -309,24 +328,25 @@ function build() {
             ${tabsHtml()}
             <header class="bank-head">
                 <h2 id="bank-title" class="bank-title">${icon("book")}<span data-i18n="bank.title">${t("bank.title")}</span></h2>
-                <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" aria-label="${t("bank.close")}">${icon("close")}</button>
+                <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
             <label class="bank-search">${icon("search", 16)}<input type="search" data-search="bank" autocomplete="off" placeholder="${t("bank.search")}" data-i18n-placeholder="bank.search"></label>
+            <div class="bank-suggest" hidden></div>
             <div class="bank-filters">
                 <div class="bank-filter-row">
-                    <select class="bank-select bank-subject" aria-label="${t("bank.subject")}"></select>
-                    <select class="bank-select bank-sort" aria-label="${t("bank.sort")}">
+                    <select class="bank-select bank-subject" data-label="bank.subject" aria-label="${t("bank.subject")}"></select>
+                    <select class="bank-select bank-sort" data-label="bank.sort" aria-label="${t("bank.sort")}">
                         ${SORTS.map(sort => `<option value="${sort}">${t(`bank.sort.${sort}`)}</option>`).join("")}
                     </select>
                 </div>
-                <div class="bank-grades" role="radiogroup" aria-label="${t("bank.grade")}"></div>
-                <div class="bank-levels" role="group" aria-label="${t("bank.level")}"></div>
+                <div class="bank-grades" role="radiogroup" data-label="bank.grade" aria-label="${t("bank.grade")}"></div>
+                <div class="bank-levels" role="group" data-label="bank.level" aria-label="${t("bank.level")}"></div>
             </div>
             <section class="bank-topics">
                 <button type="button" class="bank-topics-head" aria-expanded="true">
                     ${icon("chevron", 14)}<span data-i18n="bank.topics">${t("bank.topics")}</span><span class="bank-topic-path"></span>
                 </button>
-                <div class="bank-fold"><div class="bank-fold-inner"><div class="bank-tree" role="tree" aria-label="${t("bank.topics")}"></div></div></div>
+                <div class="bank-fold"><div class="bank-fold-inner"><div class="bank-tree" role="tree" data-label="bank.topics" aria-label="${t("bank.topics")}"></div></div></div>
             </section>
             <div class="bank-topic-info" hidden></div>
             <div class="bank-list-head"><span class="bank-total"></span></div>
@@ -342,6 +362,7 @@ function build() {
     els.toasts = document.querySelector(".bank-toasts");
     const inPanel = selector => els.panel.querySelector(selector);
     Object.assign(els, {
+        suggest: inPanel(".bank-suggest"),
         subject: inPanel(".bank-subject"),
         sort: inPanel(".bank-sort"),
         grades: inPanel(".bank-grades"),
@@ -376,10 +397,36 @@ function build() {
         onSelection: ids => updateSelbar(els.mine, ids)
     });
 
+    builtLanguage = getLanguage();
+    allowTouchDrag(els.panel);
+    allowTouchDrag(els.mine);
     wireCommon();
     wireBank();
     wireMine();
     addMineDropZone();
+}
+
+// The language was switched while the editor was closed: texts the page's own translation pass
+// does not reach (labels, tooltips, choices) are written again
+function relabel() {
+    builtLanguage = getLanguage();
+    document.querySelectorAll(".bank-aside [data-label]").forEach(el => {
+        const text = t(el.dataset.label);
+        el.setAttribute("aria-label", text);
+        if (el.hasAttribute("title")) el.title = text;
+    });
+    [...els.sort.options].forEach(option => { option.textContent = t(`bank.sort.${option.value}`); });
+    bankList.relabel(t("bank.add"));
+    mineList.relabel(t("bank.add"));
+    if (bank.started) {
+        renderFilters();
+        renderTree();
+        els.bankTotal.textContent = countLabel(bank.total);
+    }
+    if (mine.started) {
+        renderFolders();
+        els.mineTotal.textContent = countLabel(mine.listed);
+    }
 }
 
 function wireCommon() {
@@ -436,14 +483,25 @@ function wireBank() {
         clearTimeout(timer);
         timer = setTimeout(() => {
             bank.q = search.value;
+            renderSuggestions();
             reloadBank();
         }, 250);
+    });
+    // A suggested topic: open it instead of searching the words
+    els.suggest.addEventListener("click", e => {
+        const chip = e.target.closest("[data-topic]");
+        if (!chip) return;
+        search.value = "";
+        bank.q = "";
+        renderSuggestions();
+        selectTopic(Number(chip.dataset.topic));
     });
     els.subject.addEventListener("change", () => {
         bank.subjectId = Number(els.subject.value);
         bank.topicId = null;
         treeOpen = true;
         renderFold();
+        renderSuggestions();
         prefs.subjectId = bank.subjectId;
         savePrefs();
         reloadBank();
@@ -462,6 +520,13 @@ function wireBank() {
         bank.gradeId = grade;
         prefs.gradeId = grade;
         savePrefs();
+        // A topic that grade's curriculum doesn't have would leave the list empty and hidden
+        const topic = meta.topicsById.get(bank.topicId);
+        if (grade && topic && !taughtIn(topic, grade) && !topicPath(topic.id).some(step => step.grades.some(row => row.grade === grade))) {
+            bank.topicId = null;
+            treeOpen = true;
+            renderFold();
+        }
         renderGrades();
         reloadBank();
     });
@@ -600,6 +665,27 @@ function topicPath(id) {
     const path = [];
     for (let topic = meta.topicsById.get(id); topic; topic = meta.topicsById.get(topic.parentId)) path.unshift(topic);
     return path;
+}
+
+// Search covers the tasks' own words; a teacher typing a topic's name ("trupmenos", "lygtys") is
+// shown those topics as well, the chosen grade's first
+const fold = text => String(text).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+function renderSuggestions() {
+    const words = fold(bank.q).split(/\s+/).filter(word => word.length >= 3);
+    const matches = !words.length ? [] : meta.topics
+        .filter(topic => topic.subjectId === bank.subjectId && words.every(word => fold(topic.name).includes(word)))
+        .sort((a, b) => Number(!!bank.gradeId && !taughtIn(a, bank.gradeId)) - Number(!!bank.gradeId && !taughtIn(b, bank.gradeId)))
+        .slice(0, 4);
+    els.suggest.hidden = !matches.length;
+    els.suggest.innerHTML = matches.length
+        ? `<span class="bank-suggest-label">${t("bank.topics")}:</span>${matches.map(topic =>
+            `<button type="button" class="bank-chip" data-topic="${topic.id}" title="${escapeHtml(topicPath(topic.id).map(step => step.name).join(" › "))}">${escapeHtml(topic.name)}</button>`).join("")}`
+        : "";
+}
+
+// Whether a grade's curriculum has this topic or one of its subtopics
+function taughtIn(topic, grade) {
+    return topic.grades.some(row => row.grade === grade) || meta.childrenOf(topic.id).some(child => taughtIn(child, grade));
 }
 
 function expandedTopics() {
@@ -818,14 +904,12 @@ function startMine() {
 }
 
 async function reloadFolders() {
-    const [folders, all, unfiled] = await Promise.all([
-        api.listFolders(),
-        api.listItems({ scope: "mine", limit: 1, facets: "none" }),
-        api.listItems({ scope: "mine", folder: "none", limit: 1, facets: "none" })
-    ]);
-    if (folders.ok) mine.folders = folders.data.folders || [];
-    if (all.ok) mine.total = all.data.total ?? 0;
-    if (unfiled.ok) mine.unfiled = unfiled.data.total ?? 0;
+    const res = await api.listFolders();
+    if (res.ok) {
+        mine.folders = res.data.folders || [];
+        mine.total = res.data.total ?? 0;
+        mine.unfiled = res.data.unfiled ?? 0;
+    }
     if (typeof mine.folderId === "number" && !folderById(mine.folderId)) {
         mine.folderId = "all";
         reloadMine();
@@ -837,7 +921,9 @@ async function reloadMine() {
     const folder = mine.folderId === "all" ? null : mine.folderId;
     const res = await mineList.reset((cursor, signal) =>
         api.listItems({ scope: "mine", folder, q: mine.q.trim(), limit: PAGE, cursor, facets: "none" }, signal));
-    if (res) els.mineTotal.textContent = res.ok ? countLabel(res.data.total ?? 0) : "";
+    if (!res) return;
+    mine.listed = res.data.total ?? 0;
+    els.mineTotal.textContent = res.ok ? countLabel(mine.listed) : "";
 }
 
 function renderFolders() {
@@ -899,6 +985,11 @@ function toggleFolder(id) {
 
 // Renaming in place, or a new (sub)folder typed into a row that appears where it will live
 function editFolder({ folder = null, parentId = null }) {
+    const editing = els.folders.querySelector(".mine-folder-input");
+    if (editing) {
+        editing.focus(); // one name at a time
+        return;
+    }
     let node;
     if (folder) {
         node = els.folders.querySelector(`[data-folder="${folder.id}"]`);
@@ -1193,21 +1284,29 @@ async function pickFromTopic(topicId, available, anchor) {
 // again (a quiz carries its own pictures)
 async function questionsFor(ids) {
     const items = (await api.loadItems(ids)).filter(Boolean);
-    const questions = await Promise.all(items.map(toQuestion));
+    const lost = { pictures: 0 };
+    const questions = await Promise.all(items.map(item => toQuestion(item, lost)));
     if (items.length) api.markUsed(items.map(item => item.id));
+    if (lost.pictures) toast(t("bank.pictureLost"), "error");
     return questions;
 }
 
-async function toQuestion(item) {
+async function toQuestion(item, lost) {
     const question = JSON.parse(JSON.stringify(item.content));
     question.id = `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     question.source = { bankId: item.id };
-    try {
-        if (question.image) question.image = await inlineImage(question.image);
-        for (const choice of question.choices || []) if (choice.image) choice.image = await inlineImage(choice.image);
-    } catch (error) {
-        console.warn("A bank picture could not be loaded", error);
-    }
+    // A picture that can't be fetched is left out rather than shown broken; the teacher is told
+    const embed = async (holder, key) => {
+        try {
+            holder[key] = await inlineImage(holder[key]);
+        } catch (error) {
+            console.warn("A bank picture could not be loaded", error);
+            delete holder[key];
+            lost.pictures++;
+        }
+    };
+    if (question.image) await embed(question, "image");
+    for (const choice of question.choices || []) if (choice.image) await embed(choice, "image");
     return question;
 }
 
@@ -1225,13 +1324,19 @@ async function inlineImage(src) {
 }
 
 async function addTasks(ids, fromEl) {
-    if (justDragged() || !ids.length) return;
-    const questions = await questionsFor(ids);
-    if (!questions.length) {
-        toast(t("bank.loadFailed"), "error");
-        return;
+    if (justDragged() || !ids.length || ids.some(id => adding.has(id))) return; // a double click adds once
+    ids.forEach(id => adding.add(id));
+    try {
+        const questions = await questionsFor(ids);
+        if (!questions.length) {
+            toast(t("bank.loadFailed"), "error");
+            return;
+        }
+        insertAndReveal(questions, fromEl);
+    } finally {
+        // Held a moment longer: a double click's second click comes after a quick insert is done
+        setTimeout(() => ids.forEach(id => adding.delete(id)), 600);
     }
-    insertAndReveal(questions, fromEl);
 }
 
 // The new questions go to the end of the quiz; a copy of the row flies to where they land
@@ -1382,6 +1487,10 @@ function onSheetClick(e) {
     if (!button || !sheet) return;
     const item = sheet.list.items[sheet.index];
     const act = button.dataset.act;
+    if (!item && act !== "close") {
+        closeSheet(); // the list was listed anew under it
+        return;
+    }
     if (act === "close") closeSheet();
     else if (act === "prev" || act === "next") {
         sheet.index += act === "next" ? 1 : -1;
@@ -1454,6 +1563,7 @@ function typeset(el) {
 // A row's second line; in the bank the chosen topic is not repeated on every row
 function rowMetaHtml(item, mineScope) {
     const parts = [];
+    if (inQuiz.has(item.id)) parts.push(`<span class="bank-in-quiz">${icon("check", 12)}${escapeHtml(t("bank.inQuiz"))}</span>`);
     const level = meta?.levelsById.get(item.difficultyId);
     if (level) parts.push(`<span class="bank-pill" style="--lvl:${escapeHtml(level.color || "var(--muted)")}"><i aria-hidden="true"></i>${escapeHtml(level.name)}</span>`);
     if (item.gradeId) parts.push(`<span>${escapeHtml(t("bank.gradeShort").replace("{n}", item.gradeId))}</span>`);

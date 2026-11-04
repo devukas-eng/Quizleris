@@ -855,8 +855,15 @@ function renderAdminForm() {
     }
   });
 
-  
+
   restoreFocusAndScroll(focusState);
+  // The task bank marks the tasks this quiz holds
+  document.dispatchEvent(new window.CustomEvent("quiz-questions-changed"));
+}
+
+/** IDs of the bank tasks this quiz's questions came from. */
+function bankIdsInQuiz() {
+  return new Set((adminQuiz?.questions || []).map(q => q.source?.bankId).filter(Boolean));
 }
 // Answer options with a correct-answer marker (radio for one correct, checkbox for several)
 function renderChoiceList(q, qIdx, multiple) {
@@ -2009,6 +2016,7 @@ async function handleLocalDeleteClick() {
   await populateLocalSelector();
 }
 export {
+  bankIdsInQuiz,
   insertQuestions,
   isEditorOpen,
   moveQuestion,

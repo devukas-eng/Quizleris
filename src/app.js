@@ -9,7 +9,19 @@ import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
 import { syncCloudQuizzes } from "./sync.js";
-import { initBankWorkspace } from "./bank-workspace.js";
+import { isAdminAccessAllowed } from "./auth.js";
+
+// The task bank's code is fetched only for signed-in teachers and admins: students never load it
+let bankWorkspace = null;
+function loadBankWorkspace() {
+    if (bankWorkspace || !isAdminAccessAllowed()) return;
+    bankWorkspace = import("./bank-workspace.js")
+        .then(module => module.initBankWorkspace())
+        .catch(error => {
+            bankWorkspace = null;
+            console.error("The task bank could not be loaded", error);
+        });
+}
 
 function confirmLeaveQuiz() {
     return confirmDialog({
@@ -128,8 +140,8 @@ async function initApp() {
         const onAdmin = () => toggleAdminMode();
         // 1. Setup Dashboard (needs onHome)
         setupDashboard({ onHome });
-        // Before the editor's own listener: the task bank notes where the dashboard was
-        initBankWorkspace();
+        loadBankWorkspace();
+        document.addEventListener("quizleris-auth-changed", loadBankWorkspace);
         document.addEventListener("open-editor", (e) => { openEditor(e.detail?.quizId); });
         // 2. Setup Menu (needs onAdmin only)
         setupMenu({ onAdmin });

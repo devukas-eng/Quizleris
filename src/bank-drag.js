@@ -25,6 +25,17 @@ export function addDropZone(zone) {
     zones.push(zone);
 }
 
+/**
+ * Lets a finger drag out of a scrolling area after a press. A browser decides when the finger lands
+ * whether the gesture may scroll without asking the page, so the listener that stops the scroll
+ * once a drag has begun has to be in place before that, not added when the drag starts.
+ */
+export function allowTouchDrag(el) {
+    el.addEventListener("touchmove", e => {
+        if (session && e.cancelable) e.preventDefault();
+    }, { passive: false });
+}
+
 export function isDragging() {
     return !!session;
 }
@@ -76,6 +87,7 @@ function startSession(e, start, options) {
     const sourceRect = options.source?.getBoundingClientRect();
     const ghost = document.createElement("div");
     ghost.className = "drag-ghost";
+    ghost.setAttribute("aria-hidden", "true");
     const card = options.ghost();
     card.classList.add("drag-ghost-card");
     ghost.appendChild(card);

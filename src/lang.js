@@ -531,6 +531,8 @@ const translations = {
         'bank.deleteFolderBody': 'Užduotys neišnyks: jos bus perkeltos į aukštesnį aplanką.',
         'bank.mineEmpty': 'Čia dar tuščia',
         'bank.mineHint': 'Nutempk klausimą iš testo už ⋮⋮ arba užduotį iš banko ant aplanko, ir ji išsisaugos čia.',
+        'bank.inQuiz': 'Teste',
+        'bank.pictureLost': 'Kai kurių paveikslėlių nepavyko įkelti, todėl jie praleisti',
     },
     en: {
         // Start Menu
@@ -1065,6 +1067,8 @@ const translations = {
         'bank.deleteFolderBody': 'Its tasks stay: they move to the folder above.',
         'bank.mineEmpty': 'Nothing here yet',
         'bank.mineHint': 'Drag a question out of the quiz by ⋮⋮, or a task from the bank, onto a folder to keep it here.',
+        'bank.inQuiz': 'In quiz',
+        'bank.pictureLost': 'Some pictures could not be loaded and were left out',
     }
 };
 let currentLanguage = 'lt'; // Default to Lithuanian

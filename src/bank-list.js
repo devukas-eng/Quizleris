@@ -8,6 +8,8 @@ const ROW = 80;          // row height + gap, px (matches .bank-row in style.css
 const OVERSCAN = 6;      // rows kept beyond each edge
 const PRELOAD = 15;      // load the next page this many rows before the end
 const SKELETONS = 6;
+const RETRY_MS = [2000, 5000, 15000]; // after a page failed to load, scrolling tries again after these
+const TYPESET_LIMIT = 1500;
 const typeset = new Map(); // task id + preview → typeset HTML
 
 const MATH_DELIMITERS = [{ left: "\\(", right: "\\)", display: false }];
@@ -24,7 +26,7 @@ function previewHtml(item) {
     } catch {
         // a broken formula stays as text
     }
-    if (typeset.size > 4000) typeset.delete(typeset.keys().next().value);
+    if (typeset.size > TYPESET_LIMIT) typeset.delete(typeset.keys().next().value);
     typeset.set(key, el.innerHTML);
     return el.innerHTML;
 }
@@ -53,6 +55,9 @@ export function createTaskList(container, options) {
     let controller = null;
     let raf = 0;
     let lastAnchor = null;   // for Shift + click ranges
+    let active = 0;          // the one row reached with Tab (the others with the arrow keys)
+    let failures = 0;
+    let retryAt = 0;
     const rows = new Map();  // index → row element
     const spare = [];
     const selected = new Set();
@@ -71,7 +76,6 @@ export function createTaskList(container, options) {
         const row = document.createElement("div");
         row.className = "bank-row";
         row.setAttribute("role", "listitem");
-        row.tabIndex = 0;
         row.innerHTML = `
             <div class="bank-row-main">
                 <div class="bank-row-text"></div>
@@ -119,7 +123,10 @@ export function createTaskList(container, options) {
         }
         for (let i = first; i <= last; i++) rowFor(i);
         for (const row of spare) if (row.isConnected) row.remove();
-        if (nextCursor && !loading && last >= items.length - PRELOAD) loadMore();
+        // One Tab stop: the active row, or the first one shown while it is scrolled away
+        const tabStop = rows.has(active) ? active : first;
+        for (const [index, row] of rows) row.tabIndex = index === tabStop ? 0 : -1;
+        if (nextCursor && !loading && last >= items.length - PRELOAD && performance.now() >= retryAt) loadMore();
     }
 
     const schedule = () => {
@@ -135,10 +142,16 @@ export function createTaskList(container, options) {
         if (run !== generation) return null;
         loading = false;
         if (!res.ok) {
-            nextCursor = null;
+            // The first page failing shows the error; a later one is tried again as scrolling goes on
+            if (!cursor) nextCursor = null;
+            const delay = RETRY_MS[Math.min(failures++, RETRY_MS.length - 1)];
+            retryAt = performance.now() + delay;
+            setTimeout(schedule, delay + 50);
             schedule();
             return res;
         }
+        failures = 0;
+        retryAt = 0;
         items = items.concat(res.data.items || []);
         nextCursor = res.data.nextCursor || null;
         // Rows holding a skeleton get their task now
@@ -209,6 +222,11 @@ export function createTaskList(container, options) {
         options.onPointerDown(e, item, row);
     });
 
+    container.addEventListener("focusin", e => {
+        const row = e.target.closest?.(".bank-row");
+        if (row?.dataset.id) active = Number(row.dataset.index);
+    });
+
     function changed() {
         for (const [index, row] of rows) if (items[index]) row.classList.toggle("is-selected", selected.has(items[index].id));
         options.onSelection?.([...selected]);
@@ -216,6 +234,7 @@ export function createTaskList(container, options) {
 
     function focusIndex(index) {
         if (index < 0 || index >= items.length) return;
+        active = index;
         const top = index * ROW;
         if (top < container.scrollTop) container.scrollTop = top;
         else if (top + ROW > container.scrollTop + container.clientHeight) container.scrollTop = top + ROW - container.clientHeight;
@@ -233,6 +252,9 @@ export function createTaskList(container, options) {
             nextCursor = null;
             selected.clear();
             lastAnchor = null;
+            active = 0;
+            failures = 0;
+            retryAt = 0;
             for (const row of rows.values()) {
                 row.removeAttribute("data-id");
                 spare.push(row);
@@ -260,6 +282,22 @@ export function createTaskList(container, options) {
         rowOf(id) {
             for (const [index, row] of rows) if (items[index]?.id === id) return row;
             return null;
+        },
+        /** After a language switch: new texts on the rows already made. */
+        relabel(addLabel) {
+            options.addLabel = addLabel;
+            for (const row of [...rows.values(), ...spare]) {
+                const button = row.querySelector(".bank-row-add");
+                button.title = addLabel;
+                button.setAttribute("aria-label", addLabel);
+                row.removeAttribute("data-id"); // the second line is written again
+            }
+            for (const [index, row] of rows) fill(row, index);
+        },
+        /** Rows written again (their second line depends on what is in the quiz). */
+        refresh() {
+            for (const row of rows.values()) row.removeAttribute("data-id");
+            for (const [index, row] of rows) fill(row, index);
         },
         focusIndex
     };
