@@ -1,4 +1,4 @@
-import { QuizState, quiz, setQuiz, isTypedSlot, typedSlotMatches } from "./state.js";
+import { QuizState, quiz, setQuiz, isTypedSlot, matchTypedAnswers } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
@@ -246,6 +246,25 @@ function renderMCQ(q) {
     }
 }
 /**
+ * Which write-in / number slots get a box on screen. Several slots of one kind are the teacher's
+ * way of listing answers, not boxes to fill: one box per kind for a single answer, and with
+ * "select all" as many boxes as there are correct answers of that kind (grading ignores which
+ * box holds which answer).
+ */
+function visibleTypedSlots(q) {
+    const shown = new Set();
+    ["write", "number"].forEach(kind => {
+        const slots = (q.choices || []).filter(c => c.kind === kind);
+        const wanted = q.allowMultipleAnswers ? Math.max(1, slots.filter(c => c.isCorrect).length) : 1;
+        slots.slice(0, wanted).forEach(c => shown.add(c.id));
+    });
+    return shown;
+}
+const typedSlotAnswerText = (choice) => choice.kind === "number"
+    ? `${choice.number}${choice.tolerance ? ` ± ${choice.tolerance}` : ""}`
+    : (choice.accepted || []).join(" / ");
+
+/**
  * Choice questions whose answers mix plain options with write-in / number slots.
  * The answer is { selected: [ids], typed: { id: text } }; a typed slot counts as picked once
  * the student focuses it (single answer) or types something (multiple answers).
@@ -258,6 +277,11 @@ function renderSlotChoices(q) {
     const state = stored && Array.isArray(stored.selected)
         ? { selected: [...stored.selected], typed: { ...(stored.typed || {}) } }
         : { selected: [], typed: {} };
+    const shownSlots = visibleTypedSlots(q);
+    const { matched, missing } = isAnswered ? matchTypedAnswers(q, stored) : { matched: new Map(), missing: [] };
+    // After answering, the correct answers nobody typed are listed under the last box of their kind
+    const lastBoxOfKind = new Map();
+    (q.choices || []).forEach(c => { if (shownSlots.has(c.id)) lastBoxOfKind.set(c.kind, c.id); });
 
     const rows = [];
     let submitBtn = null;
@@ -281,6 +305,7 @@ function renderSlotChoices(q) {
 
     (q.choices || []).forEach((choice) => {
         const typed = isTypedSlot(choice);
+        if (typed && !shownSlots.has(choice.id)) return;
         const el = document.createElement(typed ? "div" : "button");
         el.className = `answer-btn mc-btn${typed ? " own-answer-row" : ""}${multiple ? " checkbox-style" : ""}`;
         el.dataset.choiceId = choice.id;
@@ -312,15 +337,12 @@ function renderSlotChoices(q) {
             } else {
                 input.disabled = true;
                 const picked = (stored?.selected || []).includes(choice.id);
-                const slotOk = picked && choice.isCorrect && typedSlotMatches(choice, stored?.typed?.[choice.id]);
-                if (picked) el.classList.add(slotOk ? "correct" : "incorrect");
-                if (choice.isCorrect && !slotOk) {
+                if (picked) el.classList.add(matched.has(choice.id) ? "correct" : "incorrect");
+                const notTyped = missing.filter(c => c.kind === choice.kind);
+                if (lastBoxOfKind.get(choice.kind) === choice.id && notTyped.length) {
                     const expected = document.createElement("div");
                     expected.className = "own-answer-expected";
-                    const answerText = choice.kind === "number"
-                        ? `${choice.number}${choice.tolerance ? ` ± ${choice.tolerance}` : ""}`
-                        : (choice.accepted || []).join(" / ");
-                    expected.textContent = `${t('quiz.correctAnswerIs')} ${answerText}`;
+                    expected.textContent = `${t('quiz.correctAnswerIs')} ${notTyped.map(typedSlotAnswerText).join("; ")}`;
                     el.appendChild(expected);
                 }
             }
@@ -552,33 +574,74 @@ function renderImageUpload(q) {
         input.style.display = "none";
         const btn = document.createElement("button");
         btn.className = "btn btn-secondary";
-        btn.textContent = currentAnswer ? "Change Photo" : "📷 Upload Work";
+        btn.textContent = currentAnswer ? t('quiz.changePhoto') : `📷 ${t('quiz.uploadPhoto')}`;
         btn.onclick = () => input.click();
-        input.onchange = (e) => {
+        const error = document.createElement("p");
+        error.className = "upload-error";
+        error.setAttribute("role", "alert");
+        error.hidden = true;
+        let sub = null;
+        input.onchange = async (e) => {
             const file = e.target.files?.[0];
             if (!file)
                 return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const base64 = ev.target?.result;
-                quiz?.userAnswers.set(q.id, base64);
-                renderAnswers(q);
-                if (quiz?.quiz.mode === 'exam')
-                    renderExamNavigation();
-            };
-            reader.readAsDataURL(file);
+            btn.disabled = true;
+            if (sub) sub.disabled = true;
+            try {
+                quiz?.userAnswers.set(q.id, await shrinkPhoto(file));
+            } catch (err) {
+                console.warn("Could not read the photo", err);
+                error.textContent = t('quiz.photoFailed');
+                error.hidden = false;
+                btn.disabled = false;
+                if (sub) sub.disabled = false;
+                return;
+            }
+            renderAnswers(q);
+            if (quiz?.quiz.mode === 'exam')
+                renderExamNavigation();
         };
         answersContainer.appendChild(input);
         answersContainer.appendChild(btn);
         if (quiz?.quiz.mode !== 'exam') {
-            const sub = document.createElement("button");
+            sub = document.createElement("button");
             sub.className = "btn btn-primary";
-            sub.textContent = t('quiz.nextQuestion');
+            sub.textContent = t('quiz.submitAnswer');
             sub.style.marginLeft = "10px";
             sub.onclick = () => onAnswer(quiz?.userAnswers.get(q.id));
             answersContainer.appendChild(sub);
         }
+        answersContainer.appendChild(error);
     }
+}
+/**
+ * A student's photo of their work, made small enough to send with the result (a phone photo can
+ * be several MB; the teacher only needs to read it). Always comes back as a JPEG/PNG data URL,
+ * so formats the page can't show are converted or rejected here, not after submitting.
+ */
+function shrinkPhoto(file, maxDim = 1600) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject(new Error("No canvas"));
+            ctx.fillStyle = "#fff"; // transparent screenshots stay readable as JPEG
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Unsupported image"));
+        };
+        img.src = url;
+    });
 }
 function triggerCSSConfetti(target) {
     if (!target) return;
@@ -623,15 +686,17 @@ export function onAnswer(answer) {
     const grading = quiz.gradeQuestion(quiz.currentQuestion, answer);
     const wasCorrect = grading.isCorrect && !grading.pendingReview;
     quiz.submitAnswer(answer);
-    
+
     if (quiz.quiz.mode !== 'exam') {
         const pointsAwarded = quiz.questionScores.get(qId) || 0;
-        
+
         renderQuiz(); // Redraw with feedback
-        
+
         const activeBtn = document.activeElement;
         const targetElement = (activeBtn && activeBtn.classList.contains("answer-btn")) ? activeBtn : answersContainer;
-        
+
+        // A photo or written answer waits for the teacher: neither praised nor marked wrong
+        if (grading.pendingReview) return;
         if (wasCorrect) {
             playCorrect();
             triggerCSSConfetti(targetElement);
@@ -701,7 +766,8 @@ export function renderQuiz() {
     if (quiz.quiz.mode !== 'exam') {
         if (quiz.hasAnswered) {
             const grading = quiz.gradeQuestion(quiz.currentQuestion, quiz.userAnswers.get(quiz.currentQuestion.id));
-            renderStatus(grading.isCorrect ? t('quiz.correct') : t('quiz.incorrect'), grading.isCorrect ? "correct" : "incorrect");
+            if (grading.pendingReview) renderStatus(`⏳ ${t('quiz.pending')}`, "pending");
+            else renderStatus(grading.isCorrect ? t('quiz.correct') : t('quiz.incorrect'), grading.isCorrect ? "correct" : "incorrect");
         }
         else {
             renderStatus(t('quiz.chooseAnswer'), "neutral");
@@ -762,7 +828,8 @@ export function renderExamNavigation() {
 }
 // Render status message
 export function renderStatus(message, kind) {
-    const colorClass = kind === "correct" ? "badge badge-correct" : kind === "incorrect" ? "badge badge-incorrect" : "badge";
+    const colorClass = kind === "correct" ? "badge badge-correct" : kind === "incorrect" ? "badge badge-incorrect"
+        : kind === "pending" ? "badge badge-pending" : "badge";
     const scoreText = `${t('quiz.score')}: ${quiz?.score ?? 0}`;
     clearElement(statusContainer);
     const msgSpan = document.createElement("span");

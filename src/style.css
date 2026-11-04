@@ -386,9 +386,17 @@ body {
     color: var(--text);
 }
 
+/* The label stays neutral; the answer itself is colored by its result */
 .result-question-answer {
-    color: var(--success);
+    color: var(--muted);
     font-weight: 500;
+}
+
+.upload-error {
+    margin: 10px 0 0;
+    color: var(--danger);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 /* Admin UI styles */

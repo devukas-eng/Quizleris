@@ -32,6 +32,34 @@ export function typedSlotMatches(choice, value) {
 // Questions with typed slots store { selected: [ids], typed: { id: text } }; others keep id / [ids]
 const isSlotAnswer = (answer) => !!answer && typeof answer === 'object' && Array.isArray(answer.selected);
 
+/**
+ * Pairs what the student typed with the question's correct write-in / number slots. Which box the
+ * student typed into doesn't matter: each typed answer may fill any correct slot of the same kind,
+ * once. Returns `matched` (typed slot id -> the correct slot it fills) and `missing` (correct slots
+ * nothing filled).
+ */
+export function matchTypedAnswers(q, answer) {
+    const choices = q.choices || [];
+    const selected = isSlotAnswer(answer) ? answer.selected : [];
+    const typed = isSlotAnswer(answer) ? (answer.typed || {}) : {};
+    const entries = choices.filter(c => isTypedSlot(c) && selected.includes(c.id) && String(typed[c.id] ?? '').trim());
+    const targets = choices.filter(c => isTypedSlot(c) && c.isCorrect);
+    const owner = new Map(); // correct slot id -> typed slot id filling it
+    // Augmenting paths: a typed answer that fits a taken slot may move the earlier answer elsewhere
+    const place = (entry, seen) => targets.some(target => {
+        if (target.kind !== entry.kind || seen.has(target.id) || !typedSlotMatches(target, typed[entry.id])) return false;
+        seen.add(target.id);
+        const holder = owner.get(target.id);
+        if (holder && !place(entries.find(e => e.id === holder), seen)) return false;
+        owner.set(target.id, entry.id);
+        return true;
+    });
+    entries.forEach(entry => place(entry, new Set()));
+    const matched = new Map();
+    owner.forEach((entryId, targetId) => matched.set(entryId, targets.find(c => c.id === targetId)));
+    return { matched, missing: targets.filter(c => !owner.has(c.id)), entries };
+}
+
 // Readable form of an answer for result reviews (choice IDs become the option text)
 function describeAnswer(q, answer) {
     if (answer === null || answer === undefined) return null;
@@ -167,15 +195,19 @@ export class QuizState {
         switch (type) {
             case 'multiple-choice': {
                 const selectedIds = isSlotAnswer(answer) ? answer.selected : (Array.isArray(answer) ? answer : [answer]);
-                const correctIds = q.choices?.filter(c => c.isCorrect).map(c => c.id) || [];
-                // Selection must match exactly: all correct ones and no incorrect ones
-                const sameSelection = selectedIds.length === correctIds.length &&
-                    selectedIds.every(id => correctIds.includes(id));
-                // ...and every selected write-in / number slot must hold an accepted answer
-                const typedOk = (q.choices || [])
-                    .filter(c => isTypedSlot(c) && selectedIds.includes(c.id))
-                    .every(c => typedSlotMatches(c, isSlotAnswer(answer) ? answer.typed?.[c.id] : undefined));
-                return { isCorrect: sameSelection && typedOk, pendingReview: false };
+                const choices = q.choices || [];
+                const byId = (id) => choices.find(c => c.id === id);
+                // Plain options must match exactly: all correct ones and no incorrect ones
+                const pickedOptions = selectedIds.filter(id => !isTypedSlot(byId(id)));
+                const correctOptions = choices.filter(c => c.isCorrect && !isTypedSlot(c)).map(c => c.id);
+                const sameOptions = pickedOptions.length === correctOptions.length &&
+                    pickedOptions.every(id => correctOptions.includes(id));
+                // Typed answers: every one must fill a correct slot, and every correct slot must be filled.
+                // A picked slot left empty counts as a wrong answer.
+                const pickedTyped = selectedIds.filter(id => isTypedSlot(byId(id)));
+                const { matched, missing } = matchTypedAnswers(q, answer);
+                const typedOk = missing.length === 0 && pickedTyped.every(id => matched.has(id));
+                return { isCorrect: sameOptions && typedOk, pendingReview: false };
             }
             case 'numeric': {
                 const val = parseFloat(answer);
