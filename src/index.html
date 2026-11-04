@@ -9,14 +9,13 @@
   <meta name="description" content="Quizleris - A fast, modern, and engaging quiz application." />
   <meta name="theme-color" content="#6366f1" />
 
-  <!-- Link to your stylesheet (we'll create style.css next) -->
-  <link rel="stylesheet" href="style.css" />
-  
   <!-- DOMPurify for HTML sanitization (CodeQL fixes) -->
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
   
   <!-- KaTeX CSS for LaTeX rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <!-- Our styles, after KaTeX's so they win. copy-files.js replaces ?v= here and on app.js
+       below with a hash of the file, so each deploy gets new addresses. -->
   <link rel="stylesheet" href="style.css?v=0.5.0">
   <!-- KaTeX JS (we'll call this later from TypeScript-compiled JS) -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
