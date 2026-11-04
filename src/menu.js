@@ -93,6 +93,15 @@ export function renderStartMenu() {
     updatePageLanguage();
 }
 
+/** "1 klausimas", "5 klausimai", "12 klausimų" — Lithuanian has three count forms, English two. */
+function questionCountLabel(n) {
+    const mod10 = n % 10, mod100 = n % 100;
+    let key = 'join.questionsMany';
+    if (getLanguage() !== 'lt') key = n === 1 ? 'join.questionsOne' : 'join.questionsMany';
+    else if (mod10 === 1 && mod100 !== 11) key = 'join.questionsOne';
+    else if (mod10 >= 2 && (mod100 < 10 || mod100 >= 20)) key = 'join.questionsFew';
+    return `${n} ${t(key)}`;
+}
 /**
  * Renders the intermediate "Join Quiz" screen shown when a user follows a quiz link.
  * Displays quiz metadata (title, question count, timer) and name input.
@@ -107,17 +116,24 @@ export function renderStudentJoin(quizToJoin) {
     startMenu.appendChild(joinContainer);
     joinContainer.style.display = "flex";
 
-    // Time information
-    let timeInfo = t('admin.timerNone');
+    // Time information, short enough to stay on one line
+    let timeInfo = t('join.noTimer');
     if (quizToJoin.timerConfig && quizToJoin.timerConfig.mode !== "none") {
         const limit = quizToJoin.timerConfig.limitSeconds;
         if (quizToJoin.timerConfig.mode === "question") {
-            timeInfo = `${limit}s / ${t('admin.timerPerQuestion').toLowerCase()}`;
+            timeInfo = t('join.perQuestion').replace('{s}', limit);
         }
         else {
-            timeInfo = `${Math.floor(limit / 60)}m ${limit % 60}s ${t('admin.timerWholeQuiz').toLowerCase()}`;
+            const min = Math.floor(limit / 60);
+            const sec = limit % 60;
+            const span = [min ? `${min} min` : '', sec ? `${sec} s` : ''].filter(Boolean).join(' ');
+            timeInfo = t('join.wholeQuiz').replace('{time}', span);
         }
     }
+    const isPreview = new URLSearchParams(window.location.search).get("preview") === "true";
+    // A race needs other players, so the teacher's own preview never offers one
+    const raceBtnHtml = isPreview ? '' :
+        `<button id="join-host-race-btn" class="btn btn-secondary btn-xl" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; font-weight: 800;">🏎️ ${t('join.hostRace')}</button>`;
     joinContainer.innerHTML = `
         <div class="join-card">
              <div style="margin-bottom: 24px;">
@@ -126,8 +142,8 @@ export function renderStudentJoin(quizToJoin) {
                 </span>
              </div>
              <div class="join-quiz-info">
-                <h2 style="font-size: 2.2rem; margin-bottom: 12px;">${escapeHtml(quizToJoin.title)}</h2>
-                <p style="font-size: 1.1rem; color: var(--muted);">${quizToJoin.questions.length} ${t('join.questions')} | ${escapeHtml(timeInfo)}</p>
+                <h2 style="font-size: 2.2rem; margin-bottom: 6px;">${escapeHtml(quizToJoin.title)}</h2>
+                <p style="font-size: 1.1rem; color: var(--muted);">${questionCountLabel(quizToJoin.questions.length)} · ${escapeHtml(timeInfo)}</p>
              </div>
              
              <div class="join-input-group">
@@ -136,7 +152,7 @@ export function renderStudentJoin(quizToJoin) {
              </div>
              
              <div class="join-actions" style="display: flex; flex-direction: column; gap: 10px;">
-                <button id="join-host-race-btn" class="btn btn-secondary btn-xl" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; font-weight: 800;">🏎️ Host Race</button>
+                ${raceBtnHtml}
                 <div style="display: flex; gap: 10px; width: 100%;">
                     <button id="join-start-btn" class="btn btn-primary btn-xl" style="flex: 1;">${t('join.startBtn')}</button>
                     <button id="join-back-btn" class="btn btn-secondary" style="flex: 1;">${t('join.backBtn')}</button>
@@ -150,19 +166,19 @@ export function renderStudentJoin(quizToJoin) {
         startStudentQuizDirect(name, quizToJoin);
     };
     
-    document.getElementById("join-host-race-btn").onclick = () => {
+    const raceBtn = document.getElementById("join-host-race-btn");
+    if (raceBtn) raceBtn.onclick = () => {
         const nameInput = document.getElementById("join-student-name");
         const name = nameInput.value.trim() || "Anonymous";
         if (name) localStorage.setItem("current_student_name", name);
-        
+
         joinContainer.style.display = "none";
         document.getElementById('start-menu').style.display = "none";
-        
+
         import("./race.js").then(m => m.renderRaceMode(quizToJoin));
     };
     // Auto-fill name in preview mode
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("preview") === "true") {
+    if (isPreview) {
         const nameInput = document.getElementById("join-student-name");
         if (nameInput) {
             nameInput.value = t('admin.previewName');

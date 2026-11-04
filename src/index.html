@@ -44,7 +44,6 @@
         ← <span data-i18n="quiz.backBtn">Back</span>
       </button>
       <div style="flex: 1;"></div>
-      <button id="quiz-mute-btn" class="btn btn-icon" style="font-size: 1.2rem; background: transparent; border: none; padding: 4px; margin-right: 10px;" title="Toggle Mute">🔊</button>
       <button id="admin-toggle" class="btn" style="display: none;" data-i18n="admin.adminMode">Admin Mode</button>
     </header>
     <section id="start-menu" class="start-menu">
@@ -241,6 +240,8 @@
         <button type="button" class="theme-row-item" data-theme="cyberpunk" role="option" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></button>
       </div>
     </div>
+    <!-- Sound toggle: shown only while a quiz is on screen (render.js) -->
+    <button id="quiz-mute-btn" type="button" hidden>🔊</button>
     <!-- Dual Language Flag Pills -->
     <div class="lang-pills">
       <button id="lang-lt-btn" class="lang-pill" title="Lietuvių kalba">

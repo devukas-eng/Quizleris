@@ -1,5 +1,6 @@
 import { quiz } from "./state.js";
 import { statusContainer } from "./dom.js";
+import { t } from "./lang.js";
 // Timer state tracking
 let rafId = null;
 let currentTimerMode = null;
@@ -63,7 +64,7 @@ export function startTimer(config, onTimeout) {
             // Stopwatch (Count Up)
             const minutes = Math.floor(elapsed / 60);
             const seconds = Math.floor(elapsed % 60);
-            timerEl.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, "0")}`;
+            timerEl.textContent = `${t('quiz.time')}: ${minutes}:${seconds.toString().padStart(2, "0")}`;
             rafId = requestAnimationFrame(updateTimer);
         }
         else {
@@ -72,7 +73,7 @@ export function startTimer(config, onTimeout) {
             const displayRemaining = Math.ceil(remaining);
             const minutes = Math.floor(displayRemaining / 60);
             const seconds = displayRemaining % 60;
-            timerEl.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, "0")}`;
+            timerEl.textContent = `${t('quiz.time')}: ${minutes}:${seconds.toString().padStart(2, "0")}`;
             if (displayRemaining <= 5) {
                 timerEl.classList.add("text-danger");
             }

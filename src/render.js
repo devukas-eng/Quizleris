@@ -4,20 +4,29 @@ import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
 import { submitAttempt } from "./api.js";
 import { renderStartMenu } from "./menu.js";
-import { t } from "./lang.js";
+import { t, getLanguage } from "./lang.js";
 import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
 import { confirmDialog } from "./dialog.js";
 
-// Setup Mute Button
+// Setup Mute Button. It sits in the top-right controls beside the language flags and shows
+// only while a quiz is on screen, which is exactly when the quiz header is shown.
 document.addEventListener("DOMContentLoaded", () => {
     const muteBtn = document.getElementById("quiz-mute-btn");
-    if (muteBtn) {
-        muteBtn.textContent = getIsMuted() ? "🔇" : "🔊";
-        muteBtn.addEventListener("click", () => {
-            const muted = toggleMute();
-            muteBtn.textContent = muted ? "🔇" : "🔊";
-        });
-    }
+    if (!muteBtn)
+        return;
+    muteBtn.textContent = getIsMuted() ? "🔇" : "🔊";
+    muteBtn.title = t('quiz.mute');
+    muteBtn.setAttribute("aria-label", t('quiz.mute'));
+    muteBtn.addEventListener("click", () => {
+        const muted = toggleMute();
+        muteBtn.textContent = muted ? "🔇" : "🔊";
+    });
+    const quizHeader = document.querySelector(".quiz-header");
+    if (!quizHeader)
+        return;
+    const sync = () => { muteBtn.hidden = quizHeader.style.display === "none"; };
+    sync();
+    new MutationObserver(sync).observe(quizHeader, { attributes: true, attributeFilter: ["style"] });
 });
 /**
  * SANITIZER: Explicitly filters and validates URLs to ensure they contain safe image data.
@@ -626,7 +635,7 @@ export function onAnswer(answer) {
         if (wasCorrect) {
             playCorrect();
             triggerCSSConfetti(targetElement);
-            spawnFloatingScore(targetElement, `+${pointsAwarded} PTS!`, false);
+            spawnFloatingScore(targetElement, `+${pointsAwarded} ${t('quiz.points')}`, false);
         } else {
             playWrong();
             spawnFloatingScore(targetElement, "MISS!", true);
@@ -803,8 +812,7 @@ export function renderNextButton() {
     if (!btn) {
         btn = document.createElement("button");
         btn.id = btnId;
-        btn.className = "btn btn-primary";
-        btn.style.marginTop = "15px";
+        btn.className = "btn btn-primary quiz-next-btn";
         statusContainer.appendChild(btn);
     }
     if (!quiz) {
@@ -923,7 +931,7 @@ export function showResults() {
     pointsDiv.style.fontWeight = "bold";
     pointsDiv.style.color = "var(--primary-light)";
     pointsDiv.style.marginTop = "5px";
-    pointsDiv.textContent = `${results.score} PTS`;
+    pointsDiv.textContent = `${results.score} ${t('quiz.points')}`;
     
     scoreDiv.appendChild(percentDiv);
     scoreDiv.appendChild(ratioDiv);
@@ -935,10 +943,11 @@ export function showResults() {
     timeSpan.textContent = `⏱️ ${timeMin}:${timeSec.toString().padStart(2, '0')}`;
     
     const timeSpentSecVal = results.totalTime / 1000;
-    const avgSpeedVal = results.total > 0 ? (timeSpentSecVal / results.total).toFixed(1) : 0;
+    const avgSpeedVal = results.total > 0 ? timeSpentSecVal / results.total : 0;
     const speedSpan = document.createElement("span");
     speedSpan.style.marginLeft = "15px";
-    speedSpan.textContent = `⚡ ${avgSpeedVal}s / q`;
+    speedSpan.title = t('quiz.avgPerQuestion');
+    speedSpan.textContent = `⚡ ${t('quiz.secPerQuestion').replace('{n}', avgSpeedVal.toLocaleString(getLanguage(), { maximumFractionDigits: 1 }))}`;
     
     const heartsRemaining = window.quizHearts !== undefined ? window.quizHearts : 0;
     const heartsSpan = document.createElement("span");
