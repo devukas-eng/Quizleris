@@ -1,5 +1,6 @@
-/* ── Theme: Light Classic (Šviesus Fonas / Smaragdas) ── */
-:root, .theme-emerald {
+/* Theme tokens. themes.js writes the chosen theme's values into <style id="theme-vars">;
+   these are the default theme's (Light Classic), used until it does. */
+:root {
     --bg: #FFFFFF;
     --panel: #F3F4F6;
     --text: #1F2937;
@@ -28,104 +29,6 @@
     --theme-picker-text: #1F2937;
     --theme-picker-border: rgba(0, 0, 0, 0.10);
 }
-
-/* ── Theme: Kiberpankas (Cyber Midnight) ── */
-.theme-cyberpunk {
-    --bg: #0b071e;
-    --panel: rgba(25, 16, 59, 0.6);
-    --text: #f3f0ff;
-    --accent: #ff007f;
-    --accent-strong: #00f0ff;
-    --danger: #ff3366;
-    --success: #05ffc5;
-    --muted: #a59bbd;
-    --shadow: 0 15px 35px rgba(255, 0, 127, 0.25);
-    --bg-grad: radial-gradient(circle at 20% 20%, rgba(255, 0, 127, 0.15), transparent 45%),
-               radial-gradient(circle at 80% 80%, rgba(0, 240, 255, 0.15), transparent 45%),
-               #090514;
-    --app-bg: rgba(13, 8, 34, 0.82);
-    --border-color: rgba(255, 0, 127, 0.25);
-    --input-bg: rgba(18, 12, 47, 0.8);
-    --btn-bg: rgba(25, 16, 59, 0.8);
-    --btn-hover-bg: rgba(255, 255, 255, 0.1);
-    --summary-bg: rgba(18, 12, 47, 0.6);
-    --card-bg: rgba(18, 12, 47, 0.6);
-    --glow-color: rgba(255, 0, 127, 0.4);
-    --bubble-a: #ff007f;
-    --bubble-b: #00f0ff;
-    --theme-picker-bg: #12082e;
-    --theme-picker-text: #f3f0ff;
-    --theme-picker-item-hover: rgba(255,0,127,0.08);
-    --theme-picker-border: rgba(255, 0, 127, 0.3);
-}
-
-/* ── Theme: Saulės blyksnis (Solar Flare) ── */
-.theme-solar {
-    --bg: #120e0a;
-    --panel: rgba(32, 24, 18, 0.65);
-    --text: #fff3e6;
-    --accent: #ff9100;
-    --accent-strong: #ff4d00;
-    --danger: #ef4444;
-    --success: #10b981;
-    --muted: #a69282;
-    --shadow: 0 15px 35px rgba(255, 145, 0, 0.2);
-    --bg-grad: radial-gradient(circle at 15% 20%, rgba(255, 145, 0, 0.15), transparent 45%),
-               radial-gradient(circle at 85% 80%, rgba(255, 77, 0, 0.12), transparent 45%),
-               #100b07;
-    --app-bg: rgba(20, 15, 11, 0.85);
-    --border-color: rgba(255, 145, 0, 0.2);
-    --input-bg: rgba(28, 21, 16, 0.8);
-    --btn-bg: rgba(32, 24, 18, 0.8);
-    --btn-hover-bg: rgba(255, 255, 255, 0.08);
-    --summary-bg: rgba(24, 18, 14, 0.6);
-    --card-bg: rgba(24, 18, 14, 0.6);
-    --glow-color: rgba(255, 145, 0, 0.45);
-    --bubble-a: #ff9100;
-    --bubble-b: #ff4d00;
-    --theme-picker-bg: #1a1008;
-    --theme-picker-text: #fff3e6;
-    --theme-picker-item-hover: rgba(255,145,0,0.08);
-    --theme-picker-border: rgba(255, 145, 0, 0.25);
-}
-
-/* ── Theme: Tamsus Fonas (Dark One — Slate/Sky) ── */
-.theme-slate-dark {
-    --bg: #0f172a;
-    --panel: rgba(30, 41, 59, 0.55);
-    --text: #f8fafc;
-    --accent: #38bdf8;
-    --accent-strong: #0ea5e9;
-    --danger: #f87171;
-    --success: #34d399;
-    --muted: #94a3b8;
-    --shadow: 0 15px 35px rgba(15, 23, 42, 0.6);
-    --bg-grad: radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.12), transparent 40%),
-               radial-gradient(circle at 80% 80%, rgba(14, 165, 233, 0.1), transparent 40%),
-               #020617;
-    --app-bg: rgba(15, 23, 42, 0.8);
-    --border-color: rgba(255, 255, 255, 0.12);
-    --input-bg: rgba(30, 41, 59, 0.7);
-    --btn-bg: rgba(30, 41, 59, 0.7);
-    --btn-hover-bg: rgba(255, 255, 255, 0.06);
-    --summary-bg: rgba(30, 41, 59, 0.4);
-    --card-bg: rgba(30, 41, 59, 0.4);
-    --glow-color: rgba(56, 189, 248, 0.35);
-    --bubble-a: #38bdf8;
-    --bubble-b: #1e293b;
-    --theme-picker-bg: #0c1829;
-    --theme-picker-text: #f8fafc;
-    --theme-picker-item-hover: rgba(56,189,248,0.08);
-    --theme-picker-border: rgba(56, 189, 248, 0.2);
-}
-
-/* ── Theme: Tamsus Fonas² ── uses solar palette, same CSS class kept for compat */
-/* (solar CSS class is now the Tamsus Fonas² — see app.js THEMES array) */
-
-/* ── Theme: Tamsus Fonas³ ── uses cyberpunk palette, same CSS class kept for compat */
-/* (cyberpunk CSS class is now Tamsus Fonas³ — see app.js THEMES array) */
-
-
 
 ::placeholder {
     color: color-mix(in srgb, var(--muted) 80%, transparent);
@@ -2527,6 +2430,25 @@ kbd {
     opacity: 0.55;
 }
 
+.theme-picker-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.theme-picker-sep {
+    height: 1px;
+    margin: 6px 10px;
+    background: var(--theme-picker-border, rgba(0, 0, 0, 0.1));
+}
+
+/* "All themes" opens the gallery: a palette instead of a colour bubble */
+.tp-bubble-more {
+    display: grid;
+    place-items: center;
+    font-size: 0.95rem;
+    background: var(--panel);
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    LANGUAGE FLAG PILLS
@@ -2727,6 +2649,15 @@ kbd {
     #theme-row.open .theme-row-item:nth-child(2) { transition-delay: 45ms; }
     #theme-row.open .theme-row-item:nth-child(3) { transition-delay: 90ms; }
     #theme-row.open .theme-row-item:nth-child(4) { transition-delay: 135ms; }
+    #theme-row.open .theme-row-item:nth-child(5) { transition-delay: 180ms; }
+    #theme-row.open .theme-row-item:nth-child(6) { transition-delay: 225ms; }
+
+    .theme-row-more {
+        display: grid;
+        place-items: center;
+        font-size: 1rem;
+        background: var(--btn-bg);
+    }
 
     .theme-row-item.active {
         box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgba(0, 0, 0, 0.22);
@@ -3263,9 +3194,9 @@ math-virtual-keyboard::part(action-toolbar) {
    Form system — one shape, height and colour scheme for every editor control
    ========================================================================== */
 
-/* Per-theme tokens. Declared on every theme class (not only :root) so that
-   var() references resolve against the active theme on <body>. */
-:root, .theme-emerald, .theme-cyberpunk, .theme-solar, .theme-slate-dark {
+/* Tokens built from the theme's own (themes.js sets those on :root too, so these
+   var() references resolve against the active theme). */
+:root {
     --control-radius: 10px;
     --control-height: 44px;
     --control-border: color-mix(in srgb, var(--text) 16%, transparent);
@@ -3276,16 +3207,12 @@ math-virtual-keyboard::part(action-toolbar) {
     --surface-solid: #ffffff;
     /* Text on an accent-coloured fill, the accent's gradient partner, and the warning colour */
     --on-accent: #ffffff;
-    --accent-2: var(--accent-strong);
+    --accent-2: #22C997;
     --warning: #f59e0b;
     /* Aliases for names used in older rules that were never defined */
     --bg-input: var(--input-bg);
     --bg-card: var(--card-bg);
 }
-.theme-cyberpunk { --surface-solid: #160d38; --danger-strong: #ff6b8b; }
-.theme-solar { --surface-solid: #1f1710; --danger-strong: #f87171; }
-.theme-slate-dark { --surface-solid: #1e293b; --danger-strong: #f87171; }
-:root, .theme-emerald { --accent-2: #22C997; }
 
 .admin-form input[type="text"],
 .admin-form input[type="number"],

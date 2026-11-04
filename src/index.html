@@ -17,6 +17,21 @@
   <!-- Our styles, after KaTeX's so they win. copy-files.js replaces ?v= here and on app.js
        below with a hash of the file, so each deploy gets new addresses. -->
   <link rel="stylesheet" href="style.css?v=0.5.0">
+  <!-- The saved theme's tokens, applied before the first paint (themes.js keeps this copy) -->
+  <script>
+    (function () {
+      try {
+        var css = localStorage.getItem("selected_theme_css");
+        if (!css) return;
+        var style = document.createElement("style");
+        style.id = "theme-vars";
+        style.textContent = css;
+        document.head.appendChild(style);
+        var base = /color-scheme: (light|dark)/.exec(css);
+        if (base) document.documentElement.dataset.themeBase = base[1];
+      } catch (e) { /* storage blocked: the default theme shows */ }
+    })();
+  </script>
   <!-- KaTeX JS (we'll call this later from TypeScript-compiled JS) -->
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
@@ -27,12 +42,6 @@
 </head>
 
 <body>
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem("selected_theme") || "emerald";
-      document.body.classList.add(`theme-${savedTheme}`);
-    })();
-  </script>
   <div id="app-root">
 
     <!-- Minimal static structure; TypeScript will fill this dynamically -->
@@ -234,12 +243,8 @@
         <span class="theme-btn-bubble" id="theme-btn-bubble"></span>
         <span id="theme-btn-label">Šviesus fonas</span>
       </button>
-      <div id="theme-row" role="listbox" aria-label="Tema">
-        <button type="button" class="theme-row-item" data-theme="emerald" role="option" style="background: linear-gradient(135deg, #1B9B7E 50%, #ffffff 50%);"></button>
-        <button type="button" class="theme-row-item" data-theme="slate-dark" role="option" style="background: linear-gradient(135deg, #38bdf8 50%, #0f172a 50%);"></button>
-        <button type="button" class="theme-row-item" data-theme="solar" role="option" style="background: linear-gradient(135deg, #ff9100 50%, #120e0a 50%);"></button>
-        <button type="button" class="theme-row-item" data-theme="cyberpunk" role="option" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></button>
-      </div>
+      <!-- Filled by theme-picker.js -->
+      <div id="theme-row" role="listbox" aria-label="Tema"></div>
     </div>
     <!-- Sound toggle: shown only while a quiz is on screen (render.js) -->
     <button id="quiz-mute-btn" type="button" hidden>🔊</button>
@@ -336,26 +341,8 @@
       </button>
     </div>
   </div>
-  <!-- Theme Picker Popup (positioned by JS) -->
-  <div id="theme-picker-popup" role="listbox" aria-label="Select Theme">
-    <div class="theme-picker-label">TEMA</div>
-    <div class="theme-picker-item" data-theme="emerald" role="option">
-      <div><div class="tp-name">Šviesus fonas</div><div class="tp-subtitle">Light Classic</div></div>
-      <span class="tp-bubble" style="background: linear-gradient(135deg, #1B9B7E 50%, #ffffff 50%);"></span>
-    </div>
-    <div class="theme-picker-item" data-theme="slate-dark" role="option">
-      <div><div class="tp-name">Tamsus fonas</div><div class="tp-subtitle">Slate / Sky</div></div>
-      <span class="tp-bubble" style="background: linear-gradient(135deg, #38bdf8 50%, #0f172a 50%);"></span>
-    </div>
-    <div class="theme-picker-item" data-theme="solar" role="option">
-      <div><div class="tp-name">Tamsus fonas²</div><div class="tp-subtitle">Solar Flare</div></div>
-      <span class="tp-bubble" style="background: linear-gradient(135deg, #ff9100 50%, #120e0a 50%);"></span>
-    </div>
-    <div class="theme-picker-item" data-theme="cyberpunk" role="option">
-      <div><div class="tp-name">Tamsus fonas³</div><div class="tp-subtitle">Cyber Midnight</div></div>
-      <span class="tp-bubble" style="background: linear-gradient(135deg, #ff007f 50%, #0b071e 50%);"></span>
-    </div>
-  </div>
+  <!-- Theme Picker Popup (positioned and filled by theme-picker.js) -->
+  <div id="theme-picker-popup" role="listbox" aria-label="Tema"></div>
 
   <!-- Cookie Consent Banner -->
   <div id="cookie-banner" style="display: none;">

@@ -10,6 +10,7 @@ import { initDashboardUI } from "./dashboard-ui.js";
 import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent } from "./analytics.js";
 import { syncCloudQuizzes } from "./sync.js";
 import { isAdminAccessAllowed } from "./auth.js";
+import { initThemePicker, refreshThemePicker, closeThemePicker } from "./theme-picker.js";
 
 // The task bank's code is fetched only for signed-in teachers and admins: students never load it
 let bankWorkspace = null;
@@ -50,109 +51,8 @@ async function initApp() {
         // Background sync quizzes from cloud
         syncCloudQuizzes();
 
-        // ── Apple-like Theme Picker ──────────────────────────────────
-        const THEMES = [
-            { value: 'emerald',    labelLt: '\u0160viesus fonas',    labelEn: 'Light Classic' },
-            { value: 'slate-dark', labelLt: 'Tamsus fonas',         labelEn: 'Dark Mode' },
-            { value: 'solar',      labelLt: 'Tamsus fonas\u00b2',   labelEn: 'Dark Mode II' },
-            { value: 'cyberpunk',  labelLt: 'Tamsus fonas\u00b3',   labelEn: 'Dark Mode III' },
-        ];
-
-        const applyTheme = (theme) => {
-            document.body.classList.remove(
-                'theme-emerald', 'theme-cyberpunk', 'theme-solar',
-                'theme-slate-dark', 'theme-dark-2', 'theme-dark-3'
-            );
-            document.body.classList.add(`theme-${theme}`);
-        };
-
-        let currentTheme = localStorage.getItem('selected_theme') || 'emerald';
-        applyTheme(currentTheme);
-
-        const themeBtn = document.getElementById('theme-btn');
-        const themePopup = document.getElementById('theme-picker-popup');
-        const themeBtnLabel = document.getElementById('theme-btn-label');
-
-        function getThemeLabel(value) {
-            const lang = getLanguage();
-            const th = THEMES.find(t => t.value === value);
-            if (!th) return value;
-            return lang === 'lt' ? th.labelLt : th.labelEn;
-        }
-
-        function updateThemePickerUI(theme) {
-            if (themeBtnLabel) themeBtnLabel.textContent = getThemeLabel(theme);
-            document.querySelectorAll('.theme-picker-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.theme === theme);
-            });
-            document.querySelectorAll('.theme-row-item').forEach(item => {
-                const active = item.dataset.theme === theme;
-                item.classList.toggle('active', active);
-                item.setAttribute('aria-selected', String(active));
-                item.title = getThemeLabel(item.dataset.theme);
-                item.setAttribute('aria-label', item.title);
-            });
-        }
-
-        function setTheme(theme) {
-            currentTheme = theme;
-            localStorage.setItem('selected_theme', theme);
-            applyTheme(theme);
-            updateThemePickerUI(theme);
-            logEvent('theme', 'change', { theme });
-        }
-
-        // Phones (same width as style.css's phone header) open a row of theme bubbles under the
-        // button instead of the popup
-        const phoneHeader = window.matchMedia('(max-width: 600px)');
-        const themeRow = document.getElementById('theme-row');
-
-        let popupOpen = false;
-        function openThemePopup() {
-            if (!themeBtn || !themePopup) return;
-            if (phoneHeader.matches && themeRow) {
-                themeRow.classList.add('open');
-            } else {
-                const rect = themeBtn.getBoundingClientRect();
-                themePopup.style.top = (rect.bottom + 8) + 'px';
-                themePopup.style.right = (window.innerWidth - rect.right) + 'px';
-                themePopup.style.left = 'auto';
-                themePopup.classList.add('open');
-            }
-            themeBtn.setAttribute('aria-expanded', 'true');
-            popupOpen = true;
-        }
-        function closeThemePopup() {
-            themePopup?.classList.remove('open');
-            themeRow?.classList.remove('open');
-            themeBtn?.setAttribute('aria-expanded', 'false');
-            popupOpen = false;
-        }
-
-        if (themeBtn) {
-            themeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                closeLangMenu();
-                if (popupOpen) closeThemePopup();
-                else openThemePopup();
-            });
-        }
-
-        document.querySelectorAll('.theme-picker-item, .theme-row-item').forEach(item => {
-            item.addEventListener('click', () => {
-                setTheme(item.dataset.theme);
-                closeThemePopup();
-            });
-        });
-        document.querySelectorAll('.theme-picker-item').forEach(item => {
-            item.addEventListener('mouseenter', () => { applyTheme(item.dataset.theme); });
-            item.addEventListener('mouseleave', () => { applyTheme(currentTheme); });
-        });
-
-        window.addEventListener('click', () => {
-            if (popupOpen) closeThemePopup();
-        });
-        updateThemePickerUI(currentTheme);
+        // Theme picker (theme-picker.js; the gallery loads on demand)
+        initThemePicker({ onOpen: () => closeLangMenu() });
 
         // --- Core App Callbacks ---
         // Register callbacks from menu.js to setupDashboard / setupAdmin
@@ -267,7 +167,7 @@ async function initApp() {
             if (langLtBtn) langLtBtn.classList.toggle('active', lang === 'lt');
             if (langEnBtn) langEnBtn.classList.toggle('active', lang === 'en');
             // Also update theme button labels on lang change
-            updateThemePickerUI(currentTheme);
+            refreshThemePicker();
         }
 
         async function switchLanguage(newLang) {
@@ -293,7 +193,7 @@ async function initApp() {
         [langLtBtn, langEnBtn].forEach(btn => {
             btn?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                closeThemePopup();
+                closeThemePicker();
                 const lang = btn === langLtBtn ? 'lt' : 'en';
                 if (lang === getLanguage()) {
                     document.querySelector('.lang-pills')?.classList.toggle('open');
