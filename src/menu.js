@@ -3,6 +3,7 @@ import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { } from "./frenzy.js";
 import { } from "./legal.js";
+import { raceQuestions, RACE_WINNING_SCORE } from "./race.js";
 // DOM Elements
 let startMenu;
 let quizHeader;
@@ -131,8 +132,9 @@ export function renderStudentJoin(quizToJoin) {
         }
     }
     const isPreview = new URLSearchParams(window.location.search).get("preview") === "true";
-    // A race needs other players, so the teacher's own preview never offers one
-    const raceBtnHtml = isPreview ? '' :
+    // A race needs other players, so the teacher's own preview never offers one, and enough
+    // one-tap questions to reach the finish (write-in or photo questions can't be raced)
+    const raceBtnHtml = isPreview || raceQuestions(quizToJoin).length < RACE_WINNING_SCORE ? '' :
         `<button id="join-host-race-btn" class="btn btn-secondary btn-xl" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; font-weight: 800;">🏎️ ${t('join.hostRace')}</button>`;
     joinContainer.innerHTML = `
         <div class="join-card">

@@ -1,4 +1,4 @@
-import { QuizState, quiz, setQuiz, isTypedSlot, matchTypedAnswers } from "./state.js";
+import { QuizState, quiz, setQuiz, isTypedSlot, matchTypedAnswers, studentChoices, typedSlotAnswerText } from "./state.js";
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
@@ -246,25 +246,6 @@ function renderMCQ(q) {
     }
 }
 /**
- * Which write-in / number slots get a box on screen. Several slots of one kind are the teacher's
- * way of listing answers, not boxes to fill: one box per kind for a single answer, and with
- * "select all" as many boxes as there are correct answers of that kind (grading ignores which
- * box holds which answer).
- */
-function visibleTypedSlots(q) {
-    const shown = new Set();
-    ["write", "number"].forEach(kind => {
-        const slots = (q.choices || []).filter(c => c.kind === kind);
-        const wanted = q.allowMultipleAnswers ? Math.max(1, slots.filter(c => c.isCorrect).length) : 1;
-        slots.slice(0, wanted).forEach(c => shown.add(c.id));
-    });
-    return shown;
-}
-const typedSlotAnswerText = (choice) => choice.kind === "number"
-    ? `${choice.number}${choice.tolerance ? ` ± ${choice.tolerance}` : ""}`
-    : (choice.accepted || []).join(" / ");
-
-/**
  * Choice questions whose answers mix plain options with write-in / number slots.
  * The answer is { selected: [ids], typed: { id: text } }; a typed slot counts as picked once
  * the student focuses it (single answer) or types something (multiple answers).
@@ -277,11 +258,11 @@ function renderSlotChoices(q) {
     const state = stored && Array.isArray(stored.selected)
         ? { selected: [...stored.selected], typed: { ...(stored.typed || {}) } }
         : { selected: [], typed: {} };
-    const shownSlots = visibleTypedSlots(q);
+    const shown = studentChoices(q);
     const { matched, missing } = isAnswered ? matchTypedAnswers(q, stored) : { matched: new Map(), missing: [] };
     // After answering, the correct answers nobody typed are listed under the last box of their kind
     const lastBoxOfKind = new Map();
-    (q.choices || []).forEach(c => { if (shownSlots.has(c.id)) lastBoxOfKind.set(c.kind, c.id); });
+    shown.forEach(c => { if (isTypedSlot(c)) lastBoxOfKind.set(c.kind, c.id); });
 
     const rows = [];
     let submitBtn = null;
@@ -290,11 +271,10 @@ function renderSlotChoices(q) {
         const ready = state.selected.length > 0 &&
             state.selected.every(id => !isTypedSlot(q.choices.find(c => c.id === id)) || (state.typed[id] || "").trim());
         if (submitBtn) submitBtn.disabled = !ready;
-        if (isExam) {
-            if (state.selected.length) quiz.userAnswers.set(q.id, { selected: [...state.selected], typed: { ...state.typed } });
-            else quiz.userAnswers.delete(q.id);
-            renderExamNavigation();
-        }
+        // Kept as the draft answer too, so running out of time submits what was typed
+        if (state.selected.length) quiz.userAnswers.set(q.id, { selected: [...state.selected], typed: { ...state.typed } });
+        else quiz.userAnswers.delete(q.id);
+        if (isExam) renderExamNavigation();
     };
     const select = (id, on = true) => {
         if (!multiple) state.selected = on ? [id] : state.selected.filter(x => x !== id);
@@ -303,9 +283,8 @@ function renderSlotChoices(q) {
     };
     const submit = () => onAnswer({ selected: [...state.selected], typed: { ...state.typed } });
 
-    (q.choices || []).forEach((choice) => {
+    shown.forEach((choice) => {
         const typed = isTypedSlot(choice);
-        if (typed && !shownSlots.has(choice.id)) return;
         const el = document.createElement(typed ? "div" : "button");
         el.className = `answer-btn mc-btn${typed ? " own-answer-row" : ""}${multiple ? " checkbox-style" : ""}`;
         el.dataset.choiceId = choice.id;
@@ -619,7 +598,7 @@ function renderImageUpload(q) {
  * be several MB; the teacher only needs to read it). Always comes back as a JPEG/PNG data URL,
  * so formats the page can't show are converted or rejected here, not after submitting.
  */
-function shrinkPhoto(file, maxDim = 1600) {
+function shrinkPhoto(file, maxDim = 1280) {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
@@ -634,7 +613,7 @@ function shrinkPhoto(file, maxDim = 1600) {
             ctx.fillStyle = "#fff"; // transparent screenshots stay readable as JPEG
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL("image/jpeg", 0.82));
+            resolve(canvas.toDataURL("image/jpeg", 0.8));
         };
         img.onerror = () => {
             URL.revokeObjectURL(url);
@@ -785,7 +764,7 @@ export function renderQuiz() {
                 showResults(); // Hard stop for exam
             }
             else {
-                onAnswer(null); // Time out for practice
+                onAnswer(quiz.timeoutAnswer()); // Time out for practice: what the student has so far
             }
         });
     }
@@ -952,16 +931,39 @@ export function showResults() {
         mode: quiz.quiz.mode || 'practice',
         details: results.questionResults
     });
-    // The teacher sees the attempt in the quiz's results (not for the teacher's own preview)
+    // The teacher sees the attempt in the quiz's results (not for the teacher's own preview).
+    // The student is told if it didn't arrive, and can try again, instead of it being lost silently.
+    const sendNote = document.createElement("p");
+    sendNote.className = "send-note";
+    sendNote.setAttribute("role", "status");
     if (!isPreview && quiz.quiz.id) {
-        submitAttempt(quiz.quiz.id, {
+        const quizId = quiz.quiz.id;
+        const attempt = {
             name: localStorage.getItem("current_student_name") || "",
             score: results.correctCount,
             maxScore: results.total,
             durationSeconds: Math.round(timeSpentSec),
             mode: quiz.quiz.mode || 'practice',
             details: results.questionResults
-        });
+        };
+        const send = async () => {
+            sendNote.className = "send-note";
+            sendNote.textContent = t('quiz.sending');
+            if (await submitAttempt(quizId, attempt)) {
+                sendNote.className = "send-note sent";
+                sendNote.textContent = `✓ ${t('quiz.sentToTeacher')}`;
+                return;
+            }
+            sendNote.className = "send-note failed";
+            sendNote.textContent = `${t('quiz.sendFailed')} `;
+            const retry = document.createElement("button");
+            retry.type = "button";
+            retry.className = "btn btn-secondary btn-compact";
+            retry.textContent = t('quiz.sendRetry');
+            retry.onclick = send;
+            sendNote.appendChild(retry);
+        };
+        send();
     }
     // Clean UI
     questionContainer.style.display = "none";
@@ -1027,6 +1029,7 @@ export function showResults() {
         statsDiv.appendChild(heartsSpan);
     }
     card.appendChild(statsDiv);
+    if (sendNote.textContent) card.appendChild(sendNote);
     // In Exam mode, we hide the detailed per-question review to maintain integrity.
     // In Practice mode, we show it unless explicitly disabled in the config.
     const showDetails = quiz.quiz.showDetailedResults !== false && quiz.quiz.mode !== 'exam';

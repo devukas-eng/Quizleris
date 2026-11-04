@@ -392,6 +392,26 @@ body {
     font-weight: 500;
 }
 
+.send-note {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.send-note.sent {
+    color: var(--success);
+}
+
+.send-note.failed {
+    color: var(--danger);
+    font-weight: 600;
+}
+
 .upload-error {
     margin: 10px 0 0;
     color: var(--danger);

@@ -1,6 +1,6 @@
 import { t } from "./lang.js";
 import { escapeHtml } from "./dom.js";
-import { isTypedSlot } from "./state.js";
+import { isTypedSlot, studentChoices, choiceAnswerKey } from "./state.js";
 import {
     resolvePrintLayout, withItemSetting, withImageWidth, imageSizeFor, maxImageWidth, naturalSize,
     normalizeImageSrc, IMAGE_SIZE_KEYS, SPACE_STEPS, SPACE_HEIGHTS, MIN_IMAGE_WIDTH, PAGE
@@ -480,7 +480,7 @@ function questionBlock(item, naturals, geo, total) {
     const { q, id, number, pageBreak, columns, space } = item;
     const type = q.type || "multiple-choice";
     const isChoice = type === "multiple-choice";
-    const choices = q.choices || [];
+    const choices = studentChoices(q); // one line per answer needed, as on screen
     const hasTyped = choices.some(isTypedSlot);
     const marker = q.allowMultipleAnswers ? "☐" : "○";
 
@@ -532,12 +532,8 @@ function answerKeyBlocks(title, items) {
         const type = q.type || "multiple-choice";
         let text;
         if (type === "multiple-choice") {
-            text = (q.choices || []).map((c, i) => ({ c, i })).filter(({ c }) => c.isCorrect).map(({ c, i }) => {
-                const letter = `${String.fromCharCode(65 + i)}) `;
-                if (c.kind === "write") return letter + escapeHtml((c.accepted || []).join(" / "));
-                if (c.kind === "number") return letter + escapeHtml(`${c.number}${c.tolerance ? ` ± ${c.tolerance}` : ""}`);
-                return letter + richHtml(c.text);
-            }).join(";&nbsp; ");
+            text = choiceAnswerKey(q).map(k => `${k.letter}) ${k.typed ? escapeHtml(k.text) : richHtml(k.choice.text)}`)
+                .join(";&nbsp; ");
         } else if (type === "true-false") text = q.isTrue ? t("docx.true") : t("docx.false");
         else if (type === "numeric") text = escapeHtml(`${q.correctAnswerNumber ?? "—"}${q.toleranceValue ? ` ± ${q.toleranceValue}${q.toleranceType === "percentage" ? " %" : ""}` : ""}`);
         else if (type === "fill-blank") text = escapeHtml((q.blankAnswers || []).join(";  ") || "—");

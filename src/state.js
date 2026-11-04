@@ -57,7 +57,47 @@ export function matchTypedAnswers(q, answer) {
     entries.forEach(entry => place(entry, new Set()));
     const matched = new Map();
     owner.forEach((entryId, targetId) => matched.set(entryId, targets.find(c => c.id === targetId)));
-    return { matched, missing: targets.filter(c => !owner.has(c.id)), entries };
+    return { matched, missing: targets.filter(c => !owner.has(c.id)) };
+}
+
+/**
+ * The answer slots a student is given, on screen and on paper. Several write-in / number slots of
+ * one kind are the teacher's list of answers, not boxes to fill: one box per kind for a single
+ * answer, and with "select all" one box per correct answer of that kind (grading ignores which
+ * box holds which answer). Plain options are all kept.
+ */
+export function studentChoices(q) {
+    const choices = q.choices || [];
+    const shown = new Set();
+    ['write', 'number'].forEach(kind => {
+        const slots = choices.filter(c => c.kind === kind);
+        const wanted = q.allowMultipleAnswers ? Math.max(1, slots.filter(c => c.isCorrect).length) : 1;
+        slots.slice(0, wanted).forEach(c => shown.add(c.id));
+    });
+    return choices.filter(c => !isTypedSlot(c) || shown.has(c.id));
+}
+
+/** A typed slot's accepted answer as text ("katė / katinas", "2 ± 0.1"). */
+export const typedSlotAnswerText = (choice) => choice.kind === 'number'
+    ? `${choice.number}${choice.tolerance ? ` ± ${choice.tolerance}` : ''}`
+    : (choice.accepted || []).join(' / ');
+
+/**
+ * The answer key for a choice question as the student sees it: [{ letter, text, typed }], where
+ * the letters follow studentChoices (A, B, ... with hidden slots skipped) and each kind of typed
+ * answer is one entry naming its boxes and every correct answer of that kind.
+ */
+export function choiceAnswerKey(q) {
+    const shown = studentChoices(q);
+    const letter = (c) => String.fromCharCode(65 + shown.indexOf(c));
+    const key = shown.filter(c => c.isCorrect && !isTypedSlot(c)).map(c => ({ letter: letter(c), choice: c, typed: false }));
+    ['write', 'number'].forEach(kind => {
+        const correct = (q.choices || []).filter(c => c.kind === kind && c.isCorrect);
+        if (!correct.length) return;
+        const boxes = shown.filter(c => c.kind === kind).map(letter).join(', ');
+        key.push({ letter: boxes, text: correct.map(typedSlotAnswerText).join('; '), typed: true });
+    });
+    return key;
 }
 
 // Readable form of an answer for result reviews (choice IDs become the option text)
@@ -226,9 +266,8 @@ export class QuizState {
                 const correctAnswers = q.blankAnswers || [];
                 if (correctAnswers.length === 0)
                     return { isCorrect: false, pendingReview: false };
-                const isCorrect = correctAnswers.every((correct, idx) => 
-                // Normalizing input with trim and lowercase for robustness.
-                String(studentAnswers[idx] || "").trim().toLowerCase() === correct.trim().toLowerCase());
+                // Same comparison as write-in answers: case, spaces and decimal comma don't matter
+                const isCorrect = correctAnswers.every((correct, idx) => answersMatch(studentAnswers[idx], correct));
                 return { isCorrect, pendingReview: false };
             }
             case 'true-false': {
@@ -247,6 +286,13 @@ export class QuizState {
             default:
                 return { isCorrect: false, pendingReview: false };
         }
+    }
+    /**
+     * What is submitted when time runs out: whatever the student has typed, uploaded or ticked on
+     * the current question so far (null if nothing), so a timeout doesn't throw their work away.
+     */
+    timeoutAnswer() {
+        return this.userAnswers.get(this.currentQuestion.id) ?? null;
     }
     nextQuestion() {
         if (this.isLastQuestion)

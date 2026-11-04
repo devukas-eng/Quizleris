@@ -2,14 +2,46 @@
 
 import { playCorrect, playWrong, playLevelUp } from "./audio.js";
 import { addPlayerXP } from "./storage.js";
+import { escapeHtml } from "./dom.js";
+import { isTypedSlot, answersMatch } from "./state.js";
+import { t } from "./lang.js";
+
+export const RACE_WINNING_SCORE = 10;
+
+// Pictures in race answers: embedded images or the app's own media only
+const safeImage = (src) => typeof src === "string" &&
+    (/^data:image\/(jpeg|png|gif|webp);base64,/.test(src) || src.startsWith("/api/media/")) ? src : null;
+
+/**
+ * The quiz's questions a race can play: answered with one tap (single-answer options, true/false)
+ * or a short typed answer from older premade quizzes. Write-in, "select all", numeric, text and
+ * photo questions need the full quiz screen, so they are left out. Each comes with `answers`.
+ */
+export function raceQuestions(quizData) {
+    return (quizData.questions || []).flatMap(q => {
+        const type = q.type || "multiple-choice";
+        if (type === "short-answer" || (!q.choices && typeof q.correctAnswer === "string" && q.correctAnswer)) {
+            return [{ ...q, shortAnswer: true }];
+        }
+        if (type === "true-false" && typeof q.isTrue === "boolean") {
+            return [{ ...q, answers: [{ text: t("docx.true"), isCorrect: q.isTrue }, { text: t("docx.false"), isCorrect: !q.isTrue }] }];
+        }
+        const choices = q.choices || [];
+        if (type !== "multiple-choice" || q.allowMultipleAnswers || choices.some(isTypedSlot)) return [];
+        if (choices.length < 2 || choices.filter(c => c.isCorrect).length !== 1) return [];
+        if (choices.some(c => !String(c.text || "").trim() && !safeImage(c.image))) return [];
+        return [{ ...q, answers: choices.map(c => ({ text: c.text || "", image: safeImage(c.image), isCorrect: !!c.isCorrect })) }];
+    });
+}
 
 let isAnimating = false;
 let currentQuestionIndex = 0;
 let questionPool = [];
 
 // Race State
-const WINNING_SCORE = 10;
+const WINNING_SCORE = RACE_WINNING_SCORE;
 let gameActive = false;
+let raceQuiz = null; // kept for "Play Again"
 let raceIntervals = [];
 
 // Players
@@ -21,11 +53,12 @@ let leaderboardArea;
 
 const BOT_NAMES = ["Alex", "Sam", "Jordan", "Taylor", "Casey", "Riley", "Avery", "Quinn"];
 
-export function renderRaceMode(quizData) {
+export function renderRaceMode(quizData = raceQuiz) {
     const appRoot = document.getElementById('app-root');
-    
-    // Use the quiz's questions
-    questionPool = quizData.questions.map(q => ({ ...q, _topicName: quizData.title }));
+    raceQuiz = quizData;
+
+    // The quiz's questions a race can play (the join screen only offers a race when there are enough)
+    questionPool = raceQuestions(quizData).map(q => ({ ...q, _topicName: quizData.title }));
     
     // Shuffle pool
     questionPool.sort(() => Math.random() - 0.5);
@@ -96,7 +129,7 @@ function renderLobby() {
         lobbyPlayers.innerHTML = players.map(p => `
             <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; width: 120px; border: 2px solid ${p.joined ? p.color : 'transparent'}; opacity: ${p.joined ? 1 : 0.3}; transition: 0.3s;">
                 <div style="font-size: 2rem; margin-bottom: 10px;">${p.joined ? '👤' : '⏳'}</div>
-                <div style="font-weight: bold;">${p.joined ? p.name : 'Waiting...'}</div>
+                <div style="font-weight: bold;">${p.joined ? escapeHtml(p.name) : 'Waiting...'}</div>
             </div>
         `).join('');
         
@@ -147,7 +180,7 @@ function updateLeaderboardUI() {
         return `
             <div class="race-player-card" style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; position: relative; opacity: ${isEliminated ? '0.4' : '1'}; transition: all 0.3s;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-weight: 800; font-size: 1.1rem;">${index === 0 ? '👑 ' : ''}${p.name}</span>
+                    <span style="font-weight: 800; font-size: 1.1rem;">${index === 0 ? '👑 ' : ''}${escapeHtml(p.name)}</span>
                     <span style="font-size: 0.9rem;">${heartsHtml}</span>
                 </div>
                 <div style="height: 12px; background: rgba(0,0,0,0.5); border-radius: 6px; overflow: hidden; position: relative;">
@@ -219,25 +252,20 @@ function loadNextQuestion() {
         currentQuestionIndex = 0; // Loop questions if we run out somehow
     }
 
-    const isShortAnswer = q.type === 'short-answer' || (!q.choices && q.correctAnswer);
-    const questionText = q.prompt || q.text || "Missing Question Text";
-    
+    const isShortAnswer = !!q.shortAnswer;
+    // Quiz text is the teacher's: always escaped (KaTeX still finds the \( \) markers in the text)
+    const questionText = escapeHtml(q.prompt || q.text || "");
+    const questionImage = safeImage(q.image);
+
     // Prepare answers (shuffle them)
     let answersHtml;
     if (!isShortAnswer) {
-        let answers = [];
-        if (q.choices) {
-            answers = [...q.choices].map(c => ({ text: c.text, isCorrect: c.isCorrect }));
-        } else if (q.options) {
-            answers = [...q.options].map((text, i) => ({ text, isCorrect: i === q.correctIndex }));
-        }
-        
-        answers.sort(() => Math.random() - 0.5);
-        
+        const answers = [...q.answers].sort(() => Math.random() - 0.5);
+
         answersHtml = `
             <div class="frenzy-answers-grid">
                 ${answers.map((a) => `
-                    <button class="race-ans-btn frenzy-ans-btn" data-correct="${a.isCorrect}">${a.text}</button>
+                    <button class="race-ans-btn frenzy-ans-btn" data-correct="${a.isCorrect}">${a.image ? `<img src="${escapeHtml(a.image)}" alt="" style="max-height: 90px; max-width: 100%; border-radius: 6px; display: block; margin: 0 auto 6px;">` : ""}${escapeHtml(a.text)}</button>
                 `).join('')}
             </div>
         `;
@@ -252,7 +280,8 @@ function loadNextQuestion() {
 
     playArea.innerHTML = `
         <div style="max-width: 600px; margin: 0 auto; width: 100%;">
-            <div class="frenzy-topic-badge">${q._topicName}</div>
+            <div class="frenzy-topic-badge">${escapeHtml(q._topicName || "")}</div>
+            ${questionImage ? `<img src="${escapeHtml(questionImage)}" alt="" style="display: block; max-width: 100%; max-height: 240px; margin: 20px auto 0; border-radius: 8px;">` : ""}
             <div class="frenzy-question-text" style="font-size: 2rem; margin: 30px 0;">${questionText}</div>
             ${answersHtml}
         </div>
@@ -276,7 +305,7 @@ function loadNextQuestion() {
         
         const doSubmit = () => {
             if (isAnimating || !input.value.trim() || !gameActive) return;
-            const isCorrect = input.value.trim().toLowerCase() === q.correctAnswer.toLowerCase();
+            const isCorrect = answersMatch(input.value, q.correctAnswer);
             handleAnswer(isCorrect, null);
         };
         
@@ -393,7 +422,7 @@ function endGame(winner) {
         </div>
     `;
     
-    document.getElementById('race-retry-btn').onclick = renderRaceMode;
+    document.getElementById('race-retry-btn').onclick = () => renderRaceMode(raceQuiz);
     document.getElementById('race-quit-btn-end').onclick = quitRaceMode;
 }
 

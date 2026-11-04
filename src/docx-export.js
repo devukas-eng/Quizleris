@@ -1,6 +1,6 @@
 import { t } from "./lang.js";
 import { parseRichValue } from "./rich-input.js";
-import { isTypedSlot } from "./state.js";
+import { isTypedSlot, studentChoices, choiceAnswerKey } from "./state.js";
 import { resolvePrintLayout, imageSizeFor, normalizeImageSrc, naturalSize, SPACE_HEIGHTS, INDENT, TWIPS_PER_PX } from "./print-layout.js";
 
 // Word export: a printable sheet for students, optionally followed by an answer key.
@@ -315,7 +315,7 @@ async function choiceBlocks(d, ctx, item) {
     const { q, columns } = item;
     const marker = q.allowMultipleAnswers ? "☐" : "○";
     const cells = [];
-    const choices = q.choices || [];
+    const choices = studentChoices(q); // one line per answer needed, as on screen
     for (let i = 0; i < choices.length; i++) {
         const c = choices[i];
         const runs = [new d.TextRun({ text: `${marker}  ${String.fromCharCode(65 + i)})  ` })];
@@ -402,13 +402,11 @@ function answerKeyParagraph(d, item) {
     const sep = () => runs.push(new d.TextRun({ text: ";  " }));
     switch (type) {
         case "multiple-choice": {
-            const correct = (q.choices || []).map((c, i) => ({ c, i })).filter(({ c }) => c.isCorrect);
-            correct.forEach(({ c, i }, n) => {
+            choiceAnswerKey(q).forEach((k, n) => {
                 if (n) sep();
-                runs.push(new d.TextRun({ text: `${String.fromCharCode(65 + i)}) ` }));
-                if (c.kind === "write") runs.push(new d.TextRun({ text: (c.accepted || []).join(" / ") }));
-                else if (c.kind === "number") runs.push(new d.TextRun({ text: `${c.number}${c.tolerance ? ` ± ${c.tolerance}` : ""}` }));
-                else runs.push(...richRuns(d, c.text || ""));
+                runs.push(new d.TextRun({ text: `${k.letter}) ` }));
+                if (k.typed) runs.push(new d.TextRun({ text: k.text }));
+                else runs.push(...richRuns(d, k.choice.text || ""));
             });
             break;
         }

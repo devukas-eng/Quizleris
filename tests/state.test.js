@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QuizState } from '../src/state.js';
+import { QuizState, studentChoices, choiceAnswerKey } from '../src/state.js';
 
 const grade = (question, answer) =>
     new QuizState({ questions: [question] }).gradeQuestion(question, answer).isCorrect;
@@ -46,6 +46,48 @@ describe('write-in answers', () => {
         expect(grade(multiple, { selected: ['a', 'c', 'e'], typed: { c: 'šuo', e: '2' } })).toBe(false);
         expect(grade(multiple, { selected: ['a', 'c', 'd', 'e'], typed: { c: 'šuo', d: 'šuo', e: '2' } })).toBe(false);
         expect(grade(multiple, { selected: ['a', 'b', 'c', 'd', 'e'], typed: { c: 'šuo', d: 'katė', e: '2' } })).toBe(false);
+    });
+});
+
+describe('what the student is shown', () => {
+    const write = (id, accepted, isCorrect) => ({ id, kind: 'write', accepted, isCorrect });
+
+    it('shows one box for several write-in slots of a single-answer question', () => {
+        const q = { choices: [{ id: 'a', text: 'tu' }, write('b', [], false), write('c', ['zmogus'], true), write('d', [], false)] };
+        expect(studentChoices(q).map(c => c.id)).toEqual(['a', 'b']);
+    });
+
+    it('shows one box per correct answer with "select all"', () => {
+        const q = { allowMultipleAnswers: true, choices: [write('a', ['x'], true), write('b', [], false), write('c', ['y'], true)] };
+        expect(studentChoices(q).map(c => c.id)).toEqual(['a', 'b']);
+    });
+
+    it('gives the printed answer key the letters the student sees', () => {
+        const q = { choices: [{ id: 'a', text: 'tu' }, write('b', [], false), write('c', ['zmogus', 'žmogus'], true), write('d', [], false)] };
+        expect(choiceAnswerKey(q)).toEqual([{ letter: 'B', text: 'zmogus / žmogus', typed: true }]);
+    });
+});
+
+describe('fill-in-the-blank answers', () => {
+    const q = { id: 'f', type: 'fill-blank', prompt: 'x = ___, y = ___', blankAnswers: ['0.5', 'Vilnius'] };
+
+    it('ignores decimal comma, case and extra spaces like write-in answers do', () => {
+        expect(grade(q, ['0,5', '  vilnius '])).toBe(true);
+        expect(grade(q, ['.5', 'VILNIUS'])).toBe(true);
+    });
+
+    it('still rejects a wrong blank', () => {
+        expect(grade(q, ['0.6', 'Vilnius'])).toBe(false);
+    });
+});
+
+describe('time running out', () => {
+    it('submits what the student already wrote or picked, not nothing', () => {
+        const q = { id: 't', type: 'text', prompt: 'Explain' };
+        const state = new QuizState({ questions: [q] });
+        state.userAnswers.set('t', 'my explanation');
+        expect(state.timeoutAnswer()).toBe('my explanation');
+        expect(new QuizState({ questions: [q] }).timeoutAnswer()).toBeNull();
     });
 });
 
