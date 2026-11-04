@@ -78,7 +78,6 @@
     <section id="admin-panel" class="admin-panel" style="display: none;">
       <div class="admin-panel-head" data-glide>
         <div class="admin-panel-head-main" data-glide>
-          <h2 style="margin: 0;" data-i18n="admin.title">Create/Edit Quiz</h2>
           <!-- Auto-Save Status Badge -->
           <span id="admin-draft-status" style="font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; display: inline-flex; align-items: center; gap: 6px; transition: all 0.3s ease;">
             <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981;"></span>
@@ -97,8 +96,13 @@
             <button id="admin-local-delete-btn" class="btn btn-secondary btn-icon admin-delete-saved" style="display: none;" title="Delete Selected Quiz" aria-label="Delete Quiz">🗑</button>
           </div>
         </div>
-        <button id="admin-btn-back" class="btn btn-secondary btn-compact"
-            data-i18n="admin.backToMenu">Back to Menu</button>
+        <!-- Close the editor: an X at the right end of the header row -->
+        <button id="admin-btn-back" type="button" class="btn btn-icon admin-close-btn"
+            data-i18n-label="admin.backToMenu" title="Back to Menu" aria-label="Back to Menu">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
       <div class="admin-form">
           <label>

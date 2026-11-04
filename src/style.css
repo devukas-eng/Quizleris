@@ -1710,7 +1710,6 @@ body {
     }
 
     #quiz-back-btn,
-    #admin-btn-back,
     #dashboard-close-btn,
     #join-back-btn,
     #topics-back-btn {
@@ -5521,6 +5520,32 @@ body.admin-mode-active #app-root {
     justify-content: space-between;
     gap: clamp(10px, 2cqi, 16px);
     margin-bottom: clamp(14px, 2.6cqi, 22px);
+}
+
+/* The editor header is one row of tools; the close X never wraps away from it */
+.admin-panel-head {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+}
+
+.admin-close-btn {
+    flex: 0 0 auto;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: var(--input-bg);
+    color: var(--muted);
+}
+
+.admin-close-btn:hover {
+    color: var(--danger);
+    border-color: var(--danger);
 }
 
 .admin-panel-head-main {

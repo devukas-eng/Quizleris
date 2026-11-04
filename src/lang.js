@@ -1318,6 +1318,14 @@ export function updatePageLanguage() {
             el.placeholder = t(key);
         }
     });
+    // Icon-only buttons: translate the tooltip and the screen-reader name, keep the icon
+    document.querySelectorAll('[data-i18n-label]').forEach(el => {
+        const key = el.getAttribute('data-i18n-label')?.trim();
+        if (key) {
+            el.title = t(key);
+            el.setAttribute('aria-label', t(key));
+        }
+    });
 
     // Restore saved select values
     selectStates.forEach((savedValue, select) => {
