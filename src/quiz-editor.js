@@ -1339,9 +1339,10 @@ function setupActionBar() {
 // What the import dialog needs from the editor (the task bank imports with it too)
 function importHelpers() {
   return {
-    // Several files at once is a Premium feature (plan checked with the server)
+    // Several files at once is a Premium feature (plan checked with the server); staff who fill
+    // the task bank (admins, creators) always have it
     canImportMany: () => (getToken()
-      ? fetchProfile().then(({ user }) => user.role === "admin" || !!user.premium_active)
+      ? fetchProfile().then(({ user }) => user.role === "admin" || user.role === "creator" || !!user.premium_active)
       : Promise.resolve(false)),
     resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900)
   };

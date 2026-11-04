@@ -788,14 +788,17 @@ async function convertLongIds() {
 // users.role is an ENUM made before creators existed: add 'creator' to it (a VARCHAR column needs nothing)
 async function allowCreatorRole() {
     const [[column]] = await pool.query(
-        `SELECT COLUMN_TYPE AS type, COLUMN_DEFAULT AS def FROM information_schema.COLUMNS
+        `SELECT COLUMN_TYPE AS type, COLUMN_DEFAULT AS def, IS_NULLABLE AS nullable FROM information_schema.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`
     );
     const type = String(column?.type || '');
     if (!type.toLowerCase().startsWith('enum(') || type.includes("'creator'")) return;
-    const values = [...type.matchAll(/'((?:[^']|'')*)'/g)].map(m => m[1]);
+    const values = [...type.matchAll(/'([^']*)'/g)].map(m => m[1]);
     const list = [...values, 'creator'].map(v => pool.escape(v)).join(', ');
-    await pool.query(`ALTER TABLE users MODIFY role ENUM(${list}) DEFAULT ${pool.escape(String(column.def ?? 'teacher').replace(/^'|'$/g, ''))}`);
+    // The column keeps its NULL / NOT NULL and its default (MariaDB reports the default quoted)
+    const def = String(column.def ?? 'teacher').replace(/^'|'$/g, '');
+    const nullability = column.nullable === 'NO' ? 'NOT NULL' : 'NULL';
+    await pool.query(`ALTER TABLE users MODIFY role ENUM(${list}) ${nullability} DEFAULT ${pool.escape(def)}`);
     console.log('[SCHEMA] users.role allows creator');
 }
 
