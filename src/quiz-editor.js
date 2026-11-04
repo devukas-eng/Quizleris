@@ -1336,16 +1336,30 @@ function setupActionBar() {
 
 // Questions from the import dialog are added to the open quiz; its title is taken over only
 // while it is still the default one
+// What the import dialog needs from the editor (the task bank imports with it too)
+function importHelpers() {
+  return {
+    // Several files at once is a Premium feature (plan checked with the server)
+    canImportMany: () => (getToken()
+      ? fetchProfile().then(({ user }) => user.role === "admin" || !!user.premium_active)
+      : Promise.resolve(false)),
+    resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900)
+  };
+}
+
+/** Copies of all the quiz's questions as they stand in the editor (unsaved typing included). */
+function quizQuestions() {
+  if (!adminQuiz) return [];
+  updateQuizFromDOM();
+  return JSON.parse(JSON.stringify(adminQuiz.questions));
+}
+
 function openImport(options) {
   if (!adminQuiz) adminQuiz = blankQuiz();
   updateQuizFromDOM();
   openImportDialog({
     ...options,
-    // Several files at once is a Premium feature (plan checked with the server)
-    canImportMany: () => (getToken()
-      ? fetchProfile().then(({ user }) => user.role === "admin" || !!user.premium_active)
-      : Promise.resolve(false)),
-    resizeImage: (blob, key) => resizeImage(blob, key === "q" ? 1400 : 900),
+    ...importHelpers(),
     // Imported questions go to the end; the first comes into view and the new ones glow in
     onImport: (questions, title) => insertQuestions(questions, null, { title })
   });
@@ -1368,7 +1382,7 @@ function setupFileMenu() {
   });
   menu.addEventListener("click", () => setOpen(false));
   menu.addEventListener("keydown", (e) => {
-    const items = [...menu.querySelectorAll("button")];
+    const items = [...menu.querySelectorAll("button:not([hidden])")];
     const idx = items.indexOf(document.activeElement);
     if (e.key === "Escape") { e.preventDefault(); setOpen(false); btn.focus(); }
     else if (e.key === "ArrowDown") { e.preventDefault(); items[(idx + 1) % items.length].focus(); }
@@ -2017,12 +2031,14 @@ async function handleLocalDeleteClick() {
 }
 export {
   bankIdsInQuiz,
+  importHelpers,
   insertQuestions,
   isEditorOpen,
   moveQuestion,
   openEditor,
   previewQuiz,
   questionAt,
+  quizQuestions,
   refreshAdminToggleVisibility,
   refreshAdminUI,
   renderAdminForm,

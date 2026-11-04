@@ -225,6 +225,10 @@ export function createTaskList(container, options) {
         } else if (e.key === "*" && row.dataset.star) {
             e.preventDefault();
             options.onStar?.(item, row);
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+            e.preventDefault(); // every task listed so far
+            items.forEach(listed => selected.add(listed.id));
+            changed();
         } else if (e.key === "Escape" && selected.size) {
             e.preventDefault();
             e.stopPropagation();

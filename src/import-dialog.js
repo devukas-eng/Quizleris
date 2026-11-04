@@ -21,9 +21,13 @@ let overlay = null;
  * @param {{ resizeImage: (blob: Blob, key: "q"|"option") => Promise<string>,
  *           onImport: (questions: object[], title: string) => void,
  *           canImportMany: () => Promise<boolean>,
- *           files?: File[], pickFile?: boolean }} options
+ *           files?: File[], pickFile?: boolean,
+ *           title?: string, confirmLabel?: (n: number) => string,
+ *           extra?: HTMLElement, preset?: { name?: string, questions: object[] } }} options
+ * `extra` is shown above the buttons (the task bank's classification); `preset` lists questions
+ * that are already at hand (a quiz's own, to be saved to the bank) instead of reading any.
  */
-export function openImportDialog({ resizeImage, onImport, canImportMany, files, pickFile }) {
+export function openImportDialog({ resizeImage, onImport, canImportMany, files, pickFile, title, confirmLabel, extra, preset }) {
     closeImportDialog();
     const returnFocus = document.activeElement;
     // Everything found so far: one entry per file (or the pasted text)
@@ -44,7 +48,7 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
     overlay.innerHTML = `
         <div class="imp-window" role="dialog" aria-modal="true" aria-labelledby="imp-title">
             <header class="imp-head">
-                <h2 id="imp-title">${t("import.title")}</h2>
+                <h2 id="imp-title">${escapeHtml(title || t("import.title"))}</h2>
                 <button type="button" class="btn btn-secondary btn-icon imp-close" aria-label="${t("pp.close")}">×</button>
             </header>
             <div class="imp-body">
@@ -72,6 +76,7 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
                     <ol class="imp-list"></ol>
                 </section>
             </div>
+            <div class="imp-extra"></div>
             <footer class="imp-foot">
                 <span class="imp-status"></span>
                 <button type="button" class="btn btn-secondary imp-cancel">${t("dialog.cancel")}</button>
@@ -89,6 +94,8 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
     const textToggle = $(".imp-text-toggle");
     const list = $(".imp-list");
     const confirmBtn = $(".imp-confirm");
+    if (extra) $(".imp-extra").appendChild(extra);
+    win.classList.toggle("preset", !!preset);
 
     const close = () => closeImportDialog(returnFocus);
     $(".imp-close").addEventListener("click", close);
@@ -223,7 +230,7 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
         const dropped = [...(e.dataTransfer?.files || [])];
         dragDepth = 0;
         overlay.classList.remove("dragging");
-        if (!dropped.length) return;
+        if (!dropped.length || preset) return;
         e.preventDefault();
         // Dropping onto the list adds to it; onto the start screen it replaces
         readFiles(dropped, { add: win.classList.contains("files-mode") });
@@ -396,7 +403,7 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
     function updateConfirm() {
         const count = sources.reduce((n, s) => n + s.include.filter(Boolean).length, 0);
         confirmBtn.disabled = count === 0;
-        confirmBtn.textContent = count ? t("import.confirm").replace("{n}", count) : t("import.confirmNone");
+        confirmBtn.textContent = !count ? t("import.confirmNone") : confirmLabel ? confirmLabel(count) : t("import.confirm").replace("{n}", count);
     }
 
     confirmBtn.addEventListener("click", () => {
@@ -408,6 +415,12 @@ export function openImportDialog({ resizeImage, onImport, canImportMany, files, 
         onImport(chosen, title);
     });
 
+    if (preset) {
+        const questions = preset.questions.map(q => JSON.parse(JSON.stringify(q)));
+        sources = [{ name: preset.name || "", kind: "preset", title: "", questions, flags: questions.map(() => ({})), include: questions.map(() => true), warnings: {} }];
+        render(true);
+        return;
+    }
     render();
     if (files?.length) readFiles(files);
     else if (pickFile) pickFiles(false);

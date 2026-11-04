@@ -265,4 +265,5 @@ function flyGhost(ghost, rect, landed) {
     ], { duration: landed ? 360 : 300, easing: EASE, fill: "forwards" });
     anim.onfinish = () => ghost.remove();
     anim.oncancel = () => ghost.remove();
+    setTimeout(() => ghost.remove(), 1200); // a hidden tab plays no animation: never left behind
 }

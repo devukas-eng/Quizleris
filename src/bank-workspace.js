@@ -11,7 +11,9 @@
 import * as api from "./bank-api.js";
 import { armDrag, addDropZone, allowTouchDrag, justDragged } from "./bank-drag.js";
 import { createTaskList } from "./bank-list.js";
-import { insertQuestions, questionAt, isEditorOpen, bankIdsInQuiz } from "./quiz-editor.js";
+import { classifyFields, topicFields, topicOptions } from "./bank-forms.js";
+import { openImportDialog } from "./import-dialog.js";
+import { insertQuestions, questionAt, isEditorOpen, bankIdsInQuiz, importHelpers, quizQuestions } from "./quiz-editor.js";
 import { isAdminAccessAllowed, getStoredUser } from "./auth.js";
 import { confirmDialog } from "./dialog.js";
 import { escapeHtml } from "./dom.js";
@@ -48,7 +50,9 @@ const ICONS = {
     next: '<path d="m9 6 6 6-6 6"/>',
     check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
     star: '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>',
-    flag: '<path d="M5 21V4.5"/><path d="M5 4.5h11l-2 4 2 4H5"/>'
+    flag: '<path d="M5 21V4.5"/><path d="M5 4.5h11l-2 4 2 4H5"/>',
+    upload: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>',
+    tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1L21 11.9 12.9 20z"/><circle cx="8" cy="8" r="1.5"/>'
 };
 const icon = (name, size = 18) =>
     `<svg class="bank-ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -86,7 +90,7 @@ let favorites = new Set(); // the teacher's starred shared tasks
 let flaggedCount = 0; // shared tasks with open reports of mistakes (admins)
 const adding = new Set(); // tasks on their way into the quiz: a second click doesn't add them twice
 const els = {};
-const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, flagged: false, started: false };
+const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, flagged: false, editing: false, started: false };
 const mine = { folders: [], folderId: "all", q: "", total: 0, unfiled: 0, listed: 0, started: false };
 
 export function initBankWorkspace() {
@@ -116,7 +120,7 @@ export function initBankWorkspace() {
         if (!shown) return;
         bankList.refresh();
         mineList.refresh();
-        const item = sheet?.list.items[sheet.index];
+        const item = sheet?.list?.items[sheet.index];
         if (item) sheet.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, sheet.scope === "mine");
     });
     // "/" jumps to the bank's search from anywhere but a text field
@@ -161,9 +165,14 @@ async function refreshMeta() {
     metaAt = Date.now();
     if (res.data.version === meta?.version) return;
     meta = prepareMeta(res.data);
+    // A topic deleted or merged away is no longer chosen
+    if (typeof bank.topicId === "number" && !meta.topicsById.has(bank.topicId)) {
+        bank.topicId = null;
+        treeOpen = true;
+    }
     if (shown) {
         renderFilters();
-        renderTree();
+        reloadBank();
     }
 }
 
@@ -188,9 +197,11 @@ function prepareMeta(data) {
     };
 }
 
+const isAdmin = () => getStoredUser()?.role === "admin";
+
 // Teachers see only subjects with tasks; admins see every subject so they can fill it
 function visibleSubjects() {
-    const admin = getStoredUser()?.role === "admin";
+    const admin = isAdmin();
     return meta.subjects.filter(subject => admin || subject.items > 0);
 }
 
@@ -212,6 +223,11 @@ function show(origin) {
     shown = true;
     if (builtLanguage !== getLanguage()) relabel();
     inQuiz = bankIdsInQuiz();
+    // Changing the shared bank is for admins; one's own tasks are everyone's to sort
+    const admin = isAdmin();
+    els.panel.querySelectorAll(".bank-admin-only, .bank-selbar-edit").forEach(el => { el.hidden = !admin; });
+    const saveToBank = document.getElementById("admin-bank-save-btn");
+    if (saveToBank) saveToBank.hidden = false;
     document.body.classList.add("bank-workspace");
     setTab(prefs.tab === "mine" ? "mine" : "bank");
     if (!bank.started) startBank();
@@ -227,6 +243,8 @@ function hide() {
     shown = false;
     closeSheet();
     closePopover();
+    const saveToBank = document.getElementById("admin-bank-save-btn");
+    if (saveToBank) saveToBank.hidden = true;
     const finish = () => {
         if (!shown) document.body.classList.remove("bank-workspace", "bank-drawer-open", "bank-drawer-peek");
     };
@@ -301,6 +319,7 @@ function flyDashboard(origin, target) {
         child.animate([{ opacity: 1 }, { opacity: 0 }], { duration: duration * 0.3, easing: "ease-out", fill: "forwards" }));
     ghost.animate([{ opacity: 1 }, { opacity: 1, offset: 0.62 }, { opacity: 0 }], { duration, fill: "forwards" })
         .onfinish = () => ghost.remove();
+    setTimeout(() => { ghost.remove(); veil.remove(); }, duration + 800); // in case no frame ever ran
 
     target.animate([{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }], { duration, fill: "backwards" });
     [...target.children].forEach((child, i) => child.animate(
@@ -320,6 +339,7 @@ function tabsHtml() {
 function selbarHtml() {
     return `<div class="bank-selbar" hidden>
         <span class="bank-selbar-count"></span>
+        <button type="button" class="btn btn-secondary bank-selbar-edit" data-label="bank.classify" title="${t("bank.classify")}" aria-label="${t("bank.classify")}">${icon("tag", 16)}</button>
         <button type="button" class="btn btn-primary bank-selbar-add">${icon("plus", 16)}<span data-i18n="bank.addSelected">${t("bank.addSelected")}</span></button>
         <button type="button" class="bank-icon-btn bank-selbar-clear" data-label="bank.clearSelection" title="${t("bank.clearSelection")}" aria-label="${t("bank.clearSelection")}">${icon("close", 16)}</button>
     </div>`;
@@ -333,6 +353,7 @@ function build() {
             ${tabsHtml()}
             <header class="bank-head">
                 <h2 id="bank-mine-title" class="bank-title">${icon("folder")}<span data-i18n="bank.mine">${t("bank.mine")}</span></h2>
+                <button type="button" class="bank-icon-btn" data-act="import-mine" data-label="bank.importMine" title="${t("bank.importMine")}" aria-label="${t("bank.importMine")}">${icon("upload")}</button>
                 <button type="button" class="bank-icon-btn" data-act="new-folder" data-label="bank.newFolder" title="${t("bank.newFolder")}" aria-label="${t("bank.newFolder")}">${icon("folderPlus")}</button>
                 <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
@@ -346,6 +367,7 @@ function build() {
             ${tabsHtml()}
             <header class="bank-head">
                 <h2 id="bank-title" class="bank-title">${icon("book")}<span data-i18n="bank.title">${t("bank.title")}</span></h2>
+                <button type="button" class="bank-icon-btn bank-admin-only" data-act="import" data-label="bank.importShared" title="${t("bank.importShared")}" aria-label="${t("bank.importShared")}" hidden>${icon("upload")}</button>
                 <button type="button" class="bank-icon-btn bank-drawer-close" data-act="close-drawer" data-label="bank.close" aria-label="${t("bank.close")}">${icon("close")}</button>
             </header>
             <label class="bank-search">${icon("search", 16)}<input type="search" data-search="bank" autocomplete="off" placeholder="${t("bank.search")}" data-i18n-placeholder="bank.search" aria-keyshortcuts="/"><kbd class="bank-kbd" aria-hidden="true">/</kbd></label>
@@ -361,9 +383,12 @@ function build() {
                 <div class="bank-levels" role="group" data-label="bank.level" aria-label="${t("bank.level")}"></div>
             </div>
             <section class="bank-topics">
-                <button type="button" class="bank-topics-head" aria-expanded="true">
-                    ${icon("chevron", 14)}<span data-i18n="bank.topics">${t("bank.topics")}</span><span class="bank-topic-path"></span>
-                </button>
+                <div class="bank-topics-bar">
+                    <button type="button" class="bank-topics-head" aria-expanded="true">
+                        ${icon("chevron", 14)}<span data-i18n="bank.topics">${t("bank.topics")}</span><span class="bank-topic-path"></span>
+                    </button>
+                    <button type="button" class="bank-icon-btn bank-admin-only bank-tree-edit" aria-pressed="false" data-label="bank.editTree" title="${t("bank.editTree")}" aria-label="${t("bank.editTree")}" hidden>${icon("edit", 15)}</button>
+                </div>
                 <div class="bank-fold"><div class="bank-fold-inner"><div class="bank-tree" role="tree" data-label="bank.topics" aria-label="${t("bank.topics")}"></div></div></div>
             </section>
             <div class="bank-topic-info" hidden></div>
@@ -395,6 +420,7 @@ function build() {
         topicInfo: inPanel(".bank-topic-info"),
         bankTotal: inPanel(".bank-total"),
         flagged: inPanel(".bank-flagged"),
+        treeEdit: inPanel(".bank-tree-edit"),
         folders: els.mine.querySelector(".mine-folders"),
         mineTotal: els.mine.querySelector(".bank-total"),
         mineListEl: els.mine.querySelector(".mine-list")
@@ -434,6 +460,7 @@ function build() {
     wireBank();
     wireMine();
     addMineDropZone();
+    addTreeDropZone();
 }
 
 // The language was switched while the editor was closed: texts the page's own translation pass
@@ -468,6 +495,8 @@ function wireCommon() {
                 if (layoutMode() !== "wide") slideIn(activeAside(), tab.dataset.tab === "mine" ? -1 : 1, 0);
             }
             if (e.target.closest('[data-act="close-drawer"]')) setDrawer(false);
+            if (e.target.closest('[data-act="import"]')) openBankImport({ scope: "shared" });
+            if (e.target.closest('[data-act="import-mine"]')) openBankImport({ scope: "mine" });
         });
         // Typing in the panels is not an editor shortcut (Ctrl+Z, Alt+N…)
         aside.addEventListener("keydown", e => {
@@ -480,7 +509,14 @@ function wireCommon() {
             addTasks(ids, null);
         });
         aside.querySelector(".bank-selbar-clear").addEventListener("click", () => list.clearSelection());
+        aside.querySelector(".bank-selbar-edit").addEventListener("click", () => openBulkEdit(aside, list));
     }
+    // The editor's File menu: the quiz's questions into the bank
+    document.getElementById("admin-bank-save-btn")?.addEventListener("click", () => {
+        const questions = quizQuestions();
+        if (questions.length) openBankImport({ scope: "mine", preset: questions });
+        else toast(t("bank.quizEmpty"));
+    });
     els.drawerBtn.addEventListener("click", () => setDrawer(!document.body.classList.contains("bank-drawer-open")));
     document.addEventListener("keydown", e => {
         if (e.key === "Escape" && document.body.classList.contains("bank-drawer-open") && !sheet && !popover
@@ -583,8 +619,27 @@ function wireBank() {
         els.panel.classList.toggle("is-flagged", bank.flagged);
         reloadBank();
     });
+    // Admins: the tree's own upkeep (new topics, names, descriptions, curriculum, place)
+    els.treeEdit.addEventListener("click", () => {
+        bank.editing = !bank.editing;
+        els.treeEdit.setAttribute("aria-pressed", String(bank.editing));
+        els.topics.classList.toggle("is-editing", bank.editing);
+        if (bank.editing && !treeOpen) {
+            treeOpen = true;
+            renderFold();
+        }
+        renderTree();
+    });
     els.tree.addEventListener("click", e => {
         if (justDragged()) return;
+        const tool = e.target.closest("[data-tool]");
+        if (tool) {
+            const id = Number(tool.closest(".bank-node")?.dataset.topic);
+            if (tool.dataset.tool === "edit") openTopicEditor({ topic: meta.topicsById.get(id) });
+            else if (tool.dataset.tool === "add") openTopicEditor({ parentId: id });
+            else if (tool.dataset.tool === "area") openTopicEditor({ parentId: null });
+            return;
+        }
         const node = e.target.closest(".bank-node");
         if (!node) return;
         const id = parseTopic(node.dataset.topic);
@@ -594,7 +649,7 @@ function wireBank() {
     });
     els.tree.addEventListener("pointerdown", e => {
         const node = e.target.closest(".bank-node");
-        if (node && !e.target.closest('[data-act="toggle"]')) dragTopic(e, node);
+        if (node && !e.target.closest('[data-act="toggle"], [data-tool]')) dragTopic(e, node);
     });
     treeKeys(els.tree, ".bank-node", node => toggleTopic(parseTopic(node.dataset.topic)));
     els.topicInfo.addEventListener("click", e => {
@@ -793,6 +848,7 @@ function renderTree() {
     meta.childrenOf(`s${bank.subjectId}`).forEach(topic => walk(topic, 0));
     const unsorted = bank.facets.topic?.none || 0;
     if (unsorted) rows.push(nodeHtml({ id: "none", name: t("bank.noTopic") }, 0, unsorted, null, bank.topicId === "none"));
+    if (bank.editing) rows.push(`<button type="button" class="bank-link bank-tree-new" data-tool="area">${icon("plus", 14)}${t("bank.newArea")}</button>`);
 
     const focused = els.tree.contains(document.activeElement) ? document.activeElement.dataset.topic : null;
     els.tree.innerHTML = rows.join("");
@@ -804,12 +860,18 @@ function renderTree() {
 function nodeHtml(topic, depth, count, open, selected) {
     const expandable = open !== null;
     const hint = topic.description ? topicHint(topic) : "";
-    return `<div class="bank-node${selected ? " is-selected" : ""}${count ? "" : " is-empty"}" role="treeitem" tabindex="${selected ? 0 : -1}"
+    const tools = bank.editing && typeof topic.id === "number"
+        ? `<span class="bank-node-tools">
+            <button type="button" data-tool="add" tabindex="-1" title="${t("bank.newSubtopic")}" aria-label="${t("bank.newSubtopic")}">${icon("plus", 13)}</button>
+            <button type="button" data-tool="edit" tabindex="-1" title="${t("bank.editTopic")}" aria-label="${t("bank.editTopic")}">${icon("edit", 13)}</button>
+        </span>` : "";
+    return `<div class="bank-node${selected ? " is-selected" : ""}${count ? "" : " is-empty"}${topic.archived ? " is-archived" : ""}" role="treeitem" tabindex="${selected ? 0 : -1}"
         aria-level="${depth + 1}" aria-selected="${selected}"${expandable ? ` aria-expanded="${open}"` : ""}
         data-topic="${topic.id}" data-count="${count}" style="--depth:${depth}"${hint ? ` title="${escapeHtml(hint)}"` : ""}>
         <span class="bank-node-chev" data-act="toggle">${expandable ? icon("chevron", 14) : ""}</span>
         <span class="bank-node-name">${escapeHtml(topic.name)}</span>
         <span class="bank-node-count">${count || ""}</span>
+        ${tools}
     </div>`;
 }
 
@@ -1499,6 +1561,7 @@ function insertAndReveal(questions, fromEl) {
         { transform: `translate(${dx * 0.55}px, ${dy * 0.55 - 36}px) scale(${(1 + scale) / 2})`, opacity: 0.95, offset: 0.55 },
         { transform: `translate(${dx}px, ${dy}px) scale(${scale})`, opacity: 0 }
     ], { duration: 640, easing: EASE }).onfinish = () => ghost.remove();
+    setTimeout(() => ghost.remove(), 1500); // a hidden tab plays no animation: never left behind
 }
 
 // "How many tasks?" beside the drop point (or a button); resolves to a number or null
@@ -1556,11 +1619,351 @@ function closePopover() {
     popover?.done(null);
 }
 
+// --- Filling and sorting the bank ---
+
+// A sheet in a panel holding a form: a title, the form and its buttons. An action that returns
+// false keeps the sheet open (something to fix first); Esc or the scrim closes it.
+function openFormSheet(aside, { title, body, actions }) {
+    closeSheet();
+    const el = document.createElement("div");
+    el.className = "bank-sheet is-form";
+    el.innerHTML = `
+        <div class="bank-sheet-scrim" data-act="close"></div>
+        <div class="bank-sheet-card" role="dialog" tabindex="-1">
+            <div class="bank-sheet-head">
+                <h3 class="bank-sheet-title"></h3>
+                <button type="button" class="bank-icon-btn" data-act="close" aria-label="${t("bank.close")}" title="${t("bank.close")}">${icon("close")}</button>
+            </div>
+            <div class="bank-sheet-body"></div>
+            <div class="bank-sheet-actions"></div>
+        </div>`;
+    el.querySelector(".bank-sheet-title").textContent = title;
+    el.querySelector(".bank-sheet-card").setAttribute("aria-label", title);
+    el.querySelector(".bank-sheet-body").appendChild(body);
+    const bar = el.querySelector(".bank-sheet-actions");
+    for (const action of actions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `btn ${action.primary ? "btn-primary" : action.danger ? "btn-danger" : "btn-secondary"}`;
+        button.textContent = action.label;
+        button.addEventListener("click", async () => {
+            const buttons = [...bar.querySelectorAll("button")];
+            buttons.forEach(b => { b.disabled = true; });
+            let keepOpen;
+            try {
+                keepOpen = (await action.run()) === false;
+            } finally {
+                buttons.forEach(b => { b.disabled = false; });
+            }
+            if (!keepOpen && sheet?.el === el) closeSheet();
+        });
+        bar.appendChild(button);
+    }
+    aside.appendChild(el);
+    sheet = { el, aside, list: null };
+    el.addEventListener("click", e => { if (e.target.closest('[data-act="close"]')) closeSheet(); });
+    el.addEventListener("keydown", e => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        closeSheet();
+    });
+    requestAnimationFrame(() => el.classList.add("is-open"));
+    (body.querySelector("input, select, textarea") || el.querySelector(".bank-sheet-card")).focus({ preventScroll: true });
+}
+
+// After tasks were added or changed: one's own lists at once; the shared bank once its counts have
+// been counted again (in the background, about a second)
+function afterChange(mineScope) {
+    if (mineScope) {
+        reloadFolders();
+        reloadMine();
+    } else {
+        setTimeout(reloadBank, 1200);
+    }
+}
+
+// Tasks into the bank from Word, PDF or text through the import dialog, or the quiz's own
+// questions (preset). Admins choose the shared bank or their own; everyone else fills their own.
+// The classification starts where the bank is open (subject, grade, topic, folder).
+function openBankImport({ scope, preset = null }) {
+    const admin = isAdmin();
+    const fields = classifyFields(meta, {
+        subjects: meta.subjects.filter(subject => !subject.archived),
+        subjectId: bank.subjectId,
+        gradeId: bank.gradeId,
+        topicId: typeof bank.topicId === "number" ? bank.topicId : null,
+        scopes: admin ? ["shared", "mine"] : null,
+        scope: admin ? scope : "mine",
+        folders: mine.folders,
+        folderId: typeof mine.folderId === "number" ? mine.folderId : null
+    });
+    openImportDialog({
+        ...importHelpers(),
+        title: t(preset ? "bank.saveQuizTitle" : "bank.importTitle"),
+        confirmLabel: n => t("bank.importConfirm").replace("{n}", n),
+        extra: fields.el,
+        preset: preset ? { questions: preset } : undefined,
+        onImport: questions => saveToBank(questions, fields.read())
+    });
+}
+
+// Sent in parts the server takes (at most 500 tasks and about 8 MB of pictures each); one notice
+// says what was added, what was there already and what failed
+async function saveToBank(questions, { scope, defaults }) {
+    const items = (await Promise.all(questions.map(toBankItem))).filter(Boolean);
+    const parts = [];
+    let part = [];
+    let size = 0;
+    for (const item of items) {
+        const bytes = JSON.stringify(item).length;
+        if (part.length && (part.length >= 500 || size + bytes > 8e6)) {
+            parts.push(part);
+            part = [];
+            size = 0;
+        }
+        part.push(item);
+        size += bytes;
+    }
+    if (part.length) parts.push(part);
+    toast(t("bank.saving").replace("{n}", items.length));
+    const sum = { created: 0, duplicates: 0, failed: 0, error: "" };
+    for (const chunk of parts) {
+        const res = await api.createItems(chunk, defaults, scope);
+        if (!res.ok) {
+            sum.failed += chunk.length;
+            sum.error ||= errorText(res);
+            continue;
+        }
+        sum.created += res.data.created || 0;
+        sum.duplicates += res.data.duplicates || 0;
+        sum.failed += res.data.failed || 0;
+        sum.error ||= res.data.results?.find(result => result?.error)?.error || "";
+    }
+    const where = scope === "mine" ? folderLabel(defaults.folderId) : t("bank.sharedBank");
+    const note = t("bank.savedMany").replace("{n}", sum.created).replace("{where}", where)
+        + (sum.duplicates ? ` · ${t("bank.duplicates").replace("{n}", sum.duplicates)}` : "");
+    toast(note, sum.created || sum.duplicates ? "ok" : "error");
+    if (sum.failed) toast(`${t("bank.saveFailed")} (${sum.failed}): ${sum.error}`, "error");
+    afterChange(scope === "mine");
+}
+
+// The same topic, grade, difficulty or folder for every selected task, or all of them out
+function openBulkEdit(aside, list) {
+    const ids = list.selected;
+    if (!ids.length) return;
+    const mineScope = aside === els.mine;
+    const scope = mineScope ? "mine" : "shared";
+    const fields = classifyFields(meta, { subjects: meta.subjects.filter(subject => !subject.archived), subjectId: bank.subjectId, keep: true, scope, folders: mine.folders });
+    const done = () => {
+        api.forgetItems(ids);
+        list.clearSelection();
+        afterChange(mineScope);
+    };
+    openFormSheet(aside, {
+        title: t("bank.bulkTitle").replace("{n}", ids.length),
+        body: fields.el,
+        actions: [
+            {
+                label: t("bank.apply"),
+                primary: true,
+                run: async () => {
+                    const { set } = fields.read();
+                    if (!Object.keys(set).length) {
+                        toast(t("bank.nothingChosen"));
+                        return false;
+                    }
+                    const res = await api.updateItems(ids, set, scope);
+                    if (!res.ok) {
+                        toast(errorText(res), "error");
+                        return false;
+                    }
+                    toast(t("bank.bulkDone").replace("{n}", res.data.matched ?? ids.length));
+                    done();
+                }
+            },
+            {
+                label: t(mineScope ? "bank.remove" : "bank.archiveTask"),
+                danger: true,
+                run: async () => {
+                    if (!mineScope && !(await confirmDialog({
+                        title: t("bank.archiveManyTitle").replace("{n}", ids.length),
+                        message: t("bank.archiveBody"),
+                        confirmText: t("bank.archiveTask"),
+                        danger: true
+                    }))) return false;
+                    const res = await api.archiveItems(ids, scope);
+                    if (!res.ok) {
+                        toast(errorText(res), "error");
+                        return false;
+                    }
+                    done();
+                    if (!mineScope) {
+                        toast(t("bank.archivedMany").replace("{n}", ids.length));
+                        return;
+                    }
+                    toast(t("bank.removedMany").replace("{n}", ids.length), "ok", {
+                        label: t("bank.undo"),
+                        run: async () => {
+                            const back = await api.updateItems(ids, { status: "published" });
+                            if (back.ok) afterChange(true);
+                            else toast(errorText(back), "error");
+                        }
+                    });
+                }
+            }
+        ]
+    });
+}
+
+// Sorting by dropping: admins drop shared tasks on a topic, anyone drops their own
+function addTreeDropZone() {
+    let lit = null;
+    const light = el => {
+        if (lit === el) return;
+        lit?.classList.remove("is-drop-target");
+        el?.classList.add("is-drop-target");
+        lit = el;
+    };
+    addDropZone({
+        el: els.tree,
+        accepts: payload => shown && !bank.flagged && payload.kind === "tasks"
+            && (payload.source === "mine" || (payload.source === "bank" && isAdmin())),
+        over(payload, x, y, target) {
+            const node = target.closest(".bank-node");
+            if (!node || node.dataset.topic === "all") {
+                light(null);
+                return null;
+            }
+            light(node);
+            return { topic: parseTopic(node.dataset.topic), el: node };
+        },
+        leave: () => light(null),
+        async drop(payload, hint) {
+            const mineScope = payload.source === "mine";
+            const res = await api.updateItems(payload.ids, { topicId: hint.topic === "none" ? null : hint.topic }, mineScope ? "mine" : "shared");
+            if (!res.ok) {
+                toast(errorText(res), "error");
+                return null;
+            }
+            api.forgetItems(payload.ids);
+            const name = hint.topic === "none" ? t("bank.noTopic") : meta.topicsById.get(hint.topic)?.name || "";
+            toast(t("bank.sortedInto").replace("{n}", payload.ids.length).replace("{topic}", name));
+            afterChange(mineScope);
+            return hint.el;
+        }
+    });
+}
+
+// A topic's own fields, with (for an existing one) its place among its siblings and a merge
+function openTopicEditor({ topic = null, parentId = null }) {
+    const subjectId = topic?.subjectId ?? bank.subjectId;
+    const fields = topicFields(meta, { topic, subjectId, parentId });
+    const body = document.createElement("div");
+    body.appendChild(fields.el);
+    if (topic) {
+        const tools = document.createElement("div");
+        tools.className = "bank-topic-tools";
+        tools.innerHTML = `
+            <div class="bank-topic-order"><span>${t("bank.topicOrder")}</span>
+                <button type="button" class="bank-icon-btn" data-move="-1" aria-label="${t("bank.moveUp")}" title="${t("bank.moveUp")}">↑</button>
+                <button type="button" class="bank-icon-btn" data-move="1" aria-label="${t("bank.moveDown")}" title="${t("bank.moveDown")}">↓</button>
+            </div>
+            <label class="bank-field bank-field-wide">${t("bank.mergeInto")}
+                <span class="bank-merge"><select><option value="">—</option>${topicOptions(meta, subjectId, { exclude: topic.id })}</select>
+                <button type="button" class="btn btn-secondary" data-merge>${t("bank.merge")}</button></span>
+            </label>`;
+        tools.addEventListener("click", async e => {
+            const move = e.target.closest("[data-move]");
+            if (move) {
+                moveTopic(topic, Number(move.dataset.move));
+                return;
+            }
+            if (!e.target.closest("[data-merge]")) return;
+            const into = meta.topicsById.get(Number(tools.querySelector("select").value));
+            if (!into) return;
+            const ok = await confirmDialog({
+                title: t("bank.mergeTitle").replace("{from}", topic.name).replace("{into}", into.name),
+                message: t("bank.mergeBody"),
+                confirmText: t("bank.merge"),
+                danger: true
+            });
+            if (!ok) return;
+            const res = await api.mergeTopic(topic.id, into.id);
+            if (!res.ok) {
+                toast(errorText(res), "error");
+                return;
+            }
+            if (bank.topicId === topic.id) {
+                bank.topicId = into.id;
+                rememberTopic();
+            }
+            closeSheet();
+            toast(t("bank.merged"));
+            await refreshMeta();
+        });
+        body.appendChild(tools);
+    }
+    const actions = [{
+        label: t("bank.save"),
+        primary: true,
+        run: async () => {
+            const values = fields.read();
+            if (!values.name) {
+                toast(t("bank.topicNameNeeded"), "error");
+                return false;
+            }
+            const res = topic ? await api.updateTopic(topic.id, values) : await api.createTopic(values);
+            if (!res.ok) {
+                toast(errorText(res), "error");
+                return false;
+            }
+            if (values.parentId) saveExpanded(new Set([...expandedTopics(), values.parentId]));
+            toast(t("bank.topicSaved"));
+            await refreshMeta();
+        }
+    }];
+    if (topic) {
+        actions.push({
+            label: t("bank.delete"),
+            danger: true,
+            run: async () => {
+                const ok = await confirmDialog({ title: t("bank.deleteTopicTitle").replace("{name}", topic.name), message: t("bank.deleteTopicBody"), confirmText: t("bank.delete"), danger: true });
+                if (!ok) return false;
+                const res = await api.deleteTopic(topic.id);
+                if (!res.ok) {
+                    toast(res.status === 409 ? t("bank.topicNotEmpty") : errorText(res), "error");
+                    return false;
+                }
+                toast(t("bank.topicDeleted"));
+                await refreshMeta();
+            }
+        });
+    }
+    openFormSheet(els.panel, { title: t(topic ? "bank.editTopic" : parentId ? "bank.newSubtopic" : "bank.newArea"), body, actions });
+}
+
+// One step up or down among its siblings
+async function moveTopic(topic, step) {
+    const siblings = meta.childrenOf(topic.parentId ?? `s${topic.subjectId}`).map(sibling => sibling.id);
+    const from = siblings.indexOf(topic.id);
+    const to = from + step;
+    if (from < 0 || to < 0 || to >= siblings.length) return;
+    [siblings[from], siblings[to]] = [siblings[to], siblings[from]];
+    const res = await api.reorderTopics(siblings);
+    if (!res.ok) {
+        toast(errorText(res), "error");
+        return;
+    }
+    await refreshMeta();
+    if (sheet?.el.querySelector(".bank-topic-tools")) toast(t("bank.topicMoved"));
+}
+
 // --- Preview ---
 
 function openSheet(aside, list, index, scope) {
     if (justDragged() || !list.items[index]) return;
-    if (sheet?.aside === aside) {
+    if (sheet?.aside === aside && sheet.list) {
         sheet.index = index;
         showSheetItem();
         return;
@@ -1634,7 +2037,7 @@ async function showSheetItem() {
 
 function sheetStar() {
     const button = sheet?.el.querySelector('[data-act="star"]');
-    const item = sheet?.list.items[sheet.index];
+    const item = sheet?.list?.items[sheet.index];
     if (!button || !item) return;
     const on = favorites.has(item.id);
     button.classList.toggle("is-on", on);

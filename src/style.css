@@ -8520,6 +8520,268 @@ body.is-dragging * {
     pointer-events: none;
 }
 
+/* --- Filling and sorting the bank (bank-forms.js) --- */
+.imp-extra:empty {
+    display: none;
+}
+
+.imp-extra {
+    padding: 12px clamp(14px, 3cqi, 22px);
+    border-top: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.imp-window.preset .imp-file-bar {
+    display: none;
+}
+
+.bank-classify {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px 10px;
+    align-items: end;
+}
+
+.bank-classify-scope {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    gap: 6px;
+}
+
+.bank-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.bank-field[hidden] {
+    display: none;
+}
+
+.bank-field-wide {
+    grid-column: 1 / -1;
+}
+
+@container impwin (min-width: 760px) {
+    .bank-classify .bank-field-wide {
+        grid-column: span 2;
+    }
+}
+
+.bank-field :is(select, input, textarea),
+.bank-topic-row :is(select, input, textarea) {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 8px;
+    border: 1px solid var(--control-border);
+    border-radius: 9px;
+    background: var(--input-bg);
+    color: var(--text);
+    font: 500 0.86rem var(--font);
+}
+
+.bank-field textarea,
+.bank-topic-row textarea {
+    padding: 7px 9px;
+    resize: vertical;
+}
+
+.bank-field :is(select, input, textarea):focus,
+.bank-topic-row :is(select, input, textarea):focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.bank-sheet.is-form .bank-sheet-card {
+    max-height: 92%;
+}
+
+.bank-sheet-title {
+    flex: 1;
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+
+.bank-sheet.is-form .bank-sheet-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-top: 8px;
+}
+
+.bank-sheet.is-form .bank-classify {
+    grid-template-columns: 1fr 1fr;
+}
+
+.bank-topic-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bank-topic-grades {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.bank-topic-grades legend {
+    padding: 0 4px;
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.bank-topic-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 70px 32px;
+    gap: 6px;
+    align-items: center;
+}
+
+.bank-topic-row textarea {
+    grid-column: 1 / -1;
+}
+
+.bank-topic-row:not(:has([data-row="course"])) {
+    grid-template-columns: 1.6fr 70px 32px;
+}
+
+.bank-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+}
+
+.bank-topic-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.bank-topic-order {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.bank-topic-order span {
+    margin-right: auto;
+}
+
+.bank-merge {
+    display: flex;
+    gap: 6px;
+}
+
+.bank-merge .btn {
+    flex-shrink: 0;
+    min-height: 34px;
+    font-size: 0.82rem;
+}
+
+/* The tree's edit mode (admins) and dropping tasks on a topic */
+.bank-topics-bar {
+    display: flex;
+    align-items: center;
+    padding-right: 8px;
+}
+
+.bank-topics-bar .bank-topics-head {
+    flex: 1;
+    min-width: 0;
+}
+
+.bank-tree-edit[aria-pressed="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.bank-node-tools {
+    display: none;
+    flex-shrink: 0;
+    gap: 2px;
+}
+
+.bank-topics.is-editing .bank-node:is(:hover, :focus-within) .bank-node-tools {
+    display: inline-flex;
+}
+
+.bank-topics.is-editing .bank-node:is(:hover, :focus-within) .bank-node-count {
+    display: none;
+}
+
+@media (hover: none) {
+    .bank-topics.is-editing .bank-node .bank-node-tools {
+        display: inline-flex;
+    }
+}
+
+.bank-node-tools button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.bank-node-tools button:hover {
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--text);
+}
+
+.bank-tree-new {
+    margin: 6px 0 2px 6px;
+}
+
+.bank-node.is-archived .bank-node-name {
+    font-style: italic;
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.bank-node.is-drop-target {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 2px var(--accent);
+    transform: scale(1.02);
+}
+
+.bank-selbar-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 10px;
+}
+
+.bank-selbar-edit[hidden] {
+    display: none;
+}
+
 .bank-list,
 .bank-tree,
 .mine-folders,

@@ -50,6 +50,13 @@ export const setFavorite = (id, on) => request(`/favorites/${id}`, { method: on 
 export const reportItem = (id, reason, note) => request(`/items/${id}/reports`, { method: "POST", body: { reason, note } });
 export const closeReports = (id, status) => request(`/items/${id}/reports`, { method: "PATCH", body: { status } });
 
+// The topic tree (admins)
+export const createTopic = body => request("/topics", { method: "POST", body });
+export const updateTopic = (id, body) => request(`/topics/${id}`, { method: "PATCH", body });
+export const deleteTopic = id => request(`/topics/${id}`, { method: "DELETE" });
+export const mergeTopic = (id, intoId) => request(`/topics/${id}/merge`, { method: "POST", body: { intoId } });
+export const reorderTopics = ids => request("/topics/reorder", { method: "POST", body: { ids } });
+
 export const listFolders = () => request("/folders");
 export const createFolder = (name, parentId = null) => request("/folders", { method: "POST", body: { name, parentId } });
 export const updateFolder = (id, fields) => request(`/folders/${id}`, { method: "PATCH", body: fields });
