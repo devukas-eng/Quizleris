@@ -70,20 +70,3 @@ export function playWrong() {
     // Soft but disappointing descending tone
     playTone(200, 'triangle', 0.4, 0.08, 150);
 }
-
-export function playLevelUp() {
-    if (isMuted) return;
-    resumeCtx();
-    
-    // Fanfare
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C, E, G, C (higher)
-    notes.forEach((freq, i) => {
-        setTimeout(() => playTone(freq, 'sine', 0.3, 0.15), i * 150);
-    });
-    setTimeout(() => playTone(1046.50, 'sine', 0.8, 0.2), notes.length * 150);
-}
-
-export function playFrenzyTick() {
-    // High pitched short tick for shrinking timer urgency
-    playTone(1200, 'triangle', 0.05, 0.02);
-}

@@ -53,7 +53,6 @@ document.body.innerHTML = `
         <div id="admin-draft-dismiss-btn"></div>
         <div id="menu-language-select"></div>
         <div id="menu-sound-toggle"></div>
-        <div id="frenzy-root"></div>
         <div id="start-menu"></div>
         <div id="topics-overlay"></div>
     `;

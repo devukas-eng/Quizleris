@@ -6,7 +6,7 @@ const PRIVACY_TEXT = `
 <p>Welcome to Quizleris. Your privacy is critically important to us. This Privacy Policy governs the manner in which Quizleris collects, uses, maintains and discloses information collected from users of the website.</p>
 <h4>1. Information Collection</h4>
 <p>Since Quizleris is a 100% client-side application, <strong>we do not collect, store, or transmit your personal data to any external servers.</strong><br>
-All data, including quiz scores, player profiles (XP/Levels), and custom created quizzes, are stored entirely locally within your browser using <code>localStorage</code>.</p>
+All data, including quiz scores and custom created quizzes, are stored entirely locally within your browser using <code>localStorage</code>.</p>
 <h4>2. Cookies and Local Storage</h4>
 <p>We use <code>localStorage</code> to save your progress. This acts similarly to a cookie but never leaves your device. By using the app, you consent to this local data retention.</p>
 <h4>3. Analytics</h4>
@@ -40,7 +40,7 @@ const COOKIES_TEXT = `
 <h4>How Quizleris uses Local Data</h4>
 <p>Quizleris uses HTML5 <code>localStorage</code> instead of traditional cookies. This allows us to save your:</p>
 <ul>
-<li>High Scores and XP</li>
+<li>High Scores</li>
 <li>Current Theme (Light/Dark mode)</li>
 <li>Custom created quizzes</li>
 </ul>
