@@ -3621,9 +3621,11 @@ math-virtual-keyboard::part(action-toolbar) {
     outline: none;
 }
 
-/* Selects: own chevron, readable options in every theme */
+/* Selects: own chevron, readable options in every theme (the editor's and the task bank's) */
 .admin-form select,
-.admin-select-compact {
+.admin-select-compact,
+.bank-select,
+:is(.bank-field, .bank-topic-row) select {
     appearance: none;
     -webkit-appearance: none;
     padding-right: 40px;
@@ -3637,7 +3639,9 @@ math-virtual-keyboard::part(action-toolbar) {
 }
 
 .admin-form select option,
-.admin-select-compact option {
+.admin-select-compact option,
+.bank-select option,
+:is(.bank-field, .bank-topic-row) select option {
     background-color: var(--surface-solid);
     color: var(--text);
 }
@@ -3654,12 +3658,18 @@ math-virtual-keyboard::part(action-toolbar) {
 @supports (appearance: base-select) {
     .admin-form select,
     .admin-select-compact,
+    .bank-select,
+    :is(.bank-field, .bank-topic-row) select,
     .admin-form select::picker(select),
-    .admin-select-compact::picker(select) {
+    .admin-select-compact::picker(select),
+    .bank-select::picker(select),
+    :is(.bank-field, .bank-topic-row) select::picker(select) {
         appearance: base-select;
     }
 
-    .admin-form select {
+    .admin-form select,
+    .bank-select,
+    :is(.bank-field, .bank-topic-row) select {
         display: flex;
         align-items: center;
     }
@@ -3669,13 +3679,26 @@ math-virtual-keyboard::part(action-toolbar) {
         align-items: center;
     }
 
+    /* A long choice in a narrow field stops before the chevron instead of running under it */
+    .admin-form select,
+    .admin-select-compact,
+    .bank-select,
+    :is(.bank-field, .bank-topic-row) select {
+        overflow: clip;
+        overflow-clip-margin: content-box;
+    }
+
     .admin-form select::picker-icon,
-    .admin-select-compact::picker-icon {
+    .admin-select-compact::picker-icon,
+    .bank-select::picker-icon,
+    :is(.bank-field, .bank-topic-row) select::picker-icon {
         display: none;
     }
 
     .admin-form select::picker(select),
-    .admin-select-compact::picker(select) {
+    .admin-select-compact::picker(select),
+    .bank-select::picker(select),
+    :is(.bank-field, .bank-topic-row) select::picker(select) {
         margin-top: 6px;
         padding: 6px;
         border: 1px solid var(--control-border);
@@ -3686,7 +3709,9 @@ math-virtual-keyboard::part(action-toolbar) {
     }
 
     .admin-form select option,
-    .admin-select-compact option {
+    .admin-select-compact option,
+    .bank-select option,
+    :is(.bank-field, .bank-topic-row) select option {
         padding: 9px 12px;
         border-radius: 7px;
         font-size: 0.92rem;
@@ -3696,20 +3721,42 @@ math-virtual-keyboard::part(action-toolbar) {
     .admin-form select option:hover,
     .admin-form select option:focus-visible,
     .admin-select-compact option:hover,
-    .admin-select-compact option:focus-visible {
+    .admin-select-compact option:focus-visible,
+    .bank-select option:is(:hover, :focus-visible),
+    :is(.bank-field, .bank-topic-row) select option:is(:hover, :focus-visible) {
         background-color: var(--accent-soft);
         outline: none;
     }
 
     .admin-form select option:checked,
-    .admin-select-compact option:checked {
+    .admin-select-compact option:checked,
+    .bank-select option:checked,
+    :is(.bank-field, .bank-topic-row) select option:checked {
         background-color: color-mix(in srgb, var(--accent) 18%, transparent);
         font-weight: 600;
     }
 
     .admin-form select option::checkmark,
-    .admin-select-compact option::checkmark {
+    .admin-select-compact option::checkmark,
+    .bank-select option::checkmark,
+    :is(.bank-field, .bank-topic-row) select option::checkmark {
         color: var(--accent);
+    }
+
+    /* The bank's lists sit in narrow panels: tighter rows, and the field keeps to one line */
+    .bank-select option,
+    :is(.bank-field, .bank-topic-row) select option {
+        padding: 7px 10px;
+        font-size: 0.86rem;
+        font-weight: 500;
+    }
+
+    .bank-select::picker(select),
+    :is(.bank-field, .bank-topic-row) select::picker(select) {
+        margin-top: 4px;
+        padding: 4px;
+        border-radius: 12px;
+        max-block-size: min(60vh, 420px);
     }
 }
 
@@ -7203,13 +7250,25 @@ body.bank-workspace #bank-panel {
     flex: 1;
     min-width: 0;
     height: 34px;
-    padding: 0 8px;
+    padding: 0 28px 0 10px;
     border: 1px solid var(--control-border);
     border-radius: 10px;
     background-color: var(--input-bg);
+    background-position: right 10px center;
     color: var(--text);
     font: 600 0.84rem var(--font);
     cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bank-select:hover {
+    border-color: var(--control-border-hover);
+}
+
+.bank-select:is(:focus-visible, :open) {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+    outline: none;
 }
 
 .bank-select[hidden] {
@@ -8605,9 +8664,16 @@ body.is-dragging * {
     padding: 0 8px;
     border: 1px solid var(--control-border);
     border-radius: 9px;
-    background: var(--input-bg);
+    background-color: var(--input-bg);
     color: var(--text);
     font: 500 0.86rem var(--font);
+}
+
+/* Room for the chevron the shared select rule draws */
+.bank-field select,
+.bank-topic-row select {
+    padding-right: 28px;
+    background-position: right 10px center;
 }
 
 .bank-field textarea,

@@ -52,7 +52,8 @@ const ICONS = {
     star: '<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>',
     flag: '<path d="M5 21V4.5"/><path d="M5 4.5h11l-2 4 2 4H5"/>',
     upload: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>',
-    tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1L21 11.9 12.9 20z"/><circle cx="8" cy="8" r="1.5"/>'
+    tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1L21 11.9 12.9 20z"/><circle cx="8" cy="8" r="1.5"/>',
+    alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>'
 };
 const icon = (name, size = 18) =>
     `<svg class="bank-ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -2258,17 +2259,17 @@ function rowMetaHtml(item, mineScope) {
     return parts.join("");
 }
 
+const emptyState = (name, title, hint) =>
+    `<div class="bank-empty-ico">${icon(name, 30)}</div><p><b>${t(title)}</b></p>${hint ? `<p>${t(hint)}</p>` : ""}`;
+
 function emptyHtml(res, scope) {
-    if (!res?.ok) return `<p>${t("bank.loadFailed")}</p>`;
-    if (scope === "mine" && mine.folderId === "favorites" && !mine.q.trim()) {
-        return `<div class="bank-empty-ico">${icon("star", 30)}</div><p><b>${t("bank.favoritesEmpty")}</b></p><p>${t("bank.favoritesHint")}</p>`;
-    }
-    if (scope === "mine") {
-        return mine.q.trim() || mine.folderId !== "all"
-            ? `<p><b>${t("bank.empty")}</b></p>`
-            : `<div class="bank-empty-ico">${icon("folder", 30)}</div><p><b>${t("bank.mineEmpty")}</b></p><p>${t("bank.mineHint")}</p>`;
-    }
-    return `<div class="bank-empty-ico">${icon("search", 30)}</div><p><b>${t("bank.empty")}</b></p><p>${t("bank.emptyHint")}</p>`;
+    if (!res?.ok) return emptyState("alert", "bank.loadFailed");
+    if (scope !== "mine") return emptyState("search", "bank.empty", "bank.emptyHint");
+    if (mine.q.trim()) return emptyState("search", "bank.empty", "bank.mineSearchHint");
+    if (mine.folderId === "favorites") return emptyState("star", "bank.favoritesEmpty", "bank.favoritesHint");
+    if (mine.folderId === "all") return emptyState("folder", "bank.mineEmpty", "bank.mineHint");
+    if (mine.folderId === "none") return emptyState("inbox", "bank.unfiledEmpty", "bank.unfiledHint");
+    return emptyState("folder", "bank.folderEmpty", "bank.folderHint");
 }
 
 function updateSelbar(aside, ids) {
