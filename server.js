@@ -943,7 +943,9 @@ async function purgeExpiredQuizzes() {
         `);
         if (kept.affectedRows > 0) console.log(`[CLEANUP] ${kept.affectedRows} private quiz(zes) no longer expire (owner has premium)`);
     } catch (error) {
-        console.error('[CLEANUP] premium owners:', error.code || error.message);
+        // Without this step a premium owner's quiz could be deleted: delete nothing this round
+        console.error('[CLEANUP] premium owners, skipping this round:', error.code || error.message);
+        return;
     }
     try {
         const [result] = await pool.query('DELETE FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
@@ -960,9 +962,12 @@ async function purgeExpiredQuizzes() {
 }
 
 if (process.env.NODE_ENV !== 'test') {
-    ensureSchema();
-    purgeExpiredQuizzes();
-    setInterval(purgeExpiredQuizzes, 60 * 60 * 1000).unref();
+    // Cleanup waits for the schema work: while old quiz IDs are being converted, a quiz's
+    // attempts briefly point at its old ID and would look orphaned (and be deleted)
+    ensureSchema().finally(() => {
+        purgeExpiredQuizzes();
+        setInterval(purgeExpiredQuizzes, 60 * 60 * 1000).unref();
+    });
     app.listen(PORT, () => {
         console.log(`🚀 Quizleris Backend API running on port ${PORT}`);
     });

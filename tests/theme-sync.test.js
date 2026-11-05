@@ -52,11 +52,33 @@ describe('theme sync', () => {
     it('later syncs take the account as it is (a deleted theme stays deleted)', async () => {
         localStorage.setItem('quizleris_theme_sync_user', '7');
         upsertCustomTheme(theme('c-gone001', 'Ištrinta kitur'));
+        // It reached the account earlier (nothing unsent), then another device deleted it
+        localStorage.removeItem('quizleris_theme_sync_pending');
         account = { selected: 'emerald', custom: [theme('c-remote1', 'Iš paskyros')], updated_at: 'then' };
         mockServer();
         document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
         await settle();
         expect(loadCustomThemes().map(t => t.id)).toEqual(['c-remote1']);
+    });
+
+    it('a theme the account never received survives the next sync', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        account = { selected: 'emerald', custom: [], updated_at: 'then' };
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        // The server goes down: the new theme's save fails
+        global.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+        upsertCustomTheme(theme('c-offline1', 'Be ryšio'));
+        await settle();
+        expect(themeSyncStatus()).toBe('error');
+        // Back online, signing in again: the account still lacks it, yet it is kept and sent
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        expect(loadCustomThemes().map(t => t.id)).toEqual(['c-offline1']);
+        expect(puts.at(-1).custom.map(t => t.id)).toEqual(['c-offline1']);
+        expect(localStorage.getItem('quizleris_theme_sync_pending')).toBeNull();
     });
 
     it('free accounts keep themes in the browser only', async () => {

@@ -1,8 +1,9 @@
 // Premium accounts keep the chosen theme and their own themes on the server too (/api/me/themes),
 // so both follow the teacher to other devices. Everyone else keeps them in the browser only.
 //
-// The first time an account syncs in a browser, the browser's own themes join the account's.
-// After that the account is the record: a theme deleted on one device goes on the others too.
+// The first time an account syncs in a browser, the browser's own themes join the account's, and
+// so do changes the account never received (a failed save). Otherwise the account is the record:
+// a theme deleted on one device goes on the others too.
 import { getToken } from "./api.js";
 import { getCurrentUser } from "./auth-ui.js";
 import { THEME_KEY, MAX_CUSTOM_THEMES, loadCustomThemes, saveCustomThemes, sanitizeTheme, savedThemeId } from "./themes.js";
@@ -10,6 +11,9 @@ import { reloadSavedTheme } from "./theme-picker.js";
 
 // Which account this browser last synced with (so a first sync merges and later ones don't)
 const SYNCED_USER_KEY = "quizleris_theme_sync_user";
+// Set (to the account's id) while this browser has changes the account has not received yet,
+// e.g. made while offline: the next sync then merges instead of replacing, so nothing is lost
+const PENDING_KEY = "quizleris_theme_sync_pending";
 const PUSH_DELAY_MS = 1200;
 
 // "off" (signed out), "checking", "synced", "premium-required" or "error"
@@ -51,10 +55,19 @@ async function push() {
     const body = snapshot();
     if (body === lastSent) return;
     const res = await request("PUT", body);
-    if (res.ok) lastSent = body;
-    else if (res.status === 403) setStatus("premium-required");
+    if (res.ok) {
+        lastSent = body;
+        if (body === snapshot()) localStorage.removeItem(PENDING_KEY);
+    } else if (res.status === 403) setStatus("premium-required");
     else if (res.status === 401) setStatus("off");
     else setStatus("error");
+}
+
+function onLocalChange() {
+    if (applying) return;
+    const user = getCurrentUser();
+    if (user && getToken()) localStorage.setItem(PENDING_KEY, String(user.id));
+    schedulePush();
 }
 
 function schedulePush() {
@@ -77,8 +90,9 @@ async function pull() {
 
     const remote = (res.data.custom || []).map(sanitizeTheme).filter(Boolean);
     const firstHere = localStorage.getItem(SYNCED_USER_KEY) !== String(user.id);
+    const unsent = localStorage.getItem(PENDING_KEY) === String(user.id);
     let custom = remote;
-    if (firstHere) {
+    if (firstHere || unsent) {
         custom = [...remote, ...loadCustomThemes().filter(local => !remote.some(r => r.id === local.id))].slice(0, MAX_CUSTOM_THEMES);
     }
     applying = true;
@@ -96,7 +110,7 @@ async function pull() {
 }
 
 export function initThemeSync() {
-    document.addEventListener("quizleris-themes-changed", schedulePush);
+    document.addEventListener("quizleris-themes-changed", onLocalChange);
     document.addEventListener("quizleris-auth-changed", pull);
     pull();
 }
