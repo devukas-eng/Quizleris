@@ -21,6 +21,8 @@
   <script>
     (function () {
       try {
+        var fs = localStorage.getItem("quizleris_font_size");
+        if (fs === "small" || fs === "normal" || fs === "large") document.documentElement.dataset.fontSize = fs;
         var css = localStorage.getItem("selected_theme_css");
         if (!css) return;
         var style = document.createElement("style");
@@ -76,8 +78,6 @@
       <div id="dashboard-content"></div>
       <div class="dashboard-actions" style="margin-top: 32px; display: flex; justify-content: center; gap: 16px;">
         <button id="dashboard-close-btn" class="btn btn-primary" data-i18n="dashboard.backToMenu">Atgal į meniu</button>
-        <button id="dashboard-clear-btn" class="btn btn-danger" data-i18n="dashboard.clearHistory"
-          style="background: #ef4444; border: none; padding: 10px 20px;">Išvalyti istoriją</button>
       </div>
     </section>
     <!-- Admin panel (hidden by default) -->

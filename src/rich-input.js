@@ -633,15 +633,123 @@ function ensurePopover() {
     window.addEventListener("resize", () => {
         if (popover.classList.contains("open")) positionPopover();
     });
+    // The popover hangs off its field, so it follows when the field's column (or the page) scrolls
+    let scrollFrame = 0;
+    document.addEventListener("scroll", () => {
+        if (!popover.classList.contains("open") || scrollFrame) return;
+        scrollFrame = requestAnimationFrame(() => {
+            scrollFrame = 0;
+            if (popover.classList.contains("open")) positionPopover();
+        });
+    }, { capture: true, passive: true });
 }
 
-function positionPopover() {
+const KEYBOARD_GAP = 12;
+let keyboardScrollUntil = 0;
+let keyboardWatched = false;
+
+// MathLive's "Insert Matrix" menu only offers up to 5×5 with tiny cells: a bigger grid, easier to hit
+const MATRIX_GRID = 7;
+let matrixMenuDone = false;
+
+function enlargeMatrixMenu() {
+    if (matrixMenuDone || !mathField?.shadowRoot) return;
+    let items;
+    try { items = mathField.menuItems; } catch { return; } // not mounted yet: try on the next open
+    matrixMenuDone = true;
+    try {
+        const original = items.find(item => item.id === "insert-matrix");
+        if (!original?.submenu?.length) return;
+        // MathLive's own cell lights up the rows × columns under the pointer; reuse its class for every size
+        let Cell = null;
+        try { Cell = original.submenu[0].onCreate?.(original.submenu[0], null)?.constructor || null; } catch { Cell = null; }
+        const submenu = [];
+        for (let row = 1; row <= MATRIX_GRID; row++) {
+            for (let col = 1; col <= MATRIX_GRID; col++) {
+                submenu.push({
+                    id: `insert-matrix-${row}x${col}`,
+                    label: "\u2610",
+                    tooltip: `${row} × ${col}`,
+                    data: { row, col },
+                    ...(Cell ? { onCreate: (decl, parent) => new Cell(decl, parent, row, col) } : {}),
+                    onMenuSelect: () => mathField.insert(
+                        `\\begin{pmatrix}${Array(row).fill(Array(col).fill("#?").join(" & ")).join("\\\\")}\\end{pmatrix}`,
+                        { selectionMode: "item" })
+                });
+            }
+        }
+        mathField.menuItems = items.map(item => (item === original ? { ...item, submenu, columnCount: MATRIX_GRID } : item));
+        const css = `.insert-matrix-submenu { --_menu-item-size: 28px; width: calc(${MATRIX_GRID} * var(--_menu-item-size)); }
+            .insert-matrix-submenu [part='menu-item'] { font-size: 23px; line-height: 26px; }`;
+        const root = mathField.shadowRoot;
+        if ("adoptedStyleSheets" in root && typeof window.CSSStyleSheet === "function") {
+            const sheet = new window.CSSStyleSheet();
+            sheet.replaceSync(css);
+            root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+        } else {
+            const style = document.createElement("style");
+            style.textContent = css;
+            root.appendChild(style);
+        }
+    } catch (e) {
+        console.warn("Could not enlarge the matrix menu", e);
+    }
+}
+
+// MathLive's keyboard slides up over the bottom of the page: scroll just enough to keep the popover above it.
+// Hooked on first open, since MathLive may still be loading when the popover is built.
+function watchKeyboard() {
+    const kb = window.mathVirtualKeyboard;
+    if (keyboardWatched || !kb?.addEventListener) return;
+    keyboardWatched = true;
+    kb.addEventListener("geometrychange", () => keepPopoverAboveKeyboard());
+}
+
+function keyboardHeight() {
+    const kb = window.mathVirtualKeyboard;
+    if (!kb || !kb.visible) return 0;
+    return kb.boundingRect?.height || 0;
+}
+
+function scrollParent(el) {
+    for (let node = el?.parentElement; node && node !== document.body; node = node.parentElement) {
+        const { overflowY } = window.getComputedStyle(node);
+        if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight + 1) return node;
+    }
+    return document.scrollingElement || document.documentElement;
+}
+
+function keepPopoverAboveKeyboard() {
+    if (!popover?.classList.contains("open") || !activeHost) return;
+    const kbH = keyboardHeight();
+    if (!kbH) return positionPopover();
+    positionPopover(true); // measure the usual spot under the field
+    const overlap = popover.getBoundingClientRect().bottom - (window.innerHeight - kbH - KEYBOARD_GAP);
+    if (overlap <= 0) return;
+    // Never scroll the field itself out of view at the top
+    const room = activeHost.getBoundingClientRect().top - KEYBOARD_GAP;
+    const amount = Math.min(overlap, Math.max(0, room));
+    if (amount <= 0) return positionPopover();
+    keyboardScrollUntil = Date.now() + 500; // no flipping above while the scroll glides
+    scrollParent(activeHost).scrollBy({ top: amount, behavior: "smooth" });
+    setTimeout(() => { if (popover.classList.contains("open")) positionPopover(); }, 520);
+}
+
+function positionPopover(belowOnly = false) {
     const rect = activeHost.getBoundingClientRect();
     const width = Math.min(460, window.innerWidth - 16);
     popover.style.width = `${width}px`;
     const left = Math.min(Math.max(rect.left + window.scrollX, window.scrollX + 8), window.scrollX + window.innerWidth - width - 8);
     popover.style.left = `${left}px`;
-    popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    let top = rect.bottom + 6;
+    // Still under the keyboard after scrolling (the field sits at the very end of the page): open above the field
+    const kbH = belowOnly || Date.now() < keyboardScrollUntil ? 0 : keyboardHeight();
+    if (kbH) {
+        const height = popover.offsetHeight;
+        const fitsBelow = top + height <= window.innerHeight - kbH - KEYBOARD_GAP;
+        if (!fitsBelow && rect.top - 6 - height >= 8) top = rect.top - 6 - height;
+    }
+    popover.style.top = `${top + window.scrollY}px`;
 }
 
 let activeSize = "";
@@ -677,9 +785,13 @@ function openFormulaEditor(host, chip) {
     positionPopover();
     popover.classList.add("open");
     mathField.value = chip ? chip.dataset.latex || "" : "";
+    watchKeyboard();
+    enlargeMatrixMenu();
     requestAnimationFrame(() => {
         mathField.focus();
         popover.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        // In case the keyboard was already up (no geometry change to report)
+        setTimeout(keepPopoverAboveKeyboard, 350);
     });
 }
 

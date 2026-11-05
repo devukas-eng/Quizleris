@@ -1,12 +1,15 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
+import { fetchShowcase } from "./api.js";
 import { } from "./legal.js";
 // DOM Elements
 let startMenu;
 let quizHeader;
 let quizMain;
 let isStudentMenuOpen = false;
+let showcaseTimer = null;
+let cachedShowcase = null;
 
 /**
  * Bootstraps the main menu DOM references and top-level navigation buttons.
@@ -15,8 +18,10 @@ export function setupMenu(_callbacks) {
     startMenu = getRequiredElement("start-menu");
     quizHeader = document.querySelector(".quiz-header");
     quizMain = document.querySelector(".quiz-main");
-    // Note: the static #menu-btn-student / #menu-btn-admin buttons no longer exist;
-    // they are now injected dynamically by renderStartMenu.
+    document.addEventListener("quizleris-showcase-changed", () => {
+        cachedShowcase = null;
+        if (document.getElementById("hero-pin-hint")) initHeroShowcase();
+    });
 }
 export function isStudentViewActive() {
     return isStudentMenuOpen;
@@ -30,6 +35,11 @@ export function renderStartMenu() {
     if (!startMenu) {
         console.error("Menu not setup! Call setupMenu() first.");
         return;
+    }
+
+    if (showcaseTimer) {
+        clearInterval(showcaseTimer);
+        showcaseTimer = null;
     }
 
     // Show menu, hide game
@@ -58,7 +68,7 @@ export function renderStartMenu() {
                 <input id="hero-pin-input" type="text" placeholder="${t('menu.pinPlaceholder')}" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="60" />
                 <button class="pin-go-btn" id="hero-pin-go">${t('menu.pinGo')}</button>
             </div>
-            <p class="hero-pin-hint">${t('menu.pinHint')}</p>
+            <p class="hero-pin-hint" id="hero-pin-hint">${t('menu.pinHint')}</p>
         </div>
     `;
 
@@ -82,14 +92,64 @@ export function renderStartMenu() {
         pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doStart(); });
     }
 
-
-
-    // (Admin button was removed)
-
-
-
     // Update translations
     updatePageLanguage();
+    initHeroShowcase();
+}
+
+async function initHeroShowcase() {
+    if (showcaseTimer) {
+        clearInterval(showcaseTimer);
+        showcaseTimer = null;
+    }
+    const data = cachedShowcase || await fetchShowcase();
+    cachedShowcase = data;
+    const hint = document.getElementById("hero-pin-hint");
+    if (!hint) return;
+    if (!data?.enabled || !Array.isArray(data.quizzes) || data.quizzes.length === 0) {
+        hint.textContent = t("menu.pinHint");
+        return;
+    }
+    const list = data.quizzes;
+    let index = 0;
+    let paused = false;
+
+    const renderTicker = (item, animate = false) => {
+        const prefix = escapeHtml(t("menu.pinHintPrefix"));
+        const titleTip = item.title ? `${item.title} (${item.id})` : item.id;
+        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animate ? " is-flipping" : ""}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${item.title ? `<span class="hero-code-title"> · ${escapeHtml(item.title)}</span>` : ""}</button>.`;
+    };
+
+    renderTicker(list[0], false);
+
+    hint.onmouseenter = () => { paused = true; };
+    hint.onmouseleave = () => { paused = false; };
+    hint.onclick = (e) => {
+        const btn = e.target.closest(".hero-code-ticker");
+        if (!btn) return;
+        const code = btn.dataset.code;
+        if (!code) return;
+        const pinInput = document.getElementById("hero-pin-input");
+        if (data.action === "start") {
+            isStudentMenuOpen = true;
+            startStudentQuiz("", code);
+        } else if (pinInput) {
+            pinInput.value = code;
+            pinInput.focus();
+            pinInput.classList.remove("pin-filled-flash");
+            void pinInput.offsetWidth;
+            pinInput.classList.add("pin-filled-flash");
+        }
+    };
+
+    if (list.length > 1) {
+        const ms = Math.max(2000, (Number(data.intervalSeconds) || 4) * 1000);
+        showcaseTimer = setInterval(() => {
+            if (paused || !document.getElementById("hero-pin-hint")) return;
+            index = (index + 1) % list.length;
+            renderTicker(list[index], true);
+        }, ms);
+    }
 }
 
 /** "1 klausimas", "5 klausimai", "12 klausimų" — Lithuanian has three count forms, English two. */

@@ -4,7 +4,8 @@ import { getLanguage, t } from "./lang.js";
 import { logEvent } from "./analytics.js";
 import { escapeHtml } from "./dom.js";
 import {
-    THEMES, DEFAULT_THEME_ID, applyTheme, findTheme, savedThemeId, recentThemeIds, themeName, swatch,
+    THEMES, DEFAULT_THEME_ID, FONT_SIZES, applyTheme, findTheme, savedThemeId, recentThemeIds, themeName, swatch,
+    savedFontSize, applyFontSize,
 } from "./themes.js";
 
 const SHORT_LIST = 5;
@@ -77,6 +78,8 @@ export function refreshThemePicker() {
     measureLabel();
 
     const list = shortList();
+    const fontSize = savedFontSize();
+    const fontScaleLabels = { small: "themes.fontSizeSmall", normal: "themes.fontSizeNormal", large: "themes.fontSizeLarge" };
     const popup = document.getElementById("theme-picker-popup");
     if (popup) {
         popup.setAttribute("aria-label", t("themes.label"));
@@ -88,6 +91,13 @@ export function refreshThemePicker() {
                     <span class="tp-bubble" style="background: ${swatch(theme)};"></span>
                 </div>`).join("") +
             `<div class="theme-picker-sep" role="presentation"></div>
+             <div class="theme-picker-fontsize" role="group" aria-label="${escapeHtml(t("themes.fontSize"))}">
+                <span class="tp-fontsize-label">${escapeHtml(t("themes.fontSize"))}</span>
+                <div class="tp-fontsize-btns">
+                    ${FONT_SIZES.map((sz, idx) => `<button type="button" class="tp-fontsize-btn${sz === fontSize ? " active" : ""}" data-font-size="${sz}" aria-pressed="${sz === fontSize}" title="${escapeHtml(t(fontScaleLabels[sz]))}" aria-label="${escapeHtml(t(fontScaleLabels[sz]))}" style="font-size: ${0.76 + idx * 0.14}rem">A</button>`).join("")}
+                </div>
+             </div>
+             <div class="theme-picker-sep" role="presentation"></div>
              <div class="theme-picker-item theme-picker-more" data-theme-more role="button" tabindex="0">
                 <div><div class="tp-name">${escapeHtml(t("themes.all"))}</div><div class="tp-subtitle">${escapeHtml(t("themes.allSubtitle"))}</div></div>
                 <span class="tp-bubble tp-bubble-more" aria-hidden="true">🎨</span>
@@ -159,6 +169,7 @@ function choose(item) {
 export function initThemePicker({ onOpen } = {}) {
     if (onOpen) beforeOpen = onOpen;
     current = findTheme(savedThemeId()) || findTheme(DEFAULT_THEME_ID);
+    applyFontSize(savedFontSize(), { persist: true });
     // Also re-saves the theme's CSS, which the page's first script applies before painting
     applyTheme(current, { persist: true });
     refreshThemePicker();
@@ -177,6 +188,13 @@ export function initThemePicker({ onOpen } = {}) {
         const box = document.getElementById(id);
         if (!box) continue;
         box.addEventListener("click", (e) => {
+            const fsBtn = e.target.closest("[data-font-size]");
+            if (fsBtn) {
+                e.stopPropagation();
+                applyFontSize(fsBtn.dataset.fontSize, { persist: true });
+                refreshThemePicker();
+                return;
+            }
             const item = e.target.closest(".theme-picker-item, .theme-row-item");
             if (!item) return;
             e.stopPropagation();

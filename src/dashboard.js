@@ -1,41 +1,52 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
-import { getResults, getHighScores, STORAGE_KEY_RESULTS } from "./storage.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog } from "./dialog.js";
 import { getToken, fetchAttempts, fetchAttempt, deleteAttempt } from "./api.js";
 let dashboardView;
 let dashboardContent;
 let closeBtn;
-let clearBtn;
 export function setupDashboard(callbacks) {
     dashboardView = getRequiredElement("dashboard-view");
     dashboardContent = getRequiredElement("dashboard-content");
     closeBtn = getRequiredElement("dashboard-close-btn");
-    clearBtn = getRequiredElement("dashboard-clear-btn");
     closeBtn.addEventListener("click", () => {
         dashboardView.style.display = "none";
+        shownQuizId = null;
         callbacks.onHome();
     });
-    clearBtn.addEventListener("click", async () => {
-        if (await confirmDialog({ title: t("dialog.confirm"), message: "Are you sure you want to clear all history?", confirmText: t("dialog.delete"), danger: true })) {
-            localStorage.removeItem(STORAGE_KEY_RESULTS);
-            renderDashboardList();
-        }
-    });
 }
+let shownQuizId = null;
 export async function renderDashboard(quizId) {
     dashboardView.style.display = "block";
-    // The quiz's owner sees every student's attempt from the server; anyone else, this device's history
-    if (quizId && getToken()) {
-        dashboardContent.innerHTML = `<p class="no-results">${t("profile.loading")}</p>`;
-        const res = await fetchAttempts(quizId);
-        if (res.ok) {
-            renderServerAttempts(res.data);
-            return;
-        }
-    }
-    clearBtn.style.display = "";
-    renderDashboardList(quizId);
+    shownQuizId = quizId || null;
+    // Results are only for the quiz's owner (or an admin), checked by the server. Nobody else gets a
+    // fallback: this device's history could hold other students' results on a shared classroom PC.
+    if (!quizId) return renderLocked("noAccess");
+    if (!getToken()) return renderLocked("signIn");
+    dashboardContent.innerHTML = `<p class="no-results">${t("profile.loading")}</p>`;
+    const res = await fetchAttempts(quizId);
+    if (shownQuizId !== quizId) return; // another dashboard opened meanwhile
+    if (res.ok) return renderServerAttempts(res.data);
+    renderLocked(res.status === 401 ? "signIn" : res.status === 0 || res.status >= 500 ? "failed" : "noAccess");
+}
+
+// A signed-in change (logging in from the locked page, logging out) re-checks the open results page
+document.addEventListener("quizleris-auth-changed", () => {
+    if (shownQuizId && dashboardView && dashboardView.style.display !== "none") renderDashboard(shownQuizId);
+});
+
+function renderLocked(reason) {
+    const body = { signIn: t("results.signInBody"), noAccess: t("results.noAccessBody"), failed: t("results.loadFailed") }[reason];
+    dashboardContent.innerHTML = `
+        <div class="att-locked">
+            <div class="att-locked-icon" aria-hidden="true">🔒</div>
+            <h3>${escapeHtml(reason === "failed" ? t("results.loadFailedTitle") : t("results.lockedTitle"))}</h3>
+            <p>${escapeHtml(body)}</p>
+            ${reason === "signIn" ? `<button type="button" class="btn btn-primary att-signin">${escapeHtml(t("results.signIn"))}</button>` : ""}
+            ${reason === "failed" ? `<button type="button" class="btn btn-secondary att-retry">↻ ${escapeHtml(t("results.refresh"))}</button>` : ""}
+        </div>`;
+    dashboardContent.querySelector(".att-signin")?.addEventListener("click", () => document.dispatchEvent(new window.CustomEvent("open-auth")));
+    dashboardContent.querySelector(".att-retry")?.addEventListener("click", () => renderDashboard(shownQuizId));
 }
 
 // --- Server results (the quiz's owner) ---
@@ -45,7 +56,6 @@ const scoreClass = (pct) => (pct >= 80 ? "good" : pct < 50 ? "bad" : "avg");
 const formatDuration = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`);
 
 function renderServerAttempts({ quiz, attempts }) {
-    clearBtn.style.display = "none"; // clears this device's history, not the class's results
     dashboardContent.innerHTML = `
         <div class="att-head">
             <h2 class="att-title">${escapeHtml(quiz.title || quiz.id)} <span class="att-code">${escapeHtml(quiz.id)}</span></h2>
@@ -149,96 +159,6 @@ function renderServerAttempts({ quiz, attempts }) {
     renderRows();
 }
 
-function renderDashboardList(quizId) {
-    const allResults = getResults();
-    const results = quizId ? allResults.filter(r => r.quizId === quizId) : allResults;
-    const highScores = getHighScores(allResults).filter(h => !quizId || h.quizId === quizId);
-    if (results.length === 0) {
-        dashboardContent.innerHTML = `<p class='no-results'>${quizId ? `${t('dashboard.noResults')}` : t('dashboard.noResults')}</p>`;
-        clearBtn.disabled = true;
-        return;
-    }
-    clearBtn.disabled = false;
-    // Sort by date desc
-    results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    let html = `
-        <h2 style="text-align:center; margin-bottom:32px; color:var(--accent); font-size: 1.5rem;">${quizId ? escapeHtml(`${results[0]?.quizTitle || quizId}`) : t('dashboard.unified')}</h2>
-        <div style="display:flex; flex-direction: column; gap:40px;">
-            <div style="width: 100%;">
-                <h3 style="margin-bottom:16px; color:var(--accent); font-size: 1.2rem;">${t('dashboard.recentActivity')}</h3>
-                <table class="dashboard-table">
-                    <thead>
-                        <tr>
-                            <th>${t('dashboard.date')}</th>
-                            <th>${t('dashboard.name')}</th>
-                            ${!quizId ? `<th>${t('dashboard.quiz')}</th>` : ''}
-                            <th>${t('dashboard.score')}</th>
-                            <th>${t('dashboard.actions')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-    `;
-    results.forEach(r => {
-        const dateStr = new Date(r.date).toLocaleDateString() + " " + new Date(r.date).toLocaleTimeString();
-        const displayScore = (r.correctCount !== undefined) ? r.correctCount : (r.score > r.maxScore ? Math.round((r.percentage || 0) / 100 * r.maxScore) : r.score);
-        const percentage = Math.round((displayScore / r.maxScore) * 100);
-        const scoreClass = percentage >= 80 ? "good" : percentage < 50 ? "bad" : "avg";
-        html += `
-            <tr data-result-idx="${allResults.indexOf(r)}">
-                <td>${dateStr}</td>
-                <td>${escapeHtml(r.name)}</td>
-                ${!quizId ? `<td>${escapeHtml(r.quizTitle || r.quizId)}</td>` : ''}
-                <td class="score-${scoreClass}">
-                    ${displayScore}/${r.maxScore} (${percentage}%)
-                </td>
-                <td>
-                    <button class="btn btn-secondary view-details-btn" style="padding: 6px 12px; font-size: 0.85rem;">${t('dashboard.details')}</button>
-                </td>
-            </tr>
-        `;
-    });
-    html += `</tbody></table></div>`;
-    // High Scores Section
-    html += `
-            </div>
-            <div style="width: 100%;">
-                <h3 style="margin-bottom:16px; color:var(--success); font-size: 1.2rem;">${t('dashboard.highScores')}</h3>
-                 <table class="dashboard-table">
-                    <thead>
-                        <tr>
-                            ${!quizId ? `<th>${t('admin.quizId')}</th>` : ''}
-                            <th>${t('dashboard.topStudent')}</th>
-                            <th>${t('dashboard.score')}</th>
-                            <th>${t('dashboard.date')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-    `;
-    highScores.forEach(h => {
-        const displayScore = (h.correctCount !== undefined) ? h.correctCount : (h.score > h.maxScore ? Math.round((h.percentage || 0) / 100 * h.maxScore) : h.score);
-        const percentage = Math.round((displayScore / h.maxScore) * 100);
-        html += `
-            <tr>
-                ${!quizId ? `<td>${escapeHtml(h.quizId)}</td>` : ''}
-                <td>${escapeHtml(h.name)}</td>
-                <td class="score-good">${displayScore}/${h.maxScore} (${percentage}%)</td>
-                <td>${new Date(h.date).toLocaleDateString()}</td>
-            </tr>
-         `;
-    });
-    html += `</tbody></table></div></div>`;
-    dashboardContent.innerHTML = html;
-    // After setting innerHTML, wire up Detail buttons
-    dashboardContent.querySelectorAll(".view-details-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const row = e.target.closest("tr");
-            const idx = parseInt(row?.dataset.resultIdx || "-1");
-            if (idx >= 0) {
-                showResultDetails(allResults[idx]);
-            }
-        });
-    });
-}
 function showResultDetails(result) {
     const detailId = "dashboard-detail-view";
     let detailView = document.getElementById(detailId);

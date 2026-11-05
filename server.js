@@ -408,14 +408,318 @@ app.put('/api/me/themes', authenticateToken, async (req, res) => {
 });
 
 // --- ADMIN ROUTES ---
+const USER_ROLES = new Set(['teacher', 'creator', 'admin']);
+const USER_TIERS = new Set(['free', 'premium']);
+let siteSettingsReady = false;
+
+async function readShowcaseSettings() {
+    const defaults = { enabled: true, intervalSeconds: 4, action: 'fill' };
+    if (!siteSettingsReady) return defaults;
+    try {
+        const [rows] = await pool.query('SELECT v FROM site_settings WHERE k = ?', ['showcase']);
+        if (!rows.length) return defaults;
+        const raw = typeof rows[0].v === 'string' ? JSON.parse(rows[0].v) : rows[0].v;
+        return {
+            enabled: raw?.enabled !== false,
+            intervalSeconds: toInt(raw?.intervalSeconds, 2, 30, 4),
+            action: raw?.action === 'start' ? 'start' : 'fill'
+        };
+    } catch {
+        return defaults;
+    }
+}
+
+app.get('/api/showcase', async (req, res) => {
+    try {
+        const settings = await readShowcaseSettings();
+        if (!settings.enabled) return res.json({ ...settings, quizzes: [] });
+        let rows = [];
+        try {
+            [rows] = await pool.query(`
+                SELECT q.id, q.title, u.username AS author
+                FROM quizzes q
+                LEFT JOIN users u ON q.owner_id = u.id
+                WHERE q.featured = 1 AND (q.expires_at IS NULL OR q.expires_at > NOW())
+                ORDER BY q.featured_order ASC, q.updated_at DESC
+                LIMIT 30
+            `);
+        } catch {
+            // featured column not added yet
+        }
+        res.json({ ...settings, quizzes: rows });
+    } catch (error) {
+        console.error('[SHOWCASE]', error);
+        res.json({ enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] });
+    }
+});
+
+app.put('/api/admin/showcase', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const current = await readShowcaseSettings();
+        const body = req.body || {};
+        const next = {
+            enabled: body.enabled !== undefined ? Boolean(body.enabled) : current.enabled,
+            intervalSeconds: body.intervalSeconds !== undefined ? toInt(body.intervalSeconds, 2, 30, 4) : current.intervalSeconds,
+            action: body.action === 'start' ? 'start' : body.action === 'fill' ? 'fill' : current.action
+        };
+        if (siteSettingsReady) {
+            await pool.query(
+                'INSERT INTO site_settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)',
+                ['showcase', JSON.stringify(next)]
+            );
+        }
+        const orderList = Array.isArray(body.featured_order) ? body.featured_order : Array.isArray(body.order) ? body.order : null;
+        if (orderList) {
+            const ids = orderList.map(x => String(x || '').trim()).filter(id => QUIZ_ID_RE.test(id)).slice(0, 50);
+            for (let i = 0; i < ids.length; i++) {
+                await pool.query('UPDATE quizzes SET featured_order = ?, updated_at = updated_at WHERE id = ?', [i + 1, ids[i]]);
+            }
+        }
+        res.json(next);
+    } catch (error) {
+        console.error('[ADMIN SHOWCASE]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const [[userCounts]] = await pool.query(`
+            SELECT COUNT(*) AS total,
+                   SUM(role = 'admin') AS admins,
+                   SUM(role = 'creator') AS creators,
+                   SUM(role = 'teacher') AS teachers,
+                   SUM(subscription_tier = 'premium' AND (subscription_expires_at IS NULL OR subscription_expires_at > NOW())) AS premium
+            FROM users
+        `);
+        const [[quizCounts]] = await pool.query(`
+            SELECT COUNT(*) AS total,
+                   SUM(visibility = 'public') AS public_quizzes,
+                   SUM(visibility = 'private') AS private_quizzes,
+                   COALESCE(SUM(featured = 1), 0) AS featured_quizzes
+            FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
+        `).catch(async () => {
+            const [[fallback]] = await pool.query(`
+                SELECT COUNT(*) AS total,
+                       SUM(visibility = 'public') AS public_quizzes,
+                       SUM(visibility = 'private') AS private_quizzes,
+                       0 AS featured_quizzes
+                FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
+            `);
+            return [fallback];
+        });
+        let totalAttempts = 0;
+        if (attemptsReady) {
+            const [[att]] = await pool.query('SELECT COUNT(*) AS cnt FROM quiz_attempts');
+            totalAttempts = Number(att?.cnt || 0);
+        }
+        let bankStats = { published: 0, pendingReview: 0, openReports: 0 };
+        try {
+            const [[bItems]] = await pool.query(`
+                SELECT SUM(owner_id = 0 AND status = 'published') AS published,
+                       SUM(owner_id = 0 AND status = 'draft' AND submitted_by IS NOT NULL) AS pending_review
+                FROM bank_items
+            `);
+            const [[bRep]] = await pool.query("SELECT COUNT(DISTINCT item_id) AS open_reports FROM bank_item_reports WHERE status = 'open'");
+            bankStats = {
+                published: Number(bItems?.published || 0),
+                pendingReview: Number(bItems?.pending_review || 0),
+                openReports: Number(bRep?.open_reports || 0)
+            };
+        } catch {
+            // bank tables may not exist yet
+        }
+        const showcase = await readShowcaseSettings();
+        res.json({
+            users: {
+                total: Number(userCounts?.total || 0),
+                admins: Number(userCounts?.admins || 0),
+                creators: Number(userCounts?.creators || 0),
+                teachers: Number(userCounts?.teachers || 0),
+                premium: Number(userCounts?.premium || 0)
+            },
+            quizzes: {
+                total: Number(quizCounts?.total || 0),
+                public: Number(quizCounts?.public_quizzes || 0),
+                private: Number(quizCounts?.private_quizzes || 0),
+                publicCount: Number(quizCounts?.public_quizzes || 0),
+                privateCount: Number(quizCounts?.private_quizzes || 0),
+                featured: Number(quizCounts?.featured_quizzes || 0),
+                attempts: totalAttempts
+            },
+            bank: bankStats,
+            showcase
+        });
+    } catch (error) {
+        console.error('[ADMIN OVERVIEW]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
     try {
-        const [rows] = await pool.query(
-            'SELECT id, username, email, role, subscription_tier, created_at FROM users ORDER BY created_at DESC LIMIT 500'
-        );
-        res.json(rows);
+        const [rows] = await pool.query(`
+            SELECT u.id, u.username, u.email, u.role, u.subscription_tier, u.subscription_expires_at, u.created_at,
+                   COUNT(q.id) AS quiz_count
+            FROM users u
+            LEFT JOIN quizzes q ON q.owner_id = u.id
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+            LIMIT 500
+        `);
+        res.json(rows.map(r => ({
+            ...r,
+            quiz_count: Number(r.quiz_count || 0),
+            premium_active: hasActivePremium(r)
+        })));
     } catch (error) {
         console.error('[ADMIN USERS]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.patch('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const targetId = toInt(req.params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+        if (!targetId) return res.status(400).json({ error: 'Invalid user ID' });
+        const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [targetId]);
+        const target = rows[0];
+        if (!target) return res.status(404).json({ error: 'User not found' });
+
+        const body = req.body || {};
+        const nextRole = USER_ROLES.has(body.role) ? body.role : target.role;
+        if (targetId === req.user.id && nextRole !== 'admin') {
+            return res.status(400).json({ error: 'You cannot remove your own admin role.' });
+        }
+        let nextTier = USER_TIERS.has(body.subscription_tier) ? body.subscription_tier : target.subscription_tier;
+        let nextExpires = target.subscription_expires_at || null;
+        const premDays = body.premium_days !== undefined ? body.premium_days : body.duration_days;
+        if (premDays !== undefined) {
+            if (premDays === null || premDays === 'forever') {
+                nextTier = 'premium';
+                nextExpires = null;
+            } else if (Number(premDays) <= 0) {
+                nextTier = 'free';
+                nextExpires = null;
+            } else {
+                const days = toInt(premDays, 1, 3650, 30);
+                const baseDate = target.subscription_expires_at && new Date(target.subscription_expires_at) > new Date()
+                    ? new Date(target.subscription_expires_at)
+                    : new Date();
+                baseDate.setDate(baseDate.getDate() + days);
+                nextTier = 'premium';
+                nextExpires = baseDate;
+            }
+        } else if (body.subscription_tier === 'free') {
+            nextExpires = null;
+        }
+
+        await pool.query(
+            'UPDATE users SET role = ?, subscription_tier = ?, subscription_expires_at = ? WHERE id = ?',
+            [nextRole, nextTier, nextExpires, targetId]
+        );
+        // If upgraded to premium/staff, lift expiry on their private quizzes immediately
+        if (nextRole === 'admin' || nextRole === 'creator' || nextTier === 'premium') {
+            await pool.query('UPDATE quizzes SET expires_at = NULL, updated_at = updated_at WHERE owner_id = ? AND expires_at IS NOT NULL', [targetId]);
+        }
+        res.json({
+            id: targetId,
+            role: nextRole,
+            subscription_tier: nextTier,
+            subscription_expires_at: nextExpires
+        });
+    } catch (error) {
+        console.error('[ADMIN PATCH USER]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const targetId = toInt(req.params.id, 1, Number.MAX_SAFE_INTEGER, 0);
+        if (!targetId) return res.status(400).json({ error: 'Invalid user ID' });
+        if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account.' });
+        await pool.query('DELETE FROM quizzes WHERE owner_id = ?', [targetId]);
+        await pool.query('DELETE FROM user_themes WHERE user_id = ?', [targetId]).catch(() => {});
+        await pool.query('DELETE FROM bank_items WHERE owner_id = ?', [targetId]).catch(() => {});
+        await pool.query('DELETE FROM bank_folders WHERE owner_id = ?', [targetId]).catch(() => {});
+        const [result] = await pool.query('DELETE FROM users WHERE id = ?', [targetId]);
+        if (!result.affectedRows) return res.status(404).json({ error: 'User not found' });
+        await deleteOrphanAttempts();
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('[ADMIN DELETE USER]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/admin/quizzes', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        let rows;
+        try {
+            [rows] = await pool.query(`
+                SELECT q.id, q.title, q.visibility, q.featured, q.featured_order, q.storage_bytes, q.expires_at, q.created_at, q.updated_at,
+                       q.owner_id, u.username AS author,
+                       JSON_LENGTH(JSON_EXTRACT(q.quiz_data, '$.questions')) AS question_count
+                FROM quizzes q
+                LEFT JOIN users u ON q.owner_id = u.id
+                ORDER BY q.featured DESC, q.featured_order ASC, q.updated_at DESC
+                LIMIT 500
+            `);
+        } catch {
+            [rows] = await pool.query(`
+                SELECT q.id, q.title, q.visibility, 0 AS featured, 0 AS featured_order, q.storage_bytes, q.expires_at, q.created_at, q.updated_at,
+                       q.owner_id, u.username AS author
+                FROM quizzes q
+                LEFT JOIN users u ON q.owner_id = u.id
+                ORDER BY q.updated_at DESC
+                LIMIT 500
+            `);
+        }
+        if (attemptsReady && rows.length) {
+            const [counts] = await pool.query(
+                'SELECT quiz_id, COUNT(*) AS attempts FROM quiz_attempts WHERE quiz_id IN (?) GROUP BY quiz_id',
+                [rows.map(q => q.id)]
+            );
+            const byQuiz = new Map(counts.map(c => [c.quiz_id, Number(c.attempts)]));
+            rows.forEach(q => { q.attempts = byQuiz.get(q.id) || 0; });
+        }
+        res.json({ quizzes: rows.map(q => ({ ...q, featured: Boolean(q.featured), question_count: Number(q.question_count || 0) })) });
+    } catch (error) {
+        console.error('[ADMIN QUIZZES]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.patch('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const quiz = await findQuiz(req.params.id, 'id, visibility, featured, featured_order, quiz_data');
+        if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+        const body = req.body || {};
+        const nextVis = VISIBILITIES.has(body.visibility) ? body.visibility : quiz.visibility;
+        const nextFeat = body.featured !== undefined ? (body.featured ? 1 : 0) : (quiz.featured ? 1 : 0);
+        const nextOrder = body.featured_order !== undefined ? toInt(body.featured_order, 0, 1000000, 0) : (quiz.featured_order || 0);
+
+        let quizDataStr = null;
+        if (nextVis !== quiz.visibility && quiz.quiz_data) {
+            const parsed = typeof quiz.quiz_data === 'string' ? JSON.parse(quiz.quiz_data) : quiz.quiz_data;
+            parsed.visibility = nextVis;
+            quizDataStr = JSON.stringify(parsed);
+        }
+        if (quizDataStr) {
+            await pool.query(
+                'UPDATE quizzes SET visibility = ?, featured = ?, featured_order = ?, quiz_data = ?, updated_at = updated_at WHERE id = ?',
+                [nextVis, nextFeat, nextOrder, quizDataStr, quiz.id]
+            );
+        } else {
+            await pool.query(
+                'UPDATE quizzes SET visibility = ?, featured = ?, featured_order = ?, updated_at = updated_at WHERE id = ?',
+                [nextVis, nextFeat, nextOrder, quiz.id]
+            );
+        }
+        res.json({ id: quiz.id, visibility: nextVis, featured: Boolean(nextFeat), featured_order: nextOrder });
+    } catch (error) {
+        console.error('[ADMIN PATCH QUIZ]', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -507,12 +811,12 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
         if (!QUIZ_ID_RE.test(raw)) return res.status(404).json({ error: 'Quiz not found' });
         const key = CODE_RE.test(raw.toUpperCase()) ? raw.toUpperCase() : raw;
 
-        const select = 'SELECT owner_id, visibility, expires_at, quiz_data FROM quizzes WHERE id = ?';
-        let [rows] = await pool.query(select, [key]);
-        if (!rows[0] && key !== raw) [rows] = await pool.query(select, [raw]); // a custom ID in a case-sensitive database
+        const select = 'SELECT owner_id, visibility, featured, expires_at, quiz_data FROM quizzes WHERE id = ?';
+        let [rows] = await pool.query(select, [key]).catch(() => pool.query('SELECT owner_id, visibility, 0 AS featured, expires_at, quiz_data FROM quizzes WHERE id = ?', [key]));
+        if (!rows[0] && key !== raw) [rows] = await pool.query(select, [raw]).catch(() => pool.query('SELECT owner_id, visibility, 0 AS featured, expires_at, quiz_data FROM quizzes WHERE id = ?', [raw])); // a custom ID in a case-sensitive database
         if (!rows[0]) {
             const target = await resolveAlias(raw);
-            if (target) [rows] = await pool.query(select, [target]);
+            if (target) [rows] = await pool.query(select, [target]).catch(() => pool.query('SELECT owner_id, visibility, 0 AS featured, expires_at, quiz_data FROM quizzes WHERE id = ?', [target]));
         }
         const quiz = rows[0];
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
@@ -520,7 +824,7 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
         const isOwner = req.user && quiz.owner_id === req.user.id;
         const isAdmin = req.user && req.user.role === 'admin';
         const isExpired = quiz.expires_at && new Date(quiz.expires_at) <= new Date();
-        const isListed = quiz.visibility === 'public' || quiz.owner_id === null;
+        const isListed = quiz.visibility === 'public' || quiz.owner_id === null || Boolean(quiz.featured);
         const isCode = CODE_RE.test(key) || RANDOM_ID_RE.test(raw);
 
         // Private quizzes open with their code; custom IDs (guessable words) only for the owner and
@@ -910,6 +1214,20 @@ async function ensureSchema() {
     } catch (error) {
         // Non-fatal: old long IDs keep working as they are
         console.error('[SCHEMA] could not convert old quiz IDs:', error.code || error.message);
+    }
+    try {
+        await addColumnIfMissing('quizzes', 'featured', 'TINYINT(1) NOT NULL DEFAULT 0');
+        await addColumnIfMissing('quizzes', 'featured_order', 'INT NOT NULL DEFAULT 0');
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS site_settings (
+                k VARCHAR(64) PRIMARY KEY,
+                v JSON NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+        siteSettingsReady = true;
+    } catch (error) {
+        console.error('[SCHEMA] could not set up featured showcase schema:', error.code || error.message);
     }
     try {
         await ensureBankSchema(pool);

@@ -7,6 +7,8 @@ export const THEME_KEY = "selected_theme";
 export const THEME_CSS_KEY = "selected_theme_css";
 export const CUSTOM_THEMES_KEY = "quizleris_custom_themes";
 export const RECENT_THEMES_KEY = "quizleris_recent_themes";
+export const FONT_SIZE_KEY = "quizleris_font_size";
+export const FONT_SIZES = ["small", "normal", "large"];
 export const MAX_CUSTOM_THEMES = 20;
 export const DEFAULT_THEME_ID = "emerald";
 const SHARE_PREFIX = "QZT1.";
@@ -554,5 +556,18 @@ export function applyTheme(theme, { persist = false } = {}) {
         localStorage.setItem(THEME_CSS_KEY, css);
         rememberRecent(theme.id);
         announceChange();
+    }
+}
+
+export function savedFontSize() {
+    const val = localStorage.getItem(FONT_SIZE_KEY);
+    return FONT_SIZES.includes(val) ? val : "normal";
+}
+
+export function applyFontSize(size, { persist = false } = {}) {
+    const clean = FONT_SIZES.includes(size) ? size : "normal";
+    document.documentElement.dataset.fontSize = clean;
+    if (persist) {
+        try { localStorage.setItem(FONT_SIZE_KEY, clean); } catch { /* private window */ }
     }
 }

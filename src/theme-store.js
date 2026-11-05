@@ -5,9 +5,9 @@ import { t, getLanguage } from "./lang.js";
 import { escapeHtml } from "./dom.js";
 import { confirmDialog } from "./dialog.js";
 import {
-    FONTS, EFFECTS, RANGES, MAX_CUSTOM_THEMES, DEFAULT_THEME_ID, allThemes, findTheme, upsertCustomTheme,
+    FONTS, EFFECTS, RANGES, MAX_CUSTOM_THEMES, DEFAULT_THEME_ID, FONT_SIZES, allThemes, findTheme, upsertCustomTheme,
     deleteCustomTheme, copyTheme, sanitizeTheme, encodeShareCode, decodeShareCode, readability,
-    fixReadability, themeName, previewStyle, withBase, randomTheme,
+    fixReadability, themeName, previewStyle, withBase, randomTheme, savedFontSize, applyFontSize,
 } from "./themes.js";
 import { currentTheme, setTheme, previewTheme, restoreTheme, reloadSavedTheme, refreshThemePicker } from "./theme-picker.js";
 import { themeSyncStatus } from "./theme-sync.js";
@@ -141,6 +141,7 @@ async function act(name, btn) {
     switch (name) {
         case "close": closeStore(); break;
         case "filter": state.filter = btn.dataset.value; state.share = null; render(); break;
+        case "font-size": applyFontSize(btn.dataset.value, { persist: true }); refreshThemePicker(); renderKeepingFocus(btn); break;
         case "try": startTryOn(themeOf(btn), false); break;
         case "create": openEditor(copyTheme(currentTheme(), t("themes.namePlaceholder"))); break;
         case "copy": openEditor(copyTheme(themeOf(btn), themeName(themeOf(btn), getLanguage()))); break;
@@ -380,6 +381,8 @@ function galleryHtml() {
     const themes = allThemes().filter(theme =>
         state.filter === "all" ? true : state.filter === "mine" ? theme.custom : theme.base === state.filter);
     const filterLabels = { all: "themes.filterAll", light: "themes.filterLight", dark: "themes.filterDark", mine: "themes.filterMine" };
+    const fontScaleLabels = { small: "themes.fontSizeSmall", normal: "themes.fontSizeNormal", large: "themes.fontSizeLarge" };
+    const fontSize = savedFontSize();
     const share = state.share ? `
         <div class="ts-share">
             <div class="ts-share-head">
@@ -400,7 +403,13 @@ function galleryHtml() {
             <div class="ts-filters" role="group">
                 ${FILTERS.map(f => `<button type="button" data-act="filter" data-value="${f}" aria-pressed="${state.filter === f}">${escapeHtml(t(filterLabels[f]))}</button>`).join("")}
             </div>
-            <button type="button" class="btn btn-primary" data-act="create">${escapeHtml(t("themes.create"))}</button>
+            <div class="ts-toolbar-right">
+                <div class="ts-fontsize" role="group" aria-label="${escapeHtml(t("themes.fontSize"))}">
+                    <span class="ts-fontsize-label">${escapeHtml(t("themes.fontSize"))}</span>
+                    ${FONT_SIZES.map((sz, idx) => `<button type="button" data-act="font-size" data-value="${sz}" aria-pressed="${sz === fontSize}" title="${escapeHtml(t(fontScaleLabels[sz]))}" aria-label="${escapeHtml(t(fontScaleLabels[sz]))}" style="font-size: ${0.78 + idx * 0.14}rem">A</button>`).join("")}
+                </div>
+                <button type="button" class="btn btn-primary" data-act="create">${escapeHtml(t("themes.create"))}</button>
+            </div>
         </div>
         ${share}
         ${grid}

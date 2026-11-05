@@ -59,6 +59,42 @@ export const createInvites = (role, count, note) =>
     adminRequest('invites', { method: 'POST', body: JSON.stringify({ role, count, note }) });
 export const deleteInvite = (code) => adminRequest(`invites/${encodeURIComponent(code)}`, { method: 'DELETE' });
 
+/** Admin overview counts & settings */
+export async function fetchAdminOverview() {
+    const res = await adminRequest('overview');
+    if (!res.ok) throw new Error(res.data?.error || 'Failed to load overview');
+    return res.data;
+}
+/** Admin all-quizzes list */
+export async function fetchAdminQuizzes() {
+    const res = await adminRequest('quizzes');
+    if (!res.ok) throw new Error(res.data?.error || 'Failed to load quizzes');
+    return res.data?.quizzes || [];
+}
+/** Admin update quiz visibility / featured / featured_order */
+export const updateAdminQuiz = (quizId, payload) =>
+    adminRequest(`quizzes/${encodeURIComponent(quizId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+/** Admin update user role / subscription_tier / premium_days */
+export const updateAdminUser = (userId, payload) =>
+    adminRequest(`users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+/** Admin delete user account */
+export const deleteAdminUser = (userId) =>
+    adminRequest(`users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+/** Admin update landing-page showcase settings & order */
+export const updateShowcaseSettings = (payload) =>
+    adminRequest('showcase', { method: 'PUT', body: JSON.stringify(payload) });
+
+/** Public landing-page featured showcase: { enabled, intervalSeconds, action, quizzes: [{ id, title, author }] } */
+export async function fetchShowcase() {
+    try {
+        const res = await fetch(`${API_BASE}/showcase`);
+        if (!res.ok) return { enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] };
+        return await res.json();
+    } catch {
+        return { enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] };
+    }
+}
+
 export function logout() {
     setToken(null);
     localStorage.removeItem('quizleris_user');

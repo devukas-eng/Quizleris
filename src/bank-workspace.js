@@ -83,6 +83,7 @@ let metaRequest = null;
 let built = false;
 let shown = false;
 let dashOrigin = null;
+let pendingQueue = null;
 let bankList = null;
 let mineList = null;
 let sheet = null;
@@ -105,6 +106,15 @@ export function initBankWorkspace() {
     document.addEventListener("open-editor", e => {
         const from = e.detail?.from;
         dashOrigin = from ? { ...from, at: performance.now() } : null;
+        if (e.detail?.bankQueue) {
+            if (shown) {
+                setTab("bank");
+                setDrawer(true);
+                setQueue(e.detail.bankQueue);
+            } else {
+                pendingQueue = e.detail.bankQueue;
+            }
+        }
     });
     document.addEventListener("editor-mode", e => {
         if (e.detail?.open) onEditorOpen();
@@ -137,7 +147,7 @@ export function initBankWorkspace() {
         if (target.isContentEditable || target.closest?.("input, textarea, select, rich-input, math-field, [contenteditable]")) return;
         e.preventDefault();
         if (layoutMode() !== "wide") setTab("bank");
-        if (layoutMode() === "drawer") setDrawer(true);
+        setDrawer(true);
         els.panel.querySelector('[data-search="bank"]').focus();
     });
     // Known ahead, so the editor opens straight into its three columns
@@ -252,13 +262,22 @@ function show(origin) {
     const saveToBank = document.getElementById("admin-bank-save-btn");
     if (saveToBank) saveToBank.hidden = !limits.writeMine;
     document.body.classList.add("bank-workspace");
+    document.body.classList.toggle("bank-collapsed", !!prefs.collapsed);
     setTab(prefs.tab === "mine" ? "mine" : "bank");
+    syncDrawerBtn();
     if (!bank.started) startBank();
     if (!mine.started) startMine();
     else reloadFolders();
     loadFavorites();
     refreshFlagged();
     refreshReview();
+    if (pendingQueue) {
+        const q = pendingQueue;
+        pendingQueue = null;
+        setTab("bank");
+        setDrawer(true);
+        setQueue(q);
+    }
     animateIn(origin);
 }
 
@@ -270,7 +289,7 @@ function hide() {
     const saveToBank = document.getElementById("admin-bank-save-btn");
     if (saveToBank) saveToBank.hidden = true;
     const finish = () => {
-        if (!shown) document.body.classList.remove("bank-workspace", "bank-drawer-open", "bank-drawer-peek");
+        if (!shown) document.body.classList.remove("bank-workspace", "bank-drawer-open", "bank-drawer-peek", "bank-collapsed");
     };
     if (reduceMotion.matches) {
         finish();
@@ -285,7 +304,9 @@ function hide() {
 }
 
 function onLayoutChange() {
-    if (shown && layoutMode() !== "drawer") document.body.classList.remove("bank-drawer-open", "bank-drawer-peek");
+    if (!shown) return;
+    if (layoutMode() !== "drawer") document.body.classList.remove("bank-drawer-open", "bank-drawer-peek");
+    syncDrawerBtn();
 }
 
 function activeAside() {
@@ -295,10 +316,11 @@ function activeAside() {
 function animateIn(origin) {
     if (reduceMotion.matches) return;
     const mode = layoutMode();
-    const landing = mode === "wide" ? els.mine : mode === "compact" ? activeAside() : els.drawerBtn;
+    const collapsed = mode !== "drawer" && document.body.classList.contains("bank-collapsed");
+    const landing = collapsed || mode === "drawer" ? els.drawerBtn : mode === "wide" ? els.mine : activeAside();
     if (origin) flyDashboard(origin, landing);
-    else slideIn(landing, mode === "wide" ? -1 : 1, 40);
-    if (mode === "wide") slideIn(els.panel, 1, origin ? 200 : 90);
+    else slideIn(landing, mode === "wide" && !collapsed ? -1 : 1, 40);
+    if (mode === "wide" && !collapsed) slideIn(els.panel, 1, origin ? 200 : 90);
     document.getElementById("app-root")?.animate(
         [{ opacity: 0, transform: "translateY(18px) scale(0.985)" }, { opacity: 1, transform: "none" }],
         { duration: 560, delay: origin ? 140 : 0, easing: EASE, fill: "backwards" });
@@ -553,9 +575,9 @@ function wireCommon() {
         if (questions.length) openBankImport({ scope: "mine", preset: questions });
         else toast(t("bank.quizEmpty"));
     });
-    els.drawerBtn.addEventListener("click", () => setDrawer(!document.body.classList.contains("bank-drawer-open")));
+    els.drawerBtn.addEventListener("click", () => setDrawer(!isDrawerOpen()));
     document.addEventListener("keydown", e => {
-        if (e.key === "Escape" && document.body.classList.contains("bank-drawer-open") && !sheet && !popover
+        if (e.key === "Escape" && layoutMode() === "drawer" && document.body.classList.contains("bank-drawer-open") && !sheet && !popover
             && !document.querySelector(".app-dialog-overlay.open")) setDrawer(false);
     });
 }
@@ -571,9 +593,27 @@ function setTab(tab) {
     });
 }
 
+function isDrawerOpen() {
+    return layoutMode() === "drawer"
+        ? document.body.classList.contains("bank-drawer-open")
+        : !document.body.classList.contains("bank-collapsed");
+}
+
+function syncDrawerBtn() {
+    els.drawerBtn?.setAttribute("aria-expanded", String(isDrawerOpen()));
+}
+
+// Below 1100px the bank is a drawer; from 1100px the same close/floating buttons withdraw or bring back the side panels
 function setDrawer(open) {
-    document.body.classList.toggle("bank-drawer-open", open);
-    els.drawerBtn.setAttribute("aria-expanded", String(open));
+    if (layoutMode() === "drawer") {
+        document.body.classList.toggle("bank-drawer-open", open);
+    } else {
+        const collapsed = !open;
+        document.body.classList.toggle("bank-collapsed", collapsed);
+        prefs.collapsed = collapsed;
+        savePrefs();
+    }
+    syncDrawerBtn();
 }
 
 // --- The shared bank ---
