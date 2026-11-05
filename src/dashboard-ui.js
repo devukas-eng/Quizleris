@@ -1169,6 +1169,20 @@ function toLocalDatetimeValue(date) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function formatScheduleForInput(str) {
+    if (!str) return "";
+    const d = new Date(str);
+    if (Number.isNaN(d.getTime())) return String(str).slice(0, 16);
+    return toLocalDatetimeValue(d);
+}
+
+function parseInputToIso(val) {
+    if (!val) return "";
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toISOString();
+}
+
 async function renderAdminAllQuizzesTab(panel) {
     if (!adminState.allQuizzes) {
         panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
@@ -1379,13 +1393,13 @@ function normalizeShowcaseConfig(rawCfg, allQuizzes) {
         ? cfg.playlists.map(pl => ({
             id: String(pl.id || "default"),
             name: String(pl.name || t("adminGui.showcaseDefaultPlaylist")),
-            scheduleStart: pl.scheduleStart ? String(pl.scheduleStart).slice(0, 16) : "",
-            scheduleEnd: pl.scheduleEnd ? String(pl.scheduleEnd).slice(0, 16) : "",
+            scheduleStart: pl.scheduleStart ? String(pl.scheduleStart).slice(0, 36) : "",
+            scheduleEnd: pl.scheduleEnd ? String(pl.scheduleEnd).slice(0, 36) : "",
             items: Array.isArray(pl.items) ? pl.items.map(it => ({
                 quizId: String(it.quizId || it.id || "").trim().toUpperCase(),
                 customLabel: String(it.customLabel || ""),
-                scheduleStart: it.scheduleStart ? String(it.scheduleStart).slice(0, 16) : "",
-                scheduleEnd: it.scheduleEnd ? String(it.scheduleEnd).slice(0, 16) : "",
+                scheduleStart: it.scheduleStart ? String(it.scheduleStart).slice(0, 36) : "",
+                scheduleEnd: it.scheduleEnd ? String(it.scheduleEnd).slice(0, 36) : "",
                 enabled: it.enabled !== false,
             })).filter(it => it.quizId) : [],
         }))
@@ -1593,7 +1607,7 @@ async function renderAdminShowcaseTab(panel) {
                             <button type="button" class="btn btn-primary btn-compact" id="dash-activate-playlist-btn">${escapeHtml(t("adminGui.showcaseSetActivePlaylist"))}</button>
                         `}
                         <button type="button" class="btn btn-secondary btn-compact${plHasSched ? " is-active" : ""}" id="dash-toggle-pl-sched-btn">
-                            ${escapeHtml(t("adminGui.scheduleToggleBtn"))}${plHasSched ? ` (${escapeHtml((currentPl.scheduleStart || "").replace("T", " "))} → ${escapeHtml((currentPl.scheduleEnd || "…").replace("T", " "))})` : ""}
+                            ${escapeHtml(t("adminGui.scheduleToggleBtn"))}${plHasSched ? ` (${escapeHtml(formatScheduleForInput(currentPl.scheduleStart).replace("T", " "))} → ${escapeHtml(formatScheduleForInput(currentPl.scheduleEnd).replace("T", " ") || "…")})` : ""}
                         </button>
                         ${showcaseCfg.playlists.length > 1 && currentPl.id !== "default" ? `
                             <button type="button" class="btn btn-secondary btn-compact dash-btn-danger" id="dash-delete-playlist-btn">${escapeHtml(t("adminGui.showcaseDeletePlaylist"))}</button>
@@ -1605,11 +1619,11 @@ async function renderAdminShowcaseTab(panel) {
                     <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcasePlaylistSchedule"))}:</span>
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
-                        <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(currentPl.scheduleStart || "")}">
+                        <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(formatScheduleForInput(currentPl.scheduleStart))}">
                     </label>
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
-                        <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(currentPl.scheduleEnd || "")}">
+                        <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(formatScheduleForInput(currentPl.scheduleEnd))}">
                     </label>
                     <div class="dash-sched-presets">
                         <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="24">${escapeHtml(t("adminGui.preset24h"))}</button>
@@ -1659,11 +1673,11 @@ async function renderAdminShowcaseTab(panel) {
                                 <div class="dash-showcase-item-sched" data-item-sched-drawer="${idx}" ${isSchedOpen ? "" : "hidden"}>
                                     <label>
                                         <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}:</span>
-                                        <input type="datetime-local" class="input-field" data-item-start="${idx}" value="${escapeHtml(item.scheduleStart || "")}">
+                                        <input type="datetime-local" class="input-field" data-item-start="${idx}" value="${escapeHtml(formatScheduleForInput(item.scheduleStart))}">
                                     </label>
                                     <label>
                                         <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}:</span>
-                                        <input type="datetime-local" class="input-field" data-item-end="${idx}" value="${escapeHtml(item.scheduleEnd || "")}">
+                                        <input type="datetime-local" class="input-field" data-item-end="${idx}" value="${escapeHtml(formatScheduleForInput(item.scheduleEnd))}">
                                     </label>
                                     <div class="dash-sched-presets">
                                         <button type="button" class="btn btn-secondary btn-compact" data-item-preset="24" data-idx="${idx}">${escapeHtml(t("adminGui.preset24h"))}</button>
@@ -1804,7 +1818,7 @@ async function renderAdminShowcaseTab(panel) {
                 } else if (fmt === "both" && label) {
                     innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span><span class="hero-code-title"> · ${escapeHtml(label)}</span>`;
                 }
-                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}">${innerHtml}</button>.`;
+                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}"><span class="hero-code-icon">✨</span>${innerHtml}</button>.`;
             };
             drawPreview(activePreviewItems[0], false);
             if (activePreviewItems.length > 1) {
@@ -1892,7 +1906,7 @@ async function renderAdminShowcaseTab(panel) {
 
     // Playlist schedule presets
     panel.querySelectorAll("[data-pl-preset]").forEach(btn => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
             const hours = Number(btn.dataset.plPreset);
             const sInput = panel.querySelector("#dash-pl-sched-start");
             const eInput = panel.querySelector("#dash-pl-sched-end");
@@ -1900,12 +1914,19 @@ async function renderAdminShowcaseTab(panel) {
             if (hours <= 0) {
                 sInput.value = "";
                 eInput.value = "";
+                currentPl.scheduleStart = "";
+                currentPl.scheduleEnd = "";
             } else {
                 const now = new Date();
                 const end = new Date(now.getTime() + hours * 3600 * 1000);
                 sInput.value = toLocalDatetimeValue(now);
                 eInput.value = toLocalDatetimeValue(end);
+                currentPl.scheduleStart = now.toISOString();
+                currentPl.scheduleEnd = end.toISOString();
             }
+            adminState.plSchedOpen = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
+            await persistShowcase(btn);
+            renderAdminShowcaseTab(panel);
         });
     });
 
@@ -1913,8 +1934,8 @@ async function renderAdminShowcaseTab(panel) {
     panel.querySelector("#dash-save-pl-sched-btn")?.addEventListener("click", async (e) => {
         const btn = e.currentTarget;
         btn.disabled = true;
-        currentPl.scheduleStart = panel.querySelector("#dash-pl-sched-start")?.value || "";
-        currentPl.scheduleEnd = panel.querySelector("#dash-pl-sched-end")?.value || "";
+        currentPl.scheduleStart = parseInputToIso(panel.querySelector("#dash-pl-sched-start")?.value);
+        currentPl.scheduleEnd = parseInputToIso(panel.querySelector("#dash-pl-sched-end")?.value);
         adminState.plSchedOpen = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
         await persistShowcase(btn);
         btn.disabled = false;
@@ -1992,21 +2013,29 @@ async function renderAdminShowcaseTab(panel) {
 
     // Per-item schedule presets
     panel.querySelectorAll("[data-item-preset]").forEach(btn => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
             const idx = Number(btn.dataset.idx);
             const hours = Number(btn.dataset.itemPreset);
             const sInput = panel.querySelector(`[data-item-start="${idx}"]`);
             const eInput = panel.querySelector(`[data-item-end="${idx}"]`);
-            if (!sInput || !eInput) return;
+            const item = currentPl.items[idx];
+            if (!sInput || !eInput || !item) return;
             if (hours <= 0) {
                 sInput.value = "";
                 eInput.value = "";
+                item.scheduleStart = "";
+                item.scheduleEnd = "";
             } else {
                 const now = new Date();
                 const end = new Date(now.getTime() + hours * 3600 * 1000);
                 sInput.value = toLocalDatetimeValue(now);
                 eInput.value = toLocalDatetimeValue(end);
+                item.scheduleStart = now.toISOString();
+                item.scheduleEnd = end.toISOString();
             }
+            adminState.openItemSchedIdx = (item.scheduleStart || item.scheduleEnd) ? idx : null;
+            await persistShowcase(btn);
+            renderAdminShowcaseTab(panel);
         });
     });
 
@@ -2021,8 +2050,8 @@ async function renderAdminShowcaseTab(panel) {
             const startInput = panel.querySelector(`[data-item-start="${idx}"]`);
             const endInput = panel.querySelector(`[data-item-end="${idx}"]`);
             item.customLabel = lblInput ? lblInput.value.trim() : "";
-            item.scheduleStart = startInput ? startInput.value : "";
-            item.scheduleEnd = endInput ? endInput.value : "";
+            item.scheduleStart = parseInputToIso(startInput ? startInput.value : "");
+            item.scheduleEnd = parseInputToIso(endInput ? endInput.value : "");
             adminState.openItemSchedIdx = (item.scheduleStart || item.scheduleEnd) ? idx : null;
             await persistShowcase(btn);
             btn.disabled = false;

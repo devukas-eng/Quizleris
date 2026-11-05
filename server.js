@@ -452,14 +452,43 @@ function sanitizePlaylists(rawList) {
     return out;
 }
 
+function parseScheduleDate(str) {
+    if (!str) return null;
+    const s = String(str).trim();
+    if (!s) return null;
+    // Explicit timezone offset (+02:00, -05:00) or UTC 'Z'
+    if (/Z|[+-]\d{2}(:?\d{2})?$/i.test(s)) {
+        const d = new Date(s);
+        return Number.isNaN(d.getTime()) ? null : d;
+    }
+    // If it's a naive ISO datetime string (YYYY-MM-DDTHH:mm...) without timezone info:
+    // Interpret with Europe/Vilnius offset so times selected in the Lithuanian admin panel match
+    // server time regardless of the host's native timezone (e.g. UTC on Linux/VPS).
+    try {
+        const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Vilnius', timeZoneName: 'shortOffset' });
+        const parts = fmt.formatToParts(new Date());
+        const tzPart = parts.find(p => p.type === 'timeZoneName')?.value || '';
+        const match = tzPart.match(/GMT([+-])(\d+)(?::(\d+))?/);
+        const sign = match && match[1] === '-' ? '-' : '+';
+        const offsetH = match ? String(match[2]).padStart(2, '0') : '02';
+        const offsetM = match ? String(match[3] || 0).padStart(2, '0') : '00';
+        const d = new Date(`${s}${sign}${offsetH}:${offsetM}`);
+        if (!Number.isNaN(d.getTime())) return d;
+    } catch {
+        // fallback
+    }
+    const fallback = new Date(s);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
 function isWithinSchedule(startStr, endStr, now = new Date()) {
     if (startStr) {
-        const s = new Date(startStr);
-        if (!Number.isNaN(s.getTime()) && now < s) return false;
+        const s = parseScheduleDate(startStr);
+        if (s && now < s) return false;
     }
     if (endStr) {
-        const e = new Date(endStr);
-        if (!Number.isNaN(e.getTime()) && now > e) return false;
+        const e = parseScheduleDate(endStr);
+        if (e && now > e) return false;
     }
     return true;
 }
@@ -511,6 +540,7 @@ async function readShowcaseSettings() {
 
 app.get('/api/showcase', async (req, res) => {
     try {
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         const settings = await readShowcaseSettings();
         if (!settings.enabled) return res.json({ ...settings, quizzes: [] });
 

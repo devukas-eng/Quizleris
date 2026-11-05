@@ -41,6 +41,7 @@ export function renderStartMenu() {
         clearInterval(showcaseTimer);
         showcaseTimer = null;
     }
+    cachedShowcase = null;
 
     // Show menu, hide game
     startMenu.style.display = "flex";
@@ -102,6 +103,7 @@ async function initHeroShowcase() {
         clearInterval(showcaseTimer);
         showcaseTimer = null;
     }
+    cachedShowcase = null;
     const data = cachedShowcase || await fetchShowcase();
     cachedShowcase = data;
     const hint = document.getElementById("hero-pin-hint");
@@ -128,7 +130,7 @@ async function initHeroShowcase() {
         }
         const titleTip = subtitle ? `${subtitle} (${item.id})` : item.id;
         const animCls = animate ? ` is-flipping anim-${escapeHtml(anim)}` : "";
-        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
+        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-icon">✨</span><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
     };
 
     renderTicker(list[0], false);

@@ -7808,6 +7808,13 @@ body.pp-open {
     outline: none;
 }
 
+.hero-code-icon {
+    font-size: 0.82em;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+}
+
 .hero-code-val {
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-weight: 700;
