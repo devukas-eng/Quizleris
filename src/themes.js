@@ -481,8 +481,14 @@ export function loadCustomThemes() {
     return list.map(sanitizeTheme).filter(t => t && !seen.has(t.id) && seen.add(t.id)).slice(0, MAX_CUSTOM_THEMES);
 }
 
+// theme-sync.js listens, to save the change in a premium account too
+function announceChange() {
+    document.dispatchEvent(new window.CustomEvent("quizleris-themes-changed"));
+}
+
 export function saveCustomThemes(list) {
     localStorage.setItem(CUSTOM_THEMES_KEY, JSON.stringify(list.slice(0, MAX_CUSTOM_THEMES)));
+    announceChange();
 }
 
 /** Saves a new or edited custom theme; false when the list is full */
@@ -547,5 +553,6 @@ export function applyTheme(theme, { persist = false } = {}) {
         localStorage.setItem(THEME_KEY, theme.id);
         localStorage.setItem(THEME_CSS_KEY, css);
         rememberRecent(theme.id);
+        announceChange();
     }
 }

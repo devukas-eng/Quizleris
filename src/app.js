@@ -11,6 +11,7 @@ import { initAnalytics, logEvent, hasDecidedConsent, grantConsent, revokeConsent
 import { syncCloudQuizzes } from "./sync.js";
 import { isAdminAccessAllowed } from "./auth.js";
 import { initThemePicker, refreshThemePicker, closeThemePicker } from "./theme-picker.js";
+import { initThemeSync } from "./theme-sync.js";
 
 // The task bank's code is fetched only for signed-in teachers and admins: students never load it
 let bankWorkspace = null;
@@ -53,6 +54,7 @@ async function initApp() {
 
         // Theme picker (theme-picker.js; the gallery loads on demand)
         initThemePicker({ onOpen: () => closeLangMenu() });
+        initThemeSync();
 
         // --- Core App Callbacks ---
         // Register callbacks from menu.js to setupDashboard / setupAdmin

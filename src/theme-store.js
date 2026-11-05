@@ -10,6 +10,7 @@ import {
     fixReadability, themeName, previewStyle, withBase, randomTheme,
 } from "./themes.js";
 import { currentTheme, setTheme, previewTheme, restoreTheme, reloadSavedTheme, refreshThemePicker } from "./theme-picker.js";
+import { themeSyncStatus } from "./theme-sync.js";
 
 const FILTERS = ["all", "light", "dark", "mine"];
 const MAIN_COLORS = ["bg", "surface", "text", "accent", "accent2"];
@@ -100,6 +101,10 @@ function build() {
         if (e.target.matches("[data-form=import]")) importCode(e.target.elements.code.value);
     });
     document.addEventListener("keydown", onKey);
+    // The account's themes may arrive (or the sign-in change) while the gallery is open
+    document.addEventListener("quizleris-theme-sync", () => {
+        if (!overlay.hidden && state.view === "gallery" && !state.tryOn) render();
+    });
 }
 
 function onKey(e) {
@@ -406,7 +411,8 @@ function galleryHtml() {
             </form>
             <button type="button" class="ts-link" data-act="reset">${escapeHtml(t("themes.reset"))}</button>
         </div>
-        <p class="ts-msg" role="status">${escapeHtml(state.message)}</p>`;
+        <p class="ts-msg" role="status">${escapeHtml(state.message)}</p>
+        <p class="ts-msg ts-sync">${escapeHtml(t(`themes.sync.${themeSyncStatus()}`))}</p>`;
 }
 
 function colorField(key) {

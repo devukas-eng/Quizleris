@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { cleanThemePayload } from '../src/backend/user-themes.js';
 import {
     THEMES, deriveTokens, themeCss, contrastRatio, textOn, readability, fixReadability,
     sanitizeTheme, encodeShareCode, decodeShareCode, upsertCustomTheme, loadCustomThemes,
@@ -110,6 +111,16 @@ describe('themes', () => {
             const flipped = sanitizeTheme(withBase(theme, base === 'dark' ? 'light' : 'dark'));
             expect(readability(flipped).text, `flipped ${i}`).toBeGreaterThanOrEqual(4.5);
         }
+    });
+
+    it('the server keeps exactly what the page saves, and nothing worse', () => {
+        const page = [sanitizeTheme({ ...custom, id: 'c-abcd1234' }), copyTheme(findTheme('paper'), 'Popierius 2')];
+        const stored = cleanThemePayload({ selected: 'paper', custom: page });
+        expect(stored).toEqual({ selected: 'paper', custom: page });
+        expect(cleanThemePayload({ selected: 'x', custom: [{ ...page[0], colors: { ...page[0].colors, bg: '#000;}body{' } }] })).toBeNull();
+        expect(cleanThemePayload({ custom: [page[0], page[0]] })).toBeNull();
+        expect(cleanThemePayload({ custom: Array(21).fill(0).map((_, i) => ({ ...page[0], id: `c-aaaa${i}x` })) })).toBeNull();
+        expect(cleanThemePayload({ selected: 'emerald;drop', custom: [] }).selected).toBeNull();
     });
 
     it('copies a built-in theme into an editable one', () => {

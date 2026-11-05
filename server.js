@@ -29,6 +29,8 @@ for (const key of ['DB_USER', 'DB_PASS', 'DB_NAME']) {
 const pool = require('./src/backend/db.js');
 const { seedPremadeQuizzes } = require('./src/backend/premade.js');
 const { ensureBankSchema, createBankRouter, cleanupBank } = require('./src/backend/bank.js');
+const { FREE_QUIZ_LIMIT, PRIVATE_EXPIRY_DAYS, hasActivePremium, isPremium, planCapabilities } = require('./src/backend/plans.js');
+const { cleanThemePayload } = require('./src/backend/user-themes.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -169,16 +171,7 @@ const normalizeInvite = (raw) => String(raw ?? '').toUpperCase().replace(/[\s-]/
 
 const DUMMY_HASH = bcrypt.hashSync('timing-equalizer-not-a-real-password', 12);
 
-// --- PLAN LIMITS ---
-const FREE_QUIZ_LIMIT = 5;
-const PRIVATE_EXPIRY_DAYS = 30;
-
-// Premium with no expiry date never lapses; with a date, it lapses once that date passes.
-const hasActivePremium = (user) =>
-    user.subscription_tier === 'premium' &&
-    (!user.subscription_expires_at || new Date(user.subscription_expires_at) > new Date());
-
-const isPremium = (user) => user.role === 'admin' || hasActivePremium(user);
+// --- PLAN LIMITS --- (src/backend/plans.js; compared in docs/planai.md)
 
 // --- VALIDATION ---
 const USERNAME_RE = /^[A-Za-z0-9_.-]{3,50}$/;
@@ -351,6 +344,7 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 
         const premium = isPremium(req.user);
         res.json({
+            capabilities: planCapabilities(req.user),
             user: {
                 id: row.id,
                 username: row.username,
@@ -369,6 +363,46 @@ app.get('/api/me', authenticateToken, async (req, res) => {
         });
     } catch (error) {
         console.error('[ME]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// --- THEMES IN THE ACCOUNT (premium) ---
+// The page keeps themes in the browser; for premium accounts it also saves them here, so the
+// chosen theme and the user's own themes follow to other devices.
+let userThemesReady = false;
+const THEME_SYNC_DENIED = { error: 'Saving themes in the account is a premium feature.', code: 'premium_required' };
+
+app.get('/api/me/themes', authenticateToken, async (req, res) => {
+    if (!planCapabilities(req.user).theme_sync) return res.status(403).json(THEME_SYNC_DENIED);
+    if (!userThemesReady) return res.status(503).json({ error: 'Themes cannot be saved right now' });
+    try {
+        const [rows] = await pool.query('SELECT data, updated_at FROM user_themes WHERE user_id = ?', [req.user.id]);
+        if (!rows.length) return res.json({ selected: null, custom: [], updated_at: null });
+        const data = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+        // Stored data passed the same check when it was saved; checking again costs nothing
+        const clean = cleanThemePayload(data) || { selected: null, custom: [] };
+        res.json({ ...clean, updated_at: rows[0].updated_at });
+    } catch (error) {
+        console.error('[THEMES GET]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.put('/api/me/themes', authenticateToken, async (req, res) => {
+    if (!planCapabilities(req.user).theme_sync) return res.status(403).json(THEME_SYNC_DENIED);
+    if (!userThemesReady) return res.status(503).json({ error: 'Themes cannot be saved right now' });
+    const clean = cleanThemePayload(req.body);
+    if (!clean) return res.status(400).json({ error: 'Invalid themes' });
+    try {
+        await pool.query(
+            `INSERT INTO user_themes (user_id, data) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE data = VALUES(data)`,
+            [req.user.id, JSON.stringify(clean)]
+        );
+        res.json({ saved: true });
+    } catch (error) {
+        console.error('[THEMES PUT]', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -857,6 +891,19 @@ async function ensureSchema() {
     } catch (error) {
         // Non-fatal: quizzes work, results just stay on the students' devices
         console.error('[SCHEMA] could not create the results table:', error.code || error.message);
+    }
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS user_themes (
+                user_id INT PRIMARY KEY,
+                data JSON NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+        userThemesReady = true;
+    } catch (error) {
+        // Non-fatal: themes then stay in each browser only
+        console.error('[SCHEMA] could not create the themes table:', error.code || error.message);
     }
     try {
         await convertLongIds();
