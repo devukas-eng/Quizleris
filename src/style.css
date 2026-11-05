@@ -4541,6 +4541,20 @@ math-virtual-keyboard::part(action-toolbar) {
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.dash-playlist-schedule[hidden],
+.dash-showcase-item-sched[hidden] {
+    display: none !important;
+}
+
+.dash-sched-presets {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .dash-playlist-schedule label {
@@ -4602,47 +4616,122 @@ math-virtual-keyboard::part(action-toolbar) {
 .dash-quick-add-box {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 14px 16px;
+    gap: 14px;
+    padding: 16px;
     border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border-color));
     border-radius: var(--radius);
-    background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
+    background: color-mix(in srgb, var(--accent) 4%, var(--card-bg));
+}
+
+.dash-direct-code-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .dash-quick-add-title {
-    font-size: 0.88rem;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 700;
     color: var(--text);
 }
 
-.dash-quick-add-grid {
+.dash-direct-inputs {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
 }
 
-.dash-quick-add-grid label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 0.76rem;
-    color: var(--muted);
-}
-
-.dash-quick-add-grid .input-field {
+.dash-direct-inputs .input-field {
     margin: 0;
     height: 36px;
     padding: 4px 10px;
     font-size: 0.85rem;
 }
 
-.dash-quick-add-code {
-    flex: 1 1 200px;
+.dash-direct-code-input {
+    flex: 1 1 180px;
+    max-width: 240px;
 }
 
-.dash-quick-add-label {
+.dash-direct-label-input {
+    flex: 2 1 220px;
+}
+
+.dash-sector-browser {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--control-border);
+}
+
+.dash-sector-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.dash-sector-search {
+    margin: 0 !important;
+    flex: 1 1 240px;
+    max-width: 340px;
+    height: 34px;
+    padding: 4px 10px;
+    font-size: 0.83rem;
+}
+
+.dash-sector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 8px;
+    max-height: 290px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.dash-sector-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--control-border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    transition: border-color 0.15s ease;
+}
+
+.dash-sector-card:hover {
+    border-color: var(--accent);
+}
+
+.dash-sector-card.is-added {
+    opacity: 0.72;
+    background: color-mix(in srgb, var(--accent) 4%, var(--card-bg));
+}
+
+.dash-sector-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.dash-sector-card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-item-inline-label {
+    margin: 0 !important;
     flex: 1 1 180px;
+    max-width: 260px;
+    height: 32px;
+    padding: 3px 10px;
+    font-size: 0.82rem;
 }
 
 .dash-showcase-list {

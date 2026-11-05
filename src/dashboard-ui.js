@@ -199,6 +199,7 @@ function renderAdminWorkspace(body) {
     const ov = adminState.overview;
     const tabs = [
         { id: "overview", icon: "📊", label: t("adminGui.tabOverview"), badge: null },
+        { id: "analytics", icon: "📈", label: t("adminGui.tabAnalytics"), badge: null },
         { id: "approvals", icon: "⏳", label: t("adminGui.tabApprovals"), badge: ov?.bank?.pendingReview ?? 0 },
         { id: "reports", icon: "🚩", label: t("adminGui.tabReports"), badge: ov?.bank?.openReports ?? 0 },
         { id: "bank", icon: "📚", label: t("adminGui.tabBank"), badge: ov?.bank?.published ?? null },
@@ -228,6 +229,7 @@ function renderAdminWorkspace(body) {
 
     const panel = body.querySelector("#dash-admin-panel");
     if (activeAdminTab === "overview") renderAdminOverviewTab(panel);
+    else if (activeAdminTab === "analytics") renderAdminAnalyticsTab(panel);
     else if (activeAdminTab === "approvals") renderAdminApprovalsTab(panel);
     else if (activeAdminTab === "reports") renderAdminReportsTab(panel);
     else if (activeAdminTab === "bank") renderAdminBankTab(panel);
@@ -286,17 +288,6 @@ function renderAdminOverviewTab(panel) {
             .replace("{flag}", ov.bank.openReports)
         : "";
 
-    const daily = Array.isArray(an.dailyAttempts) && an.dailyAttempts.length
-        ? an.dailyAttempts
-        : Array.from({ length: 14 }, (_, i) => {
-            const d = new Date();
-            d.setDate(d.getDate() - (13 - i));
-            return { date: d.toISOString().slice(0, 10), count: 0 };
-        });
-    const maxDay = Math.max(1, ...daily.map(d => d.count || 0));
-    const topQuizzes = an.topQuizzes || [];
-    const recentAttempts = an.recentAttempts || [];
-
     panel.innerHTML = `
         <section class="dash-section">
             <div class="dash-section-head"><h3>${escapeHtml(t("adminGui.systemOverview"))}</h3></div>
@@ -311,11 +302,11 @@ function renderAdminOverviewTab(panel) {
                     <div class="dash-overview-val">${escapeHtml(qTotal)}</div>
                     <div class="dash-overview-sub">${escapeHtml(qSub)}</div>
                 </button>
-                <div class="dash-overview-card">
+                <button type="button" class="dash-overview-card is-clickable" data-jump-tab="analytics">
                     <div class="dash-overview-label">🎯 ${escapeHtml(t("adminGui.totalAttempts"))}</div>
                     <div class="dash-overview-val">${escapeHtml(aTotal)}</div>
                     <div class="dash-overview-sub">${escapeHtml(t("adminGui.attemptsSub"))}</div>
-                </div>
+                </button>
                 <button type="button" class="dash-overview-card is-clickable" data-jump-tab="bank">
                     <div class="dash-overview-label">📚 ${escapeHtml(t("adminGui.bankTasks"))}</div>
                     <div class="dash-overview-val">${escapeHtml(bTotal)}</div>
@@ -323,87 +314,27 @@ function renderAdminOverviewTab(panel) {
                 </button>
             </div>
 
-            <div class="dash-analytics-panel">
-                <div class="dash-moderation-title">📈 ${escapeHtml(t("adminGui.analyticsTitle"))}</div>
-
+            <div class="dash-analytics-panel dash-analytics-compact">
+                <div class="dash-section-head">
+                    <div class="dash-chart-head">⚡ ${escapeHtml(t("adminGui.overviewQuickStats"))}</div>
+                    <button type="button" class="btn btn-secondary btn-compact" data-jump-tab="analytics">${escapeHtml(t("adminGui.moreAnalyticsBtn"))}</button>
+                </div>
                 <div class="dash-analytics-kpis">
                     <div class="dash-kpi-item">
-                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
+                        <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
                         <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi24h7dSub").replace("{t}", an.attemptsToday ?? 0).replace("{w}", an.attempts7d ?? 0))}</strong>
                     </div>
                     <div class="dash-kpi-item">
-                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiAvgScore"))}</span>
-                        <strong class="dash-kpi-val">${an.avgScorePct != null ? `${escapeHtml(an.avgScorePct)}%` : "—"}</strong>
-                        ${an.avgScorePct != null ? `<div class="dash-meter"><span style="width:${Math.min(100, Math.max(0, an.avgScorePct))}%"></span></div>` : ""}
+                        <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewUsers"))}</span>
+                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newUsers7d ?? 0).replace("{t}", an.newUsersToday ?? 0))}</strong>
                     </div>
                     <div class="dash-kpi-item">
-                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiAvgDuration"))}</span>
-                        <strong class="dash-kpi-val">${escapeHtml(formatDurationSec(an.avgDurationSec))}</strong>
+                        <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewQuizzes"))}</span>
+                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newQuizzes7d ?? 0).replace("{t}", an.newQuizzesToday ?? 0))}</strong>
                     </div>
                     <div class="dash-kpi-item">
-                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiStorage"))}</span>
+                        <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiStorage"))}</span>
                         <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
-                    </div>
-                </div>
-
-                <div class="dash-chart-box">
-                    <div class="dash-chart-title">${escapeHtml(t("adminGui.dailyChartTitle"))}</div>
-                    <div class="dash-bar-chart" role="img" aria-label="${escapeHtml(t("adminGui.dailyChartTitle"))}">
-                        ${daily.map(d => {
-                            const pct = Math.round(((d.count || 0) / maxDay) * 100);
-                            const shortDate = d.date.slice(5);
-                            return `
-                                <div class="dash-bar-col" title="${escapeHtml(`${d.date}: ${d.count}`)}">
-                                    <span class="dash-bar-num">${d.count > 0 ? escapeHtml(d.count) : ""}</span>
-                                    <div class="dash-bar-track">
-                                        <div class="dash-bar-fill${d.count > 0 ? " has-val" : ""}" style="height:${Math.max(4, pct)}%"></div>
-                                    </div>
-                                    <span class="dash-bar-date">${escapeHtml(shortDate)}</span>
-                                </div>
-                            `;
-                        }).join("")}
-                    </div>
-                </div>
-
-                <div class="dash-analytics-columns">
-                    <div class="dash-analytics-col">
-                        <div class="dash-chart-title">${escapeHtml(t("adminGui.topQuizzesTitle"))}</div>
-                        ${topQuizzes.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
-                            <div class="dash-mini-list">
-                                ${topQuizzes.map((tq, idx) => `
-                                    <div class="dash-mini-row">
-                                        <span class="dash-showcase-pos">#${idx + 1}</span>
-                                        <div class="dash-mini-main">
-                                            <div class="dash-mini-title">${escapeHtml(tq.title || tq.id)}</div>
-                                            <div class="dash-muted"><code>${escapeHtml(tq.id)}</code>${tq.author ? ` · ${escapeHtml(tq.author)}` : ""}</div>
-                                        </div>
-                                        ${tq.avgPct != null ? `<span class="dash-chip ${tq.avgPct >= 75 ? "public" : "private"}">${escapeHtml(tq.avgPct)}%</span>` : ""}
-                                        <a class="btn btn-secondary btn-compact dash-results" href="/?dashboard=${encodeURIComponent(tq.id)}">📊 ${escapeHtml(tq.attempts)}</a>
-                                    </div>
-                                `).join("")}
-                            </div>
-                        `}
-                    </div>
-
-                    <div class="dash-analytics-col">
-                        <div class="dash-chart-title">${escapeHtml(t("adminGui.recentAttemptsTitle"))}</div>
-                        ${recentAttempts.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
-                            <div class="dash-mini-list">
-                                ${recentAttempts.map(ra => {
-                                    const pct = ra.maxScore > 0 ? Math.round((ra.score / ra.maxScore) * 100) : 0;
-                                    const student = ra.studentName || t("results.anonymous");
-                                    return `
-                                        <div class="dash-mini-row">
-                                            <div class="dash-mini-main">
-                                                <div class="dash-mini-title">${escapeHtml(student)} <span class="dash-muted">→ ${escapeHtml(ra.quizTitle || ra.quizId)}</span></div>
-                                                <div class="dash-muted">${escapeHtml(formatDurationSec(ra.durationSeconds))} · ${escapeHtml(formatDate(ra.createdAt))}</div>
-                                            </div>
-                                            <span class="dash-chip ${pct >= 75 ? "public" : "private"}">${escapeHtml(ra.score)}/${escapeHtml(ra.maxScore)} (${pct}%)</span>
-                                        </div>
-                                    `;
-                                }).join("")}
-                            </div>
-                        `}
                     </div>
                 </div>
             </div>
@@ -415,6 +346,119 @@ function renderAdminOverviewTab(panel) {
     panel.querySelectorAll("[data-jump-tab]").forEach(btn => {
         btn.addEventListener("click", () => switchAdminTab(btn.dataset.jumpTab));
     });
+}
+
+function renderAdminAnalyticsTab(panel) {
+    const ov = adminState.overview;
+    const an = ov?.analytics || {};
+
+    const daily = Array.isArray(an.dailyAttempts) && an.dailyAttempts.length
+        ? an.dailyAttempts
+        : Array.from({ length: 14 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (13 - i));
+            return { date: d.toISOString().slice(0, 10), count: 0 };
+        });
+    const maxDay = Math.max(1, ...daily.map(d => d.count || 0));
+    const topQuizzes = an.topQuizzes || [];
+    const recentAttempts = an.recentAttempts || [];
+
+    panel.innerHTML = `
+        <section class="dash-section">
+            <div class="dash-section-head">
+                <h3>📈 ${escapeHtml(t("adminGui.analyticsTitle"))}</h3>
+            </div>
+
+            <div class="dash-analytics-kpis">
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
+                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi24h7dSub").replace("{t}", an.attemptsToday ?? 0).replace("{w}", an.attempts7d ?? 0))}</strong>
+                </div>
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiAvgScore"))}</span>
+                    <strong class="dash-kpi-val">${an.avgScorePct != null ? `${escapeHtml(an.avgScorePct)}%` : "—"}</strong>
+                    ${an.avgScorePct != null ? `<div class="dash-meter"><span style="width:${Math.min(100, Math.max(0, an.avgScorePct))}%"></span></div>` : ""}
+                </div>
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiAvgDuration"))}</span>
+                    <strong class="dash-kpi-val">${escapeHtml(formatDurationSec(an.avgDurationSec))}</strong>
+                </div>
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewUsers"))}</span>
+                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newUsers7d ?? 0).replace("{t}", an.newUsersToday ?? 0))}</strong>
+                </div>
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewQuizzes"))}</span>
+                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newQuizzes7d ?? 0).replace("{t}", an.newQuizzesToday ?? 0))}</strong>
+                </div>
+                <div class="dash-kpi-item">
+                    <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiStorage"))}</span>
+                    <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                </div>
+            </div>
+
+            <div class="dash-chart-box">
+                <div class="dash-chart-head">${escapeHtml(t("adminGui.dailyChartTitle"))}</div>
+                <div class="dash-bar-chart" role="img" aria-label="${escapeHtml(t("adminGui.dailyChartTitle"))}">
+                    ${daily.map(d => {
+                        const pct = Math.round(((d.count || 0) / maxDay) * 100);
+                        const shortDate = d.date.slice(5);
+                        return `
+                            <div class="dash-bar-col" title="${escapeHtml(`${d.date}: ${d.count}`)}">
+                                <span class="dash-bar-val">${d.count > 0 ? escapeHtml(d.count) : ""}</span>
+                                <div class="dash-bar-track">
+                                    <div class="dash-bar-fill${d.count > 0 ? " has-val" : ""}" style="height:${Math.max(4, pct)}%"></div>
+                                </div>
+                                <span class="dash-bar-lbl">${escapeHtml(shortDate)}</span>
+                            </div>
+                        `;
+                    }).join("")}
+                </div>
+            </div>
+
+            <div class="dash-analytics-columns">
+                <div class="dash-analytics-col">
+                    <div class="dash-chart-head">${escapeHtml(t("adminGui.topQuizzesTitle"))}</div>
+                    ${topQuizzes.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
+                        <div class="dash-mini-list">
+                            ${topQuizzes.map((tq, idx) => `
+                                <div class="dash-mini-row">
+                                    <span class="dash-mini-rank">#${idx + 1}</span>
+                                    <div class="dash-mini-info">
+                                        <div class="dash-mini-title">${escapeHtml(tq.title || tq.id)}</div>
+                                        <div class="dash-muted"><code class="dash-mini-code">${escapeHtml(tq.id)}</code>${tq.author ? ` · ${escapeHtml(tq.author)}` : ""}</div>
+                                    </div>
+                                    ${tq.avgPct != null ? `<span class="dash-chip ${tq.avgPct >= 75 ? "public" : "private"}">${escapeHtml(tq.avgPct)}%</span>` : ""}
+                                    <a class="btn btn-secondary btn-compact dash-results" href="/?dashboard=${encodeURIComponent(tq.id)}">📊 ${escapeHtml(tq.attempts)}</a>
+                                </div>
+                            `).join("")}
+                        </div>
+                    `}
+                </div>
+
+                <div class="dash-analytics-col">
+                    <div class="dash-chart-head">${escapeHtml(t("adminGui.recentAttemptsTitle"))}</div>
+                    ${recentAttempts.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
+                        <div class="dash-mini-list">
+                            ${recentAttempts.map(ra => {
+                                const pct = ra.maxScore > 0 ? Math.round((ra.score / ra.maxScore) * 100) : 0;
+                                const student = ra.studentName || t("results.anonymous");
+                                return `
+                                    <div class="dash-mini-row">
+                                        <div class="dash-mini-info">
+                                            <div class="dash-mini-title">${escapeHtml(student)} <span class="dash-muted">→ ${escapeHtml(ra.quizTitle || ra.quizId)}</span></div>
+                                            <div class="dash-muted">${escapeHtml(formatDurationSec(ra.durationSeconds))} · ${escapeHtml(formatDate(ra.createdAt))}</div>
+                                        </div>
+                                        <span class="dash-chip ${pct >= 75 ? "public" : "private"}">${escapeHtml(ra.score)}/${escapeHtml(ra.maxScore)} (${pct}%)</span>
+                                    </div>
+                                `;
+                            }).join("")}
+                        </div>
+                    `}
+                </div>
+            </div>
+        </section>
+    `;
 }
 
 // --- Dedicated Task Bank, Pending Approvals & Error Reports Pages ---
@@ -1050,6 +1094,41 @@ function renderAdminMyQuizzesTab(panel) {
     wireQuizCardEvents(panel);
 }
 
+function classifyQuizSector(q) {
+    const isTeacher = q.owner_id != null || Boolean(q.author);
+    const myId = adminState.profile?.user?.id;
+    const isMine = myId != null && Number(q.owner_id) === Number(myId);
+    const isPremade = !isTeacher;
+    const rawCat = String(q.category || "").toLowerCase();
+    const idLower = String(q.id || "").toLowerCase();
+    let premadeCat = "math";
+    if (rawCat === "cs" || /\b(cs|sql|python|javascript|js|html|git|algo)\b/.test(idLower)) {
+        premadeCat = "cs";
+    } else if (rawCat === "lang" || /\b(lang|trivia|geo|hist|eng|kalb|lit)\b/.test(idLower)) {
+        premadeCat = "lang";
+    }
+    return { isTeacher, isMine, isPremade, premadeCat };
+}
+
+function matchesQuizSector(q, sector) {
+    const c = classifyQuizSector(q);
+    if (sector === "teachers") return c.isTeacher;
+    if (sector === "mine") return c.isMine;
+    if (sector === "premade") return c.isPremade;
+    if (sector === "math") return c.isPremade && c.premadeCat === "math";
+    if (sector === "cs") return c.isPremade && c.premadeCat === "cs";
+    if (sector === "lang") return c.isPremade && c.premadeCat === "lang";
+    if (sector === "featured") return Boolean(q.featured);
+    if (sector === "public") return q.visibility === "public";
+    if (sector === "private") return q.visibility !== "public";
+    return true;
+}
+
+function toLocalDatetimeValue(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 async function renderAdminAllQuizzesTab(panel) {
     if (!adminState.allQuizzes) {
         panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
@@ -1063,6 +1142,9 @@ async function renderAdminAllQuizzesTab(panel) {
 
     const all = adminState.allQuizzes;
     const countAll = all.length;
+    const countTeachers = all.filter(q => matchesQuizSector(q, "teachers")).length;
+    const countMine = all.filter(q => matchesQuizSector(q, "mine")).length;
+    const countPremade = all.filter(q => matchesQuizSector(q, "premade")).length;
     const countFeatured = all.filter(q => q.featured).length;
     const countPublic = all.filter(q => q.visibility === "public").length;
     const countPrivate = all.filter(q => q.visibility !== "public").length;
@@ -1076,7 +1158,10 @@ async function renderAdminAllQuizzesTab(panel) {
             <div class="dash-filter-bar">
                 <input type="search" id="dash-quiz-search" class="input-field dash-search-input" placeholder="${escapeHtml(t("adminGui.searchQuizzes"))}" value="${escapeHtml(adminState.quizSearch)}">
                 <div class="dash-filter-chips" role="group">
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "all" ? " is-active" : ""}" data-qfilter="all">${escapeHtml(t("adminGui.filterAll"))} <span>${countAll}</span></button>
+                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "all" ? " is-active" : ""}" data-qfilter="all">${escapeHtml(t("adminGui.sectorAll"))} <span>${countAll}</span></button>
+                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "teachers" ? " is-active" : ""}" data-qfilter="teachers">${escapeHtml(t("adminGui.sectorTeachers"))} <span>${countTeachers}</span></button>
+                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "mine" ? " is-active" : ""}" data-qfilter="mine">${escapeHtml(t("adminGui.sectorMine"))} <span>${countMine}</span></button>
+                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "premade" ? " is-active" : ""}" data-qfilter="premade">${escapeHtml(t("adminGui.sectorPremade"))} <span>${countPremade}</span></button>
                     <button type="button" class="dash-filter-chip${adminState.quizFilter === "featured" ? " is-active" : ""}" data-qfilter="featured">${escapeHtml(t("adminGui.filterFeatured"))} <span>${countFeatured}</span></button>
                     <button type="button" class="dash-filter-chip${adminState.quizFilter === "public" ? " is-active" : ""}" data-qfilter="public">${escapeHtml(t("adminGui.filterPublic"))} <span>${countPublic}</span></button>
                     <button type="button" class="dash-filter-chip${adminState.quizFilter === "private" ? " is-active" : ""}" data-qfilter="private">${escapeHtml(t("adminGui.filterPrivate"))} <span>${countPrivate}</span></button>
@@ -1092,9 +1177,7 @@ async function renderAdminAllQuizzesTab(panel) {
     const drawList = () => {
         const qStr = adminState.quizSearch.trim().toLowerCase();
         const filtered = adminState.allQuizzes.filter(q => {
-            if (adminState.quizFilter === "featured" && !q.featured) return false;
-            if (adminState.quizFilter === "public" && q.visibility !== "public") return false;
-            if (adminState.quizFilter === "private" && q.visibility === "public") return false;
+            if (!matchesQuizSector(q, adminState.quizFilter)) return false;
             if (!qStr) return true;
             return (
                 (q.title || "").toLowerCase().includes(qStr) ||
@@ -1111,7 +1194,12 @@ async function renderAdminAllQuizzesTab(panel) {
 
         listEl.innerHTML = filtered.map(q => {
             const isPublic = q.visibility === "public";
-            const authorLabel = q.author ? t("adminGui.byAuthor").replace("{author}", q.author) : "—";
+            const sec = classifyQuizSector(q);
+            const authorLabel = q.author
+                ? t("adminGui.byAuthor").replace("{author}", q.author)
+                : sec.premadeCat === "cs" ? t("adminGui.sectorCs")
+                : sec.premadeCat === "lang" ? t("adminGui.sectorLang")
+                : t("adminGui.sectorMath");
             return `
                 <div class="dash-quiz" data-glide>
                     <div class="dash-quiz-main">
@@ -1316,12 +1404,16 @@ async function renderAdminShowcaseTab(panel) {
         }
     }
 
+    if (!adminState.showcaseSector) adminState.showcaseSector = "teachers";
+    if (adminState.showcasePickerSearch == null) adminState.showcasePickerSearch = "";
+
     const showcaseCfg = normalizeShowcaseConfig(adminState.overview?.showcase, adminState.allQuizzes);
     if (!adminState.selectedPlaylistId || !showcaseCfg.playlists.some(p => p.id === adminState.selectedPlaylistId)) {
         adminState.selectedPlaylistId = showcaseCfg.activePlaylistId;
     }
     const currentPl = showcaseCfg.playlists.find(p => p.id === adminState.selectedPlaylistId) || showcaseCfg.playlists[0];
     const quizById = new Map(adminState.allQuizzes.map(q => [String(q.id).toUpperCase(), q]));
+    const inCurrentPlSet = new Set(currentPl.items.map(it => String(it.quizId).toUpperCase()));
 
     const persistShowcase = async (statusEl) => {
         const activePl = showcaseCfg.playlists.find(p => p.id === showcaseCfg.activePlaylistId) || showcaseCfg.playlists[0];
@@ -1343,10 +1435,11 @@ async function renderAdminShowcaseTab(panel) {
         if (!adminState.overview) adminState.overview = {};
         adminState.overview.showcase = res.data?.showcase || payload;
 
-        const activeSet = new Set(payload.featured_order);
+        const activeSet = new Set(payload.featured_order.map(id => String(id).toUpperCase()));
         adminState.allQuizzes.forEach(q => {
-            q.featured = activeSet.has(q.id);
-            q.featured_order = activeSet.has(q.id) ? payload.featured_order.indexOf(q.id) + 1 : 0;
+            const up = String(q.id).toUpperCase();
+            q.featured = activeSet.has(up);
+            q.featured_order = activeSet.has(up) ? payload.featured_order.findIndex(x => String(x).toUpperCase() === up) + 1 : 0;
         });
         if (adminState.overview?.quizzes) {
             adminState.overview.quizzes.featured = activeSet.size;
@@ -1363,11 +1456,23 @@ async function renderAdminShowcaseTab(panel) {
         return true;
     };
 
+    const all = adminState.allQuizzes;
+    const sectorDefs = [
+        { id: "teachers", label: t("adminGui.sectorTeachers"), count: all.filter(q => matchesQuizSector(q, "teachers")).length },
+        { id: "mine", label: t("adminGui.sectorMine"), count: all.filter(q => matchesQuizSector(q, "mine")).length },
+        { id: "math", label: t("adminGui.sectorMath"), count: all.filter(q => matchesQuizSector(q, "math")).length },
+        { id: "cs", label: t("adminGui.sectorCs"), count: all.filter(q => matchesQuizSector(q, "cs")).length },
+        { id: "lang", label: t("adminGui.sectorLang"), count: all.filter(q => matchesQuizSector(q, "lang")).length },
+        { id: "all", label: t("adminGui.sectorAll"), count: all.length },
+    ];
+
+    const plHasSched = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
+    const plSchedOpen = Boolean(adminState.plSchedOpen || plHasSched);
+
     panel.innerHTML = `
         <section class="dash-section">
             <div class="dash-section-head">
                 <h3>✨ ${escapeHtml(t("adminGui.showcaseTitle"))}</h3>
-                <button type="button" class="btn btn-secondary btn-compact" data-go-pick-quizzes="1">${escapeHtml(t("adminGui.showcasePickQuizzes"))}</button>
             </div>
             <p class="dash-muted">${escapeHtml(t("adminGui.showcaseIntro"))}</p>
 
@@ -1441,60 +1546,42 @@ async function renderAdminShowcaseTab(panel) {
                 </div>
 
                 <div class="dash-playlist-meta-bar">
-                    <div class="dash-playlist-schedule">
-                        <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcasePlaylistSchedule"))}:</span>
-                        <label>
-                            <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
-                            <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(currentPl.scheduleStart || "")}">
-                        </label>
-                        <label>
-                            <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
-                            <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(currentPl.scheduleEnd || "")}">
-                        </label>
-                        <button type="button" class="btn btn-secondary btn-compact" id="dash-save-pl-sched-btn">${escapeHtml(t("adminGui.showcaseSave"))}</button>
-                    </div>
                     <div class="dash-playlist-actions">
                         ${currentPl.id === showcaseCfg.activePlaylistId ? `
                             <span class="dash-status-pill is-active">🟢 ${escapeHtml(t("adminGui.showcaseActivePlaylist"))}</span>
                         ` : `
                             <button type="button" class="btn btn-primary btn-compact" id="dash-activate-playlist-btn">${escapeHtml(t("adminGui.showcaseSetActivePlaylist"))}</button>
                         `}
+                        <button type="button" class="btn btn-secondary btn-compact${plHasSched ? " is-active" : ""}" id="dash-toggle-pl-sched-btn">
+                            ${escapeHtml(t("adminGui.scheduleToggleBtn"))}${plHasSched ? ` (${escapeHtml((currentPl.scheduleStart || "").replace("T", " "))} → ${escapeHtml((currentPl.scheduleEnd || "…").replace("T", " "))})` : ""}
+                        </button>
                         ${showcaseCfg.playlists.length > 1 && currentPl.id !== "default" ? `
                             <button type="button" class="btn btn-secondary btn-compact dash-btn-danger" id="dash-delete-playlist-btn">${escapeHtml(t("adminGui.showcaseDeletePlaylist"))}</button>
                         ` : ""}
                     </div>
                 </div>
-            </div>
 
-            <!-- Direct Code / Quiz Quick-Add -->
-            <form class="dash-quick-add-box" id="dash-showcase-quick-add">
-                <div class="dash-quick-add-title">➕ ${escapeHtml(t("adminGui.showcaseQuickAddTitle"))} — <strong>${escapeHtml(currentPl.name)}</strong></div>
-                <datalist id="dash-showcase-quiz-datalist">
-                    ${adminState.allQuizzes.map(q => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.title || "—")} (${escapeHtml(q.author || "—")})</option>`).join("")}
-                </datalist>
-                <div class="dash-quick-add-grid">
-                    <label class="dash-quick-add-code">
-                        <span>${escapeHtml(t("adminGui.showcaseQuickAddCodePlaceholder"))}</span>
-                        <input type="text" name="quizCode" list="dash-showcase-quiz-datalist" class="input-field" required placeholder="K7M3QX...">
-                    </label>
-                    <label class="dash-quick-add-label">
-                        <span>${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}</span>
-                        <input type="text" name="customLabel" class="input-field" maxlength="80" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
-                    </label>
+                <div class="dash-playlist-schedule" id="dash-pl-sched-drawer" ${plSchedOpen ? "" : "hidden"}>
+                    <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcasePlaylistSchedule"))}:</span>
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
-                        <input type="datetime-local" name="scheduleStart" class="input-field">
+                        <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(currentPl.scheduleStart || "")}">
                     </label>
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
-                        <input type="datetime-local" name="scheduleEnd" class="input-field">
+                        <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(currentPl.scheduleEnd || "")}">
                     </label>
-                    <button type="submit" class="btn btn-primary">${escapeHtml(t("adminGui.showcaseAddBtn"))}</button>
+                    <div class="dash-sched-presets">
+                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="24">${escapeHtml(t("adminGui.preset24h"))}</button>
+                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="168">${escapeHtml(t("adminGui.preset7d"))}</button>
+                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="0">${escapeHtml(t("adminGui.presetClear"))}</button>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-compact" id="dash-save-pl-sched-btn">${escapeHtml(t("adminGui.showcaseSave"))}</button>
                 </div>
-            </form>
+            </div>
 
             <!-- Ordered Items in Selected Playlist -->
-            <div class="dash-section-head" style="margin-top: 18px;">
+            <div class="dash-section-head" style="margin-top: 8px;">
                 <h4>${escapeHtml(t("adminGui.showcaseOrderTitle"))} — ${escapeHtml(currentPl.name)} <span class="dash-muted">(${currentPl.items.length})</span></h4>
             </div>
             ${currentPl.items.length === 0 ? `
@@ -1506,6 +1593,8 @@ async function renderAdminShowcaseTab(panel) {
                     ${currentPl.items.map((item, idx) => {
                         const q = quizById.get(item.quizId);
                         const st = getItemScheduleState(item);
+                        const hasItemSched = Boolean(item.scheduleStart || item.scheduleEnd);
+                        const isSchedOpen = hasItemSched || adminState.openItemSchedIdx === idx;
                         return `
                             <div class="dash-showcase-item" data-idx="${idx}">
                                 <div class="dash-showcase-item-top">
@@ -1518,18 +1607,16 @@ async function renderAdminShowcaseTab(panel) {
                                         <div class="dash-showcase-item-title">${escapeHtml(q?.title || item.customLabel || "—")}</div>
                                         <div class="dash-muted">${escapeHtml(q?.author ? t("adminGui.byAuthor").replace("{author}", q.author) : "")}</div>
                                     </div>
+                                    <input type="text" class="input-field dash-item-inline-label" data-item-label="${idx}" maxlength="80" value="${escapeHtml(item.customLabel || "")}" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
                                     <span class="dash-status-pill ${st.cls}">${escapeHtml(st.label)}</span>
                                     <div class="dash-showcase-item-actions">
+                                        <button type="button" class="btn btn-secondary btn-compact${hasItemSched ? " is-active" : ""}" data-toggle-item-sched="${idx}" title="${escapeHtml(t("adminGui.scheduleToggleBtn"))}">🕒</button>
                                         <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="-1" data-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="${escapeHtml(t("admin.moveUp"))}" aria-label="${escapeHtml(t("admin.moveUp"))}">↑</button>
                                         <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="1" data-idx="${idx}" ${idx === currentPl.items.length - 1 ? "disabled" : ""} title="${escapeHtml(t("admin.moveDown"))}" aria-label="${escapeHtml(t("admin.moveDown"))}">↓</button>
                                         <button type="button" class="btn btn-secondary btn-icon btn-compact" data-remove-idx="${idx}" title="${escapeHtml(t("adminGui.showcaseRemove"))}" aria-label="${escapeHtml(t("adminGui.showcaseRemove"))}">✕</button>
                                     </div>
                                 </div>
-                                <div class="dash-showcase-item-sched">
-                                    <label class="dash-showcase-item-label-input">
-                                        <span>Prierašas / žyma:</span>
-                                        <input type="text" class="input-field" data-item-label="${idx}" maxlength="80" value="${escapeHtml(item.customLabel || "")}" placeholder="${escapeHtml(q?.title || t("adminGui.showcaseCustomLabelPlaceholder"))}">
-                                    </label>
+                                <div class="dash-showcase-item-sched" data-item-sched-drawer="${idx}" ${isSchedOpen ? "" : "hidden"}>
                                     <label>
                                         <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}:</span>
                                         <input type="datetime-local" class="input-field" data-item-start="${idx}" value="${escapeHtml(item.scheduleStart || "")}">
@@ -1538,15 +1625,125 @@ async function renderAdminShowcaseTab(panel) {
                                         <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}:</span>
                                         <input type="datetime-local" class="input-field" data-item-end="${idx}" value="${escapeHtml(item.scheduleEnd || "")}">
                                     </label>
-                                    <button type="button" class="btn btn-secondary btn-compact" data-save-item="${idx}">${escapeHtml(t("adminGui.showcaseSave"))}</button>
+                                    <div class="dash-sched-presets">
+                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="24" data-idx="${idx}">${escapeHtml(t("adminGui.preset24h"))}</button>
+                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="168" data-idx="${idx}">${escapeHtml(t("adminGui.preset7d"))}</button>
+                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="0" data-idx="${idx}">${escapeHtml(t("adminGui.presetClear"))}</button>
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-compact" data-save-item="${idx}">${escapeHtml(t("adminGui.showcaseSave"))}</button>
                                 </div>
                             </div>
                         `;
                     }).join("")}
                 </div>
             `}
+
+            <!-- Sectorized Quiz Picker + Direct Code Entry -->
+            <div class="dash-quick-add-box">
+                <form class="dash-direct-code-row" id="dash-showcase-quick-add">
+                    <div class="dash-quick-add-title">➕ ${escapeHtml(t("adminGui.showcaseQuickAddTitle"))} — <strong>${escapeHtml(currentPl.name)}</strong></div>
+                    <div class="dash-direct-inputs">
+                        <input type="text" name="quizCode" class="input-field dash-direct-code-input" required placeholder="${escapeHtml(t("adminGui.showcaseQuickAddCodePlaceholder"))}">
+                        <input type="text" name="customLabel" class="input-field dash-direct-label-input" maxlength="80" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
+                        <button type="submit" class="btn btn-primary btn-compact">${escapeHtml(t("adminGui.showcaseAddBtn"))}</button>
+                    </div>
+                </form>
+
+                <div class="dash-sector-browser">
+                    <div class="dash-sector-header">
+                        <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.pickerBrowseTitle"))}</span>
+                        <input type="search" id="dash-showcase-sector-search" class="input-field dash-sector-search" placeholder="${escapeHtml(t("adminGui.pickerSearchPlaceholder"))}" value="${escapeHtml(adminState.showcasePickerSearch)}">
+                    </div>
+                    <div class="dash-filter-chips" role="tablist">
+                        ${sectorDefs.map(s => `
+                            <button type="button" class="dash-filter-chip${adminState.showcaseSector === s.id ? " is-active" : ""}" data-showcase-sector="${s.id}">
+                                ${escapeHtml(s.label)} <span>${s.count}</span>
+                            </button>
+                        `).join("")}
+                    </div>
+                    <div class="dash-sector-grid" id="dash-showcase-sector-grid"></div>
+                </div>
+            </div>
         </section>
     `;
+
+    // Render sectorized quiz grid inside Vitrina
+    const sectorGrid = panel.querySelector("#dash-showcase-sector-grid");
+    const sectorSearch = panel.querySelector("#dash-showcase-sector-search");
+    const drawSectorGrid = () => {
+        if (!sectorGrid) return;
+        const qStr = (adminState.showcasePickerSearch || "").trim().toLowerCase();
+        const list = adminState.allQuizzes.filter(q => {
+            if (!matchesQuizSector(q, adminState.showcaseSector)) return false;
+            if (!qStr) return true;
+            return (
+                (q.title || "").toLowerCase().includes(qStr) ||
+                (q.id || "").toLowerCase().includes(qStr) ||
+                (q.author || "").toLowerCase().includes(qStr)
+            );
+        });
+
+        if (list.length === 0) {
+            sectorGrid.innerHTML = `<div class="dash-empty" style="grid-column: 1 / -1; padding: 18px;"><p class="dash-muted">${escapeHtml(t("adminGui.noQuizzesMatch"))}</p></div>`;
+            return;
+        }
+
+        sectorGrid.innerHTML = list.map(q => {
+            const upId = String(q.id).toUpperCase();
+            const alreadyIn = inCurrentPlSet.has(upId);
+            const sec = classifyQuizSector(q);
+            const subMeta = q.author
+                ? t("adminGui.byAuthor").replace("{author}", q.author)
+                : sec.premadeCat === "cs" ? t("adminGui.sectorCs")
+                : sec.premadeCat === "lang" ? t("adminGui.sectorLang")
+                : t("adminGui.sectorMath");
+            return `
+                <div class="dash-sector-card${alreadyIn ? " is-added" : ""}">
+                    <code class="dash-showcase-code">${escapeHtml(q.id)}</code>
+                    <div class="dash-sector-card-info">
+                        <div class="dash-sector-card-title">${escapeHtml(q.title || "—")}</div>
+                        <div class="dash-muted">${escapeHtml(subMeta)} · ${escapeHtml(t("adminGui.questionsCount").replace("{n}", q.question_count ?? 0))}</div>
+                    </div>
+                    ${alreadyIn ? `
+                        <span class="dash-status-pill is-active">${escapeHtml(t("adminGui.inPlaylistBadge"))}</span>
+                    ` : `
+                        <button type="button" class="btn btn-secondary btn-compact" data-pick-quiz="${escapeHtml(q.id)}">${escapeHtml(t("adminGui.addQuizBtn"))}</button>
+                    `}
+                </div>
+            `;
+        }).join("");
+
+        sectorGrid.querySelectorAll("[data-pick-quiz]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                btn.disabled = true;
+                const code = String(btn.dataset.pickQuiz || "").toUpperCase();
+                if (!code || inCurrentPlSet.has(code)) return;
+                currentPl.items.push({
+                    quizId: code,
+                    customLabel: "",
+                    scheduleStart: "",
+                    scheduleEnd: "",
+                    enabled: true,
+                });
+                await persistShowcase();
+                renderAdminShowcaseTab(panel);
+            });
+        });
+    };
+    drawSectorGrid();
+
+    sectorSearch?.addEventListener("input", () => {
+        adminState.showcasePickerSearch = sectorSearch.value;
+        drawSectorGrid();
+    });
+
+    panel.querySelectorAll("[data-showcase-sector]").forEach(chip => {
+        chip.addEventListener("click", () => {
+            adminState.showcaseSector = chip.dataset.showcaseSector;
+            panel.querySelectorAll("[data-showcase-sector]").forEach(c => c.classList.toggle("is-active", c === chip));
+            drawSectorGrid();
+        });
+    });
 
     // Live preview inside the Showcase tab
     const previewHint = panel.querySelector("#dash-showcase-preview-hint");
@@ -1580,11 +1777,6 @@ async function renderAdminShowcaseTab(panel) {
         }
     }
 
-    panel.querySelector("[data-go-pick-quizzes]")?.addEventListener("click", () => {
-        adminState.quizFilter = "all";
-        switchAdminTab("quizzes");
-    });
-
     // Global settings form
     const form = panel.querySelector("#dash-showcase-form");
     form.addEventListener("submit", async (e) => {
@@ -1605,6 +1797,7 @@ async function renderAdminShowcaseTab(panel) {
     panel.querySelectorAll("[data-select-playlist]").forEach(btn => {
         btn.addEventListener("click", () => {
             adminState.selectedPlaylistId = btn.dataset.selectPlaylist;
+            adminState.openItemSchedIdx = null;
             renderAdminShowcaseTab(panel);
         });
     });
@@ -1649,25 +1842,52 @@ async function renderAdminShowcaseTab(panel) {
         renderAdminShowcaseTab(panel);
     });
 
+    // Toggle playlist schedule drawer
+    panel.querySelector("#dash-toggle-pl-sched-btn")?.addEventListener("click", () => {
+        const drawer = panel.querySelector("#dash-pl-sched-drawer");
+        if (!drawer) return;
+        drawer.hidden = !drawer.hidden;
+        adminState.plSchedOpen = !drawer.hidden;
+    });
+
+    // Playlist schedule presets
+    panel.querySelectorAll("[data-pl-preset]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const hours = Number(btn.dataset.plPreset);
+            const sInput = panel.querySelector("#dash-pl-sched-start");
+            const eInput = panel.querySelector("#dash-pl-sched-end");
+            if (!sInput || !eInput) return;
+            if (hours <= 0) {
+                sInput.value = "";
+                eInput.value = "";
+            } else {
+                const now = new Date();
+                const end = new Date(now.getTime() + hours * 3600 * 1000);
+                sInput.value = toLocalDatetimeValue(now);
+                eInput.value = toLocalDatetimeValue(end);
+            }
+        });
+    });
+
     // Save playlist schedule
     panel.querySelector("#dash-save-pl-sched-btn")?.addEventListener("click", async (e) => {
         const btn = e.currentTarget;
         btn.disabled = true;
         currentPl.scheduleStart = panel.querySelector("#dash-pl-sched-start")?.value || "";
         currentPl.scheduleEnd = panel.querySelector("#dash-pl-sched-end")?.value || "";
+        adminState.plSchedOpen = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
         await persistShowcase(btn);
         btn.disabled = false;
         renderAdminShowcaseTab(panel);
     });
 
-    // Quick-add quiz / code directly into current playlist
+    // Direct code form submit
     const quickAddForm = panel.querySelector("#dash-showcase-quick-add");
     quickAddForm?.addEventListener("submit", async (e) => {
         e.preventDefault();
         const rawInput = quickAddForm.quizCode.value.trim();
         if (!rawInput) return;
 
-        // Match either exact quiz ID, prefix before space/dash, or search by title
         let resolvedCode = rawInput.toUpperCase();
         if (!quizById.has(resolvedCode)) {
             const byTitle = adminState.allQuizzes.find(q => (q.title || "").toLowerCase() === rawInput.toLowerCase());
@@ -1683,8 +1903,8 @@ async function renderAdminShowcaseTab(panel) {
         const newItem = {
             quizId: resolvedCode,
             customLabel: quickAddForm.customLabel.value.trim(),
-            scheduleStart: quickAddForm.scheduleStart.value || "",
-            scheduleEnd: quickAddForm.scheduleEnd.value || "",
+            scheduleStart: "",
+            scheduleEnd: "",
             enabled: true,
         };
         if (existingIdx >= 0) {
@@ -1708,7 +1928,49 @@ async function renderAdminShowcaseTab(panel) {
         });
     });
 
-    // Per-item inline save (customLabel + scheduleStart + scheduleEnd)
+    // Per-item inline customLabel auto-save on change
+    panel.querySelectorAll("[data-item-label]").forEach(inp => {
+        inp.addEventListener("change", async () => {
+            const idx = Number(inp.dataset.itemLabel);
+            if (!currentPl.items[idx]) return;
+            currentPl.items[idx].customLabel = inp.value.trim();
+            await persistShowcase();
+            renderAdminShowcaseTab(panel);
+        });
+    });
+
+    // Toggle per-item schedule drawer
+    panel.querySelectorAll("[data-toggle-item-sched]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.toggleItemSched);
+            const drawer = panel.querySelector(`[data-item-sched-drawer="${idx}"]`);
+            if (!drawer) return;
+            drawer.hidden = !drawer.hidden;
+            adminState.openItemSchedIdx = drawer.hidden ? null : idx;
+        });
+    });
+
+    // Per-item schedule presets
+    panel.querySelectorAll("[data-item-preset]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.idx);
+            const hours = Number(btn.dataset.itemPreset);
+            const sInput = panel.querySelector(`[data-item-start="${idx}"]`);
+            const eInput = panel.querySelector(`[data-item-end="${idx}"]`);
+            if (!sInput || !eInput) return;
+            if (hours <= 0) {
+                sInput.value = "";
+                eInput.value = "";
+            } else {
+                const now = new Date();
+                const end = new Date(now.getTime() + hours * 3600 * 1000);
+                sInput.value = toLocalDatetimeValue(now);
+                eInput.value = toLocalDatetimeValue(end);
+            }
+        });
+    });
+
+    // Per-item schedule save
     panel.querySelectorAll("[data-save-item]").forEach(btn => {
         btn.addEventListener("click", async () => {
             const idx = Number(btn.dataset.saveItem);
@@ -1721,6 +1983,7 @@ async function renderAdminShowcaseTab(panel) {
             item.customLabel = lblInput ? lblInput.value.trim() : "";
             item.scheduleStart = startInput ? startInput.value : "";
             item.scheduleEnd = endInput ? endInput.value : "";
+            adminState.openItemSchedIdx = (item.scheduleStart || item.scheduleEnd) ? idx : null;
             await persistShowcase(btn);
             btn.disabled = false;
             renderAdminShowcaseTab(panel);

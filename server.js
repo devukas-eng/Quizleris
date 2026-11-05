@@ -622,7 +622,9 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                    SUM(role = 'admin') AS admins,
                    SUM(role = 'creator') AS creators,
                    SUM(role = 'teacher') AS teachers,
-                   SUM(subscription_tier = 'premium' AND (subscription_expires_at IS NULL OR subscription_expires_at > NOW())) AS premium
+                   SUM(subscription_tier = 'premium' AND (subscription_expires_at IS NULL OR subscription_expires_at > NOW())) AS premium,
+                   COALESCE(SUM(created_at >= NOW() - INTERVAL 1 DAY), 0) AS new_today,
+                   COALESCE(SUM(created_at >= NOW() - INTERVAL 7 DAY), 0) AS new_7d
             FROM users
         `);
         const [[quizCounts]] = await pool.query(`
@@ -630,7 +632,9 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                    SUM(visibility = 'public') AS public_quizzes,
                    SUM(visibility = 'private') AS private_quizzes,
                    COALESCE(SUM(featured = 1), 0) AS featured_quizzes,
-                   COALESCE(SUM(storage_bytes), 0) AS storage_bytes
+                   COALESCE(SUM(storage_bytes), 0) AS storage_bytes,
+                   COALESCE(SUM(created_at >= NOW() - INTERVAL 1 DAY), 0) AS new_today,
+                   COALESCE(SUM(created_at >= NOW() - INTERVAL 7 DAY), 0) AS new_7d
             FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
         `).catch(async () => {
             const [[fallback]] = await pool.query(`
@@ -638,7 +642,9 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                        SUM(visibility = 'public') AS public_quizzes,
                        SUM(visibility = 'private') AS private_quizzes,
                        0 AS featured_quizzes,
-                       COALESCE(SUM(storage_bytes), 0) AS storage_bytes
+                       COALESCE(SUM(storage_bytes), 0) AS storage_bytes,
+                       COALESCE(SUM(created_at >= NOW() - INTERVAL 1 DAY), 0) AS new_today,
+                       COALESCE(SUM(created_at >= NOW() - INTERVAL 7 DAY), 0) AS new_7d
                 FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
             `);
             return [fallback];
@@ -647,6 +653,10 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
         const analytics = {
             attemptsToday: 0,
             attempts7d: 0,
+            newUsersToday: Number(userCounts?.new_today || 0),
+            newUsers7d: Number(userCounts?.new_7d || 0),
+            newQuizzesToday: Number(quizCounts?.new_today || 0),
+            newQuizzes7d: Number(quizCounts?.new_7d || 0),
             avgScorePct: null,
             avgDurationSec: null,
             storageBytes: Number(quizCounts?.storage_bytes || 0),
@@ -871,7 +881,9 @@ app.get('/api/admin/quizzes', authenticateToken, requireAdmin, async (req, res) 
             [rows] = await pool.query(`
                 SELECT q.id, q.title, q.visibility, q.featured, q.featured_order, q.storage_bytes, q.expires_at, q.created_at, q.updated_at,
                        q.owner_id, u.username AS author,
-                       JSON_LENGTH(JSON_EXTRACT(q.quiz_data, '$.questions')) AS question_count
+                       JSON_LENGTH(JSON_EXTRACT(q.quiz_data, '$.questions')) AS question_count,
+                       JSON_UNQUOTE(JSON_EXTRACT(q.quiz_data, '$.category')) AS category,
+                       JSON_UNQUOTE(JSON_EXTRACT(q.quiz_data, '$.language')) AS language
                 FROM quizzes q
                 LEFT JOIN users u ON q.owner_id = u.id
                 ORDER BY q.featured DESC, q.featured_order ASC, q.updated_at DESC
