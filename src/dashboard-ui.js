@@ -1818,9 +1818,9 @@ async function renderAdminShowcaseTab(panel) {
                 } else if (fmt === "both" && label) {
                     innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span><span class="hero-code-title"> · ${escapeHtml(label)}</span>`;
                 }
-                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}"><span class="hero-code-icon">✨</span>${innerHtml}</button>.`;
+                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}">${innerHtml}</button>.`;
             };
-            drawPreview(activePreviewItems[0], false);
+            drawPreview(activePreviewItems[0], true);
             if (activePreviewItems.length > 1) {
                 const ms = Math.max(2000, Math.min(30000, (Number(showcaseCfg.intervalSeconds) || 4) * 1000));
                 showcasePreviewTimer = setInterval(() => {
@@ -1833,6 +1833,13 @@ async function renderAdminShowcaseTab(panel) {
 
     // Global settings form
     const form = panel.querySelector("#dash-showcase-form");
+    form.addEventListener("change", () => {
+        showcaseCfg.animStyle = form.animStyle.value;
+        showcaseCfg.displayFormat = form.displayFormat.value;
+        if (activePreviewItems.length > 0) {
+            drawPreview(activePreviewItems[pIdx % activePreviewItems.length], true);
+        }
+    });
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const submitBtn = form.querySelector("button[type=submit]");

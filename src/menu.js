@@ -130,10 +130,10 @@ async function initHeroShowcase() {
         }
         const titleTip = subtitle ? `${subtitle} (${item.id})` : item.id;
         const animCls = animate ? ` is-flipping anim-${escapeHtml(anim)}` : "";
-        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-icon">✨</span><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
+        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
     };
 
-    renderTicker(list[0], false);
+    renderTicker(list[0], true);
 
     hint.onmouseenter = () => { paused = true; };
     hint.onmouseleave = () => { paused = false; };

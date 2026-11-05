@@ -4861,34 +4861,6 @@ math-virtual-keyboard::part(action-toolbar) {
     flex: 1 1 200px;
 }
 
-@keyframes tickerSlideUp {
-    0% { opacity: 0; transform: translateY(10px); }
-    100% { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes tickerTypePop {
-    0% { opacity: 0; letter-spacing: -0.05em; transform: scale(0.92); }
-    60% { opacity: 1; letter-spacing: 0.08em; transform: scale(1.03); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes tickerGlowFade {
-    0% { opacity: 0; filter: blur(4px); box-shadow: 0 0 18px var(--accent); }
-    100% { opacity: 1; filter: blur(0); box-shadow: none; }
-}
-
-.hero-code-ticker.is-flipping.anim-slide {
-    animation: tickerSlideUp 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.hero-code-ticker.is-flipping.anim-typewriter {
-    animation: tickerTypePop 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.hero-code-ticker.is-flipping.anim-fade {
-    animation: tickerGlowFade 0.42s ease-out;
-}
-
 .dash-user-cell {
     display: flex;
     flex-direction: column;
@@ -7782,48 +7754,45 @@ body.pp-open {
 
 .hero-code-ticker {
     display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    align-items: baseline;
+    gap: 3px;
     margin: 0 2px;
-    padding: 2px 10px;
-    border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent) 12%, var(--surface-solid));
-    color: var(--text);
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
     font-family: inherit;
-    font-size: 0.86rem;
-    line-height: 1.35;
+    font-size: inherit;
+    line-height: inherit;
     cursor: pointer;
     vertical-align: baseline;
     transform-origin: 50% 50%;
-    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    text-decoration: none;
 }
 
 .hero-code-ticker:hover,
 .hero-code-ticker:focus-visible {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 22%, var(--surface-solid));
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 24%, transparent);
     outline: none;
 }
 
-.hero-code-icon {
-    font-size: 0.82em;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
+.hero-code-ticker:hover .hero-code-val,
+.hero-code-ticker:focus-visible .hero-code-val {
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .hero-code-val {
     font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.05em;
     color: var(--accent);
 }
 
 .hero-code-title {
-    max-width: 190px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7831,18 +7800,72 @@ body.pp-open {
     font-weight: 500;
 }
 
+/* Animations for ticker rotation & entrance */
+.hero-code-ticker.is-flipping.anim-flip,
 .hero-code-ticker.is-flipping {
     animation: heroTickerFlip 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hero-code-ticker.is-flipping.anim-slide {
+    animation: tickerSlideUp 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hero-code-ticker.is-flipping.anim-typewriter {
+    animation: tickerTypePop 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hero-code-ticker.is-flipping.anim-fade {
+    animation: tickerGlowFade 0.42s ease-out both;
 }
 
 @keyframes heroTickerFlip {
     0% {
         opacity: 0;
-        transform: perspective(360px) rotateX(-68deg) translateY(6px);
+        transform: perspective(360px) rotateX(-65deg) translateY(4px);
     }
     100% {
         opacity: 1;
         transform: perspective(360px) rotateX(0deg) translateY(0);
+    }
+}
+
+@keyframes tickerSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes tickerTypePop {
+    0% {
+        opacity: 0;
+        letter-spacing: -0.04em;
+        transform: scale(0.94);
+    }
+    60% {
+        opacity: 1;
+        letter-spacing: 0.04em;
+        transform: scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        letter-spacing: normal;
+        transform: scale(1);
+    }
+}
+
+@keyframes tickerGlowFade {
+    0% {
+        opacity: 0;
+        filter: blur(3px);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0);
     }
 }
 
