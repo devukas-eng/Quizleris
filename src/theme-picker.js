@@ -60,6 +60,13 @@ function subtitle(theme) {
     return theme.custom ? t("themes.customSubtitle") : theme.subtitle;
 }
 
+/** The folded label opens to the name's own width (style.css reads --theme-label-w) */
+function measureLabel() {
+    const btn = document.getElementById("theme-btn");
+    const label = document.getElementById("theme-btn-label");
+    if (btn && label) btn.style.setProperty("--theme-label-w", label.scrollWidth + "px");
+}
+
 export function refreshThemePicker() {
     if (!current) return;
     const lang = getLanguage();
@@ -67,6 +74,7 @@ export function refreshThemePicker() {
     if (label) label.textContent = themeName(current, lang);
     const btn = document.getElementById("theme-btn");
     if (btn) btn.title = t("themes.button");
+    measureLabel();
 
     const list = shortList();
     const popup = document.getElementById("theme-picker-popup");
@@ -155,11 +163,15 @@ export function initThemePicker({ onOpen } = {}) {
     applyTheme(current, { persist: true });
     refreshThemePicker();
 
-    document.getElementById("theme-btn")?.addEventListener("click", (e) => {
+    const themeBtn = document.getElementById("theme-btn");
+    themeBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
         if (popupOpen) closeThemePicker();
         else openPopup();
     });
+    // Measured again before it opens: the web font may have arrived since the first measure
+    themeBtn?.addEventListener("pointerenter", measureLabel);
+    themeBtn?.addEventListener("focus", measureLabel);
 
     for (const id of ["theme-picker-popup", "theme-row"]) {
         const box = document.getElementById(id);

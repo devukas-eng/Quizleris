@@ -2276,12 +2276,15 @@ kbd {
    APPLE-LIKE THEME PICKER POPUP
    ═══════════════════════════════════════════════════════════ */
 
-/* Trigger button — slim pill in the header */
+/* Trigger button — rests as just the bubble; the name unfolds out of it on hover,
+   keyboard focus and while the list is open (phones keep the bubble only) */
 #theme-btn {
+    --theme-btn-ease: cubic-bezier(0.33, 1, 0.68, 1);
+    --theme-btn-time: 0.6s;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 14px 6px 8px;
+    gap: 0;
+    padding: 6px;
     border-radius: 999px;
     border: 1px solid var(--border-color, rgba(0,0,0,0.10));
     background: var(--btn-bg, #fff);
@@ -2290,7 +2293,9 @@ kbd {
     font-family: var(--font);
     font-size: 0.82rem;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: padding var(--theme-btn-time) var(--theme-btn-ease), gap var(--theme-btn-time) var(--theme-btn-ease),
+                border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease,
+                background-color 0.2s ease, color 0.2s ease;
     box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     white-space: nowrap;
     position: relative;
@@ -2300,6 +2305,36 @@ kbd {
     border-color: var(--accent);
     box-shadow: 0 4px 12px rgba(0,0,0,0.10);
     transform: translateY(-1px);
+}
+
+/* Width comes from theme-picker.js (the name's own width), so opening and closing take the same time */
+#theme-btn-label {
+    display: block;
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    transition: max-width var(--theme-btn-time) var(--theme-btn-ease), opacity 0.18s ease;
+}
+
+@media (min-width: 601px) {
+    #theme-btn:is(:hover, :focus-visible, [aria-expanded="true"]) {
+        gap: 8px;
+        padding: 6px 14px 6px 8px;
+    }
+
+    #theme-btn:is(:hover, :focus-visible, [aria-expanded="true"]) #theme-btn-label {
+        max-width: var(--theme-label-w, 12rem);
+        opacity: 1;
+        transition: max-width var(--theme-btn-time) var(--theme-btn-ease), opacity 0.4s ease 0.15s;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #theme-btn,
+    #theme-btn-label,
+    #theme-btn:is(:hover, :focus-visible, [aria-expanded="true"]) #theme-btn-label {
+        transition: none;
+    }
 }
 
 /* Yin-yang colour bubble inside the button */
@@ -2600,15 +2635,6 @@ kbd {
 
     .nav-auth-short {
         display: inline;
-    }
-
-    /* The theme button shrinks to its bubble */
-    #theme-btn {
-        padding: 6px;
-    }
-
-    #theme-btn-label {
-        display: none;
     }
 
     /* The row starts under the button and grows to the left */
