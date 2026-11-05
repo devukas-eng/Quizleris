@@ -24,6 +24,9 @@ const MAX_SAMPLE = 50;
 const MAX_PRIVATE_ITEMS = 10000;
 const MAX_FOLDERS = 1000;
 const MAX_FAVORITES = 2000;
+const MAX_TAGS_PER_TASK = 12;
+const MAX_SUBMIT = 100;    // tasks sent to the shared bank in one go
+const MAX_PENDING = 500;   // a creator's tasks waiting for approval at once
 const MAX_OPEN_REPORTS = 30; // a teacher's reports waiting for an admin: enough for real mistakes, not for spam
 const REPORT_REASONS = ['answer', 'wording', 'classification', 'duplicate', 'other'];
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -249,6 +252,48 @@ const SCHEMA = [
         INDEX bank_item_reports_open (status, item_id),
         INDEX bank_item_reports_user (user_id, status),
         CONSTRAINT bank_item_reports_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
+    // A user's own name for a task they keep (their own, or a shared one), seen only by them; the task
+    // itself is untouched. user_id is users.id without a foreign key, like bank_favorites.
+    `CREATE TABLE IF NOT EXISTS bank_nicknames (
+        user_id INT NOT NULL,
+        item_id INT UNSIGNED NOT NULL,
+        nickname VARCHAR(120) NOT NULL,
+        PRIMARY KEY (user_id, item_id),
+        INDEX bank_nicknames_item (item_id),
+        CONSTRAINT bank_nicknames_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
+    // A user's own #tags on tasks, in the form core.normalizeTag gives; seen only by them
+    `CREATE TABLE IF NOT EXISTS bank_tags (
+        user_id INT NOT NULL,
+        item_id INT UNSIGNED NOT NULL,
+        tag VARCHAR(40) NOT NULL,
+        PRIMARY KEY (user_id, item_id, tag),
+        INDEX bank_tags_tag (user_id, tag, item_id),
+        INDEX bank_tags_item (item_id),
+        CONSTRAINT bank_tags_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
+    // A creator's own task sent to the shared bank: its copy (item_id) waits there as a draft until an
+    // admin approves it (published) or rejects it (the copy is deleted, the reason kept for the
+    // creator). open_key is 1 only while pending, so a task waits at most once. Like reports, rows
+    // outlive their author's account.
+    `CREATE TABLE IF NOT EXISTS bank_submissions (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        source_id INT UNSIGNED NULL,
+        item_id INT UNSIGNED NULL,
+        user_id INT NOT NULL,
+        status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+        open_key TINYINT UNSIGNED AS (IF(status = 'pending', 1, NULL)) STORED,
+        note VARCHAR(500) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        decided_at DATETIME NULL DEFAULT NULL,
+        decided_by INT NULL,
+        UNIQUE KEY bank_submissions_once (source_id, open_key),
+        INDEX bank_submissions_open (status, item_id),
+        INDEX bank_submissions_item (item_id),
+        INDEX bank_submissions_user (user_id, status),
+        CONSTRAINT bank_submissions_source_fk FOREIGN KEY (source_id) REFERENCES bank_items (id) ON DELETE SET NULL,
+        CONSTRAINT bank_submissions_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE SET NULL
     ) ${TABLE_OPTIONS}`
 ];
 
@@ -551,15 +596,54 @@ function bankLimits(user) {
 
 function listContext(user, params) {
     const teacher = !isStaff(user);
-    // Starred tasks are shared ones the teacher bookmarked
-    if (params.scope === 'favorites') return { ...contextFor(0, 'published', { teacher }), favoritesOf: user.id };
+    // Starred tasks are shared ones the teacher bookmarked and their own; a tag lists both kinds too.
+    // One's own lists also search one's nicknames and tags (labelsOf).
+    if (params.scope === 'favorites' || params.scope === 'tagged') {
+        const ctx = { ...contextFor(0, 'published', { teacher }), ownerIds: [0, user.id], labelsOf: user.id };
+        if (params.scope === 'favorites') ctx.favoritesOf = user.id;
+        else ctx.tagOf = { userId: user.id, tag: core.normalizeTag(params.tag) || '-' }; // no tag: nothing listed
+        return ctx;
+    }
     const mine = params.scope === 'mine';
     // Drafts and the archive are listed for whoever may edit that bank
     const mayEdit = mine ? bankLimits(user).writeMine : bankLimits(user).writeShared;
     const status = mayEdit && STATUSES.includes(params.status) ? params.status : 'published';
     const ctx = contextFor(mine ? user.id : 0, status, { teacher });
+    if (mine) ctx.labelsOf = user.id;
     if (!mine && !teacher && params.flagged === '1') ctx.flagged = true;
+    // Admins: creators' tasks waiting for approval (drafts of the shared bank)
+    if (!mine && user.role === 'admin' && params.review === '1') ctx.review = true;
     return ctx;
+}
+
+/**
+ * What only the asker sees on tasks of their own lists: nicknames and tags, and for their own tasks
+ * what became of the latest time they sent it to the shared bank.
+ */
+async function personalize(pool, user, items) {
+    if (!items.length) return items;
+    const ids = items.map(item => item.id);
+    const own = items.filter(item => item.own).map(item => item.id);
+    const [[names], [tags], [sent]] = await Promise.all([
+        pool.query('SELECT item_id, nickname FROM bank_nicknames WHERE user_id = ? AND item_id IN (?)', [user.id, ids]),
+        pool.query('SELECT item_id, tag FROM bank_tags WHERE user_id = ? AND item_id IN (?) ORDER BY tag', [user.id, ids]),
+        own.length && isStaff(user)
+            ? pool.query('SELECT source_id, status, note FROM bank_submissions WHERE source_id IN (?) ORDER BY id', [own])
+            : [[]]
+    ]);
+    const nickOf = new Map(names.map(row => [row.item_id, row.nickname]));
+    const tagsOf = new Map();
+    for (const row of tags) {
+        if (!tagsOf.has(row.item_id)) tagsOf.set(row.item_id, []);
+        tagsOf.get(row.item_id).push(row.tag);
+    }
+    const sentOf = new Map(sent.map(row => [row.source_id, { status: row.status, note: row.note }])); // the latest wins
+    for (const item of items) {
+        item.nickname = nickOf.get(item.id) || null;
+        item.tags = tagsOf.get(item.id) || [];
+        if (item.own) item.submission = sentOf.get(item.id) || null;
+    }
+    return items;
 }
 
 // The shared bank's published tasks counted by subject, grade, topic, difficulty, kind and type.
@@ -1008,6 +1092,110 @@ async function archiveItems(pool, user, body) {
     return body.purge ? { deleted: affected } : { archived: affected };
 }
 
+/** Distinct normalized tags, at most MAX_TAGS_PER_TASK of them. */
+function tagList(raw) {
+    if (!Array.isArray(raw)) throw new BankError('Tags must be a list');
+    return [...new Set(raw.map(core.normalizeTag).filter(Boolean))].slice(0, MAX_TAGS_PER_TASK);
+}
+
+// --- SENDING TASKS TO THE SHARED BANK ---
+/**
+ * Copies staff's own tasks into the shared bank with their classification. A creator's copies are
+ * drafts waiting for an admin (one pending submission per task); an admin's are published at once.
+ * A task the shared bank already holds is reported as such.
+ */
+async function submitItems(pool, user, body) {
+    const ids = idList(body.ids ?? [], MAX_SUBMIT);
+    if (!ids.length) throw new BankError('Choose the tasks');
+    const admin = user.role === 'admin';
+    const [rows] = await pool.query(
+        `SELECT i.id, i.kind, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.source, c.content
+         FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
+         WHERE i.id IN (?) AND i.owner_id = ? AND i.status = 'published'`, [ids, user.id]);
+    if (!rows.length) throw new BankError('Task not found', 404);
+    const found = rows.map(row => row.id);
+    const [[links], [pending], [[{ n: waiting }]]] = await Promise.all([
+        pool.query('SELECT item_id, value_id FROM bank_item_values WHERE item_id IN (?)', [found]),
+        pool.query("SELECT source_id FROM bank_submissions WHERE status = 'pending' AND source_id IN (?)", [found]),
+        pool.query("SELECT COUNT(*) AS n FROM bank_submissions WHERE status = 'pending' AND user_id = ?", [user.id])
+    ]);
+    const already = new Set(pending.map(row => row.source_id));
+    if (!admin && Number(waiting) + rows.length - already.size > MAX_PENDING) {
+        throw new BankError(`At most ${MAX_PENDING} tasks may wait for approval`, 429);
+    }
+    const valuesOf = new Map();
+    for (const link of links) {
+        if (!valuesOf.has(link.item_id)) valuesOf.set(link.item_id, []);
+        valuesOf.get(link.item_id).push(link.value_id);
+    }
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const results = [];
+    await inTransaction(pool, async conn => {
+        for (const id of ids) {
+            const row = byId.get(id);
+            if (!row) continue;
+            if (already.has(id)) {
+                results.push({ id, pending: true });
+                continue;
+            }
+            // Classifiers removed since the task was saved are left out rather than refusing it
+            const ref = (value, map) => (value != null && map.has(value) ? value : null);
+            const item = prepareItem({
+                content: parseJson(row.content),
+                kind: row.kind,
+                subjectId: ref(row.subject_id, meta.subjects),
+                gradeId: ref(row.grade_id, meta.grades),
+                topicId: ref(row.topic_id, meta.topics),
+                difficultyId: ref(row.difficulty_id, meta.difficulties),
+                values: (valuesOf.get(id) || []).filter(v => meta.values.has(v)),
+                source: row.source,
+                status: admin ? 'published' : 'draft'
+            }, {}, null);
+            const copy = await insertItem(conn, 0, user.id, item);
+            const [[target]] = await conn.query('SELECT status FROM bank_items WHERE id = ?', [copy.id]);
+            if (copy.duplicate && !copy.restored && target?.status === 'published') {
+                results.push({ id, exists: true });
+                continue;
+            }
+            // A draft someone else sent is already waiting: this task waits with it (an admin's settles both)
+            if (admin) {
+                await conn.query("UPDATE bank_submissions SET status = 'approved', decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
+                    [user.id, copy.id]);
+            }
+            await conn.query(
+                'INSERT INTO bank_submissions (source_id, item_id, user_id, status, decided_at, decided_by) VALUES (?, ?, ?, ?, ?, ?)',
+                admin ? [id, copy.id, user.id, 'approved', new Date(), user.id] : [id, copy.id, user.id, 'pending', null, null]);
+            if (admin && target?.status !== 'published') await conn.query("UPDATE bank_items SET status = 'published' WHERE id = ?", [copy.id]);
+            results.push({ id, itemId: copy.id, [admin ? 'published' : 'submitted']: true });
+        }
+    });
+    const count = key => results.filter(r => r[key]).length;
+    return { results, submitted: count('submitted'), published: count('published'), pending: count('pending'), exists: count('exists') };
+}
+
+/**
+ * An admin's answer to a creator's task (by its draft in the shared bank): approved, it is published;
+ * rejected, the draft is deleted and the reason kept for the creator.
+ */
+async function decideSubmission(pool, user, rawId, body) {
+    const id = toId(rawId);
+    const action = ['approve', 'reject'].includes(body.action) ? body.action : null;
+    if (!id || !action) throw new BankError('Approve or reject');
+    const note = optionalText(body.note, 500);
+    return inTransaction(pool, async conn => {
+        const [[draft]] = await conn.query("SELECT id, created_by FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'draft' FOR UPDATE", [id]);
+        const [senders] = await conn.query("SELECT user_id FROM bank_submissions WHERE item_id = ? AND status = 'pending'", [id]);
+        if (!draft || !senders.length) throw new BankError('Nothing waits for approval here', 404);
+        const [result] = await conn.query(
+            "UPDATE bank_submissions SET status = ?, note = ?, decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
+            [action === 'approve' ? 'approved' : 'rejected', note, user.id, id]);
+        if (action === 'approve') await conn.query("UPDATE bank_items SET status = 'published' WHERE id = ?", [id]);
+        // A rejected copy goes (its sender keeps their own task); a draft staff had made themselves stays
+        else if (senders.some(row => row.user_id === draft.created_by)) await conn.query('DELETE FROM bank_items WHERE id = ?', [id]);
+        return { [action === 'approve' ? 'approved' : 'rejected']: result.affectedRows };
+    });
+}
+
 // --- READING TASKS ---
 /** Full questions for preview and for dropping into a quiz, in the order asked. */
 async function fetchItems(pool, user, ids) {
@@ -1026,15 +1214,22 @@ async function fetchItems(pool, user, ids) {
     );
     if (!rows.length) return [];
     const found = rows.map(row => row.id);
-    const [[links], [myReports], [openReports]] = await Promise.all([
+    const drafts = rows.filter(row => row.owner_id === 0 && row.status === 'draft').map(row => row.id);
+    const [[links], [myReports], [openReports], [waiting]] = await Promise.all([
         pool.query('SELECT item_id, value_id FROM bank_item_values WHERE item_id IN (?)', [found]),
         pool.query("SELECT item_id FROM bank_item_reports WHERE user_id = ? AND status = 'open' AND item_id IN (?)", [user.id, found]),
         // Staff see the open reports of mistakes, with who sent them
         staff
             ? pool.query(`SELECT r.id, r.item_id, r.reason, r.note, r.created_at, u.username FROM bank_item_reports r
                           LEFT JOIN users u ON u.id = r.user_id WHERE r.status = 'open' AND r.item_id IN (?) ORDER BY r.id`, [found])
+            : [[]],
+        // …and who sent a draft of the shared bank for approval
+        staff && drafts.length
+            ? pool.query(`SELECT s.item_id, s.created_at, u.username FROM bank_submissions s
+                          LEFT JOIN users u ON u.id = s.user_id WHERE s.status = 'pending' AND s.item_id IN (?)`, [drafts])
             : [[]]
     ]);
+    const waitingOf = new Map(waiting.map(row => [row.item_id, { user: row.username, createdAt: row.created_at }]));
     const valuesOf = new Map();
     for (const link of links) {
         if (!valuesOf.has(link.item_id)) valuesOf.set(link.item_id, []);
@@ -1063,6 +1258,7 @@ async function fetchItems(pool, user, ids) {
         values: valuesOf.get(row.id) || [],
         reportedByMe: reported.has(row.id),
         ...(staff ? { reports: reportsOf.get(row.id) || [] } : {}),
+        ...(waitingOf.has(row.id) ? { submitted: waitingOf.get(row.id) } : {}),
         content: parseJson(row.content)
     }]));
     return ids.map(id => byId.get(id)).filter(Boolean);
@@ -1256,7 +1452,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         res.set('Cache-Control', 'private, no-cache');
         // A finished write that may touch the shared bank's counts has them counted again (reading
         // tasks, counting uses, folders, stars and reports change no counts)
-        const countsStay = /^\/(items\/fetch|sample|used|folders|favorites)(\/|$)|\/reports$/.test(req.path);
+        const countsStay = /^\/(items\/fetch|sample|used|folders|favorites|labels|tags)(\/|$)|\/reports$/.test(req.path);
         if (req.method !== 'GET' && !countsStay && req.body?.scope !== 'mine') {
             res.on('finish', () => {
                 sharedWrites++;
@@ -1272,8 +1468,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     router.get('/bank/meta', route(req => (isStaff(req.user) ? meta.adminData : meta.teacherData)));
 
     router.get('/bank/items', route(async req => {
-        const result = await listItems(pool, req.query, listContext(req.user, req.query));
+        const ctx = listContext(req.user, req.query);
+        const result = await listItems(pool, req.query, ctx);
         if (!result) throw new BankError('Invalid cursor');
+        if (ctx.labelsOf) await personalize(pool, req.user, result.items);
         return result;
     }));
 
@@ -1365,21 +1563,31 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         return { deleted: gone.length, moved };
     }));
 
-    // Stars: a teacher's bookmarks into the shared bank (tasks taken out of it drop off the list)
+    // Stars: a teacher's bookmarks into the shared bank and among their own tasks (tasks taken out of
+    // the bank, or removed from one's own, drop off the list)
     const sharedTask = async rawId => {
         const id = toId(rawId);
         const [[row]] = id ? await pool.query("SELECT id FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'published'", [id]) : [[]];
         if (!row) throw new BankError('Task not found', 404);
         return row.id;
     };
+    const keptTask = async (user, rawId) => {
+        const id = toId(rawId);
+        const [[row]] = id
+            ? await pool.query("SELECT id FROM bank_items WHERE id = ? AND owner_id IN (0, ?) AND status = 'published'", [id, user.id])
+            : [[]];
+        if (!row) throw new BankError('Task not found', 404);
+        return row.id;
+    };
     router.get('/bank/favorites', route(async req => {
         const [rows] = await pool.query(
             `SELECT f.item_id FROM bank_favorites f JOIN bank_items i ON i.id = f.item_id
-             WHERE f.user_id = ? AND i.owner_id = 0 AND i.status = 'published' ORDER BY f.created_at DESC LIMIT ?`, [req.user.id, MAX_FAVORITES]);
+             WHERE f.user_id = ? AND i.owner_id IN (0, ?) AND i.status = 'published' ORDER BY f.created_at DESC LIMIT ?`,
+            [req.user.id, req.user.id, MAX_FAVORITES]);
         return { ids: rows.map(row => row.item_id) };
     }));
     router.put('/bank/favorites/:id', route(async req => {
-        const id = await sharedTask(req.params.id);
+        const id = await keptTask(req.user, req.params.id);
         const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM bank_favorites WHERE user_id = ?', [req.user.id]);
         if (Number(n) >= MAX_FAVORITES) throw new BankError(`At most ${MAX_FAVORITES} starred tasks`, 403);
         await pool.query('INSERT IGNORE INTO bank_favorites (user_id, item_id) VALUES (?, ?)', [req.user.id, id]);
@@ -1416,6 +1624,59 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
             "UPDATE bank_item_reports SET status = ?, closed_at = NOW(), closed_by = ? WHERE item_id = ? AND status = 'open'", [status, req.user.id, id]);
         return { closed: result.affectedRows };
     }));
+
+    // Nicknames and #tags: one's own labels on one's own or shared tasks, seen by nobody else
+    router.get('/bank/tags', route(async req => {
+        const [rows] = await pool.query(
+            `SELECT t.tag, COUNT(*) AS n FROM bank_tags t JOIN bank_items i ON i.id = t.item_id
+             WHERE t.user_id = ? AND i.owner_id IN (0, ?) AND i.status = 'published' GROUP BY t.tag ORDER BY t.tag`,
+            [req.user.id, req.user.id]);
+        return { tags: rows.map(row => ({ tag: row.tag, n: Number(row.n) })) };
+    }));
+    router.put('/bank/labels/:id', route(async req => {
+        const id = await keptTask(req.user, req.params.id);
+        const body = req.body || {};
+        const nickname = body.nickname === undefined ? undefined : optionalText(body.nickname, 120);
+        const tags = body.tags === undefined ? undefined : tagList(body.tags);
+        await inTransaction(pool, async conn => {
+            if (nickname === null) await conn.query('DELETE FROM bank_nicknames WHERE user_id = ? AND item_id = ?', [req.user.id, id]);
+            else if (nickname !== undefined) {
+                await conn.query('INSERT INTO bank_nicknames (user_id, item_id, nickname) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname)',
+                    [req.user.id, id, nickname]);
+            }
+            if (tags !== undefined) {
+                await conn.query('DELETE FROM bank_tags WHERE user_id = ? AND item_id = ?', [req.user.id, id]);
+                if (tags.length) await conn.query('INSERT IGNORE INTO bank_tags (user_id, item_id, tag) VALUES ?', [tags.map(tag => [req.user.id, id, tag])]);
+            }
+        });
+        const [item] = await personalize(pool, req.user, [{ id }]);
+        return { id, nickname: item.nickname, tags: item.tags };
+    }));
+    // One tag put on (or taken off) many tasks: dropping tasks on a tag
+    router.post('/bank/labels/tags', route(async req => {
+        const ids = idList(req.body?.ids ?? [], MAX_FETCH);
+        const add = tagList(req.body?.add ?? []);
+        const remove = tagList(req.body?.remove ?? []);
+        if (!ids.length || (!add.length && !remove.length)) throw new BankError('Choose the tasks and the tag');
+        const [rows] = await pool.query("SELECT id FROM bank_items WHERE id IN (?) AND owner_id IN (0, ?) AND status = 'published'", [ids, req.user.id]);
+        const kept = rows.map(row => row.id);
+        if (!kept.length) throw new BankError('Task not found', 404);
+        await inTransaction(pool, async conn => {
+            if (remove.length) await conn.query('DELETE FROM bank_tags WHERE user_id = ? AND item_id IN (?) AND tag IN (?)', [req.user.id, kept, remove]);
+            if (add.length) {
+                const [counts] = await conn.query('SELECT item_id, COUNT(*) AS n FROM bank_tags WHERE user_id = ? AND item_id IN (?) GROUP BY item_id', [req.user.id, kept]);
+                const full = new Set(counts.filter(row => Number(row.n) + add.length > MAX_TAGS_PER_TASK).map(row => row.item_id));
+                const pairs = kept.filter(id => !full.has(id)).flatMap(id => add.map(tag => [req.user.id, id, tag]));
+                if (pairs.length) await conn.query('INSERT IGNORE INTO bank_tags (user_id, item_id, tag) VALUES ?', [pairs]);
+            }
+        });
+        return { changed: kept.length };
+    }));
+
+    // Staff send their own tasks to the shared bank: a creator's wait as drafts for an admin, an admin's
+    // go in at once. Admins approve or reject the waiting ones.
+    router.post('/bank/submissions', requireStaff, route(req => submitItems(pool, req.user, req.body || {})));
+    router.patch('/bank/submissions/:id', requireAdmin, route(req => decideSubmission(pool, req.user, req.params.id, req.body || {})));
 
     router.post('/bank/items', route(req => createItems(pool, req.user, req.body || {})));
     router.patch('/bank/items', route(req => bulkUpdate(pool, req.user, req.body || {})));
@@ -1632,6 +1893,8 @@ async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
     // Top-level folders only: their subfolders go with them
     await pool.query('DELETE f FROM bank_folders f LEFT JOIN users u ON u.id = f.owner_id WHERE f.parent_id IS NULL AND u.id IS NULL');
     await pool.query('DELETE f FROM bank_favorites f LEFT JOIN users u ON u.id = f.user_id WHERE u.id IS NULL');
+    await pool.query('DELETE n FROM bank_nicknames n LEFT JOIN users u ON u.id = n.user_id WHERE u.id IS NULL');
+    await pool.query('DELETE t FROM bank_tags t LEFT JOIN users u ON u.id = t.user_id WHERE u.id IS NULL');
     const [pictures] = await pool.query(
         `DELETE m FROM bank_media m LEFT JOIN bank_item_media l ON l.sha256 = m.sha256
          WHERE l.sha256 IS NULL AND m.created_at <= NOW() - INTERVAL ? HOUR`, [graceHours]);

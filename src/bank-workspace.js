@@ -53,6 +53,9 @@ const ICONS = {
     flag: '<path d="M5 21V4.5"/><path d="M5 4.5h11l-2 4 2 4H5"/>',
     upload: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>',
     tag: '<path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1L21 11.9 12.9 20z"/><circle cx="8" cy="8" r="1.5"/>',
+    hash: '<path d="M9.5 4 7.5 20M16.5 4l-2 16M4.5 9h15M3.5 15h15"/>',
+    send: '<path d="M4 12 20 4l-6 16-3-7z"/><path d="m11 13 9-9"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>'
 };
 const icon = (name, size = 18) =>
@@ -87,12 +90,14 @@ let popover = null;
 let treeOpen = true; // the topic tree folds into its header once a topic without subtopics is chosen
 let builtLanguage = null;
 let inQuiz = new Set(); // bank tasks the open quiz already holds (their source.bankId)
-let favorites = new Set(); // the teacher's starred shared tasks
+let favorites = new Set(); // the teacher's starred tasks: shared ones and their own
 let flaggedCount = 0; // shared tasks with open reports of mistakes (admins)
+let reviewCount = 0; // creators' tasks waiting for approval (admins)
 const adding = new Set(); // tasks on their way into the quiz: a second click doesn't add them twice
 const els = {};
-const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, flagged: false, editing: false, started: false };
-const mine = { folders: [], folderId: "all", q: "", total: 0, unfiled: 0, listed: 0, started: false };
+const bank = { subjectId: null, gradeId: null, topicId: null, levels: new Set(), q: "", sort: "new", facets: {}, total: 0, flagged: false, review: false, editing: false, started: false };
+// folderId: a folder's ID, "all", "favorites", "none", or "tag:<tag>" for one of one's own #tags
+const mine = { folders: [], tags: [], folderId: "all", q: "", total: 0, unfiled: 0, listed: 0, started: false };
 
 export function initBankWorkspace() {
     if (initialized) return;
@@ -123,7 +128,7 @@ export function initBankWorkspace() {
         bankList.refresh();
         mineList.refresh();
         const item = sheet?.list?.items[sheet.index];
-        if (item) sheet.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, sheet.scope === "mine");
+        if (item) sheet.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, item.own, sheet.left);
     });
     // "/" jumps to the bank's search from anywhere but a text field
     document.addEventListener("keydown", e => {
@@ -237,6 +242,12 @@ function show(origin) {
     els.panel.querySelectorAll(".bank-staff-only, .bank-selbar-edit").forEach(el => { el.hidden = !limits.writeShared; });
     els.panel.querySelectorAll(".bank-admin-only").forEach(el => { el.hidden = !isAdmin(); });
     els.mine.querySelectorAll('[data-act="import-mine"], [data-act="new-folder"]').forEach(el => { el.hidden = !limits.writeMine; });
+    // Staff send their own tasks to the shared bank (a creator's wait for an admin's approval)
+    const submit = els.mine.querySelector(".bank-selbar-submit");
+    submit.hidden = !isStaff();
+    submit.dataset.label = isAdmin() ? "bank.publish" : "bank.submit";
+    submit.title = t(submit.dataset.label);
+    submit.setAttribute("aria-label", submit.title);
     document.body.classList.toggle("bank-read-only", !limits.writeMine);
     const saveToBank = document.getElementById("admin-bank-save-btn");
     if (saveToBank) saveToBank.hidden = !limits.writeMine;
@@ -247,6 +258,7 @@ function show(origin) {
     else reloadFolders();
     loadFavorites();
     refreshFlagged();
+    refreshReview();
     animateIn(origin);
 }
 
@@ -348,9 +360,10 @@ function tabsHtml() {
     </div>`;
 }
 
-function selbarHtml() {
+function selbarHtml(mineSide = false) {
     return `<div class="bank-selbar" hidden>
         <span class="bank-selbar-count"></span>
+        ${mineSide ? `<button type="button" class="btn btn-secondary bank-selbar-submit" data-label="bank.submit" title="${t("bank.submit")}" aria-label="${t("bank.submit")}" hidden>${icon("send", 16)}</button>` : ""}
         <button type="button" class="btn btn-secondary bank-selbar-edit" data-label="bank.classify" title="${t("bank.classify")}" aria-label="${t("bank.classify")}">${icon("tag", 16)}</button>
         <button type="button" class="btn btn-primary bank-selbar-add">${icon("plus", 16)}<span data-i18n="bank.addSelected">${t("bank.addSelected")}</span></button>
         <button type="button" class="bank-icon-btn bank-selbar-clear" data-label="bank.clearSelection" title="${t("bank.clearSelection")}" aria-label="${t("bank.clearSelection")}">${icon("close", 16)}</button>
@@ -373,7 +386,7 @@ function build() {
             <nav class="mine-folders" role="tree" data-label="bank.folders" aria-label="${t("bank.folders")}"></nav>
             <div class="bank-list-head"><span class="bank-total"></span></div>
             <div class="mine-list"></div>
-            ${selbarHtml()}
+            ${selbarHtml(true)}
         </aside>
         <aside id="bank-panel" class="bank-aside" aria-labelledby="bank-title">
             ${tabsHtml()}
@@ -407,6 +420,7 @@ function build() {
             <div class="bank-list-head">
                 <span class="bank-total"></span>
                 <button type="button" class="bank-flagged" hidden aria-pressed="false">${icon("flag", 14)}<span></span></button>
+                <button type="button" class="bank-flagged bank-review" hidden aria-pressed="false">${icon("clock", 14)}<span></span></button>
             </div>
             <div class="shared-list"></div>
             ${selbarHtml()}
@@ -432,6 +446,7 @@ function build() {
         topicInfo: inPanel(".bank-topic-info"),
         bankTotal: inPanel(".bank-total"),
         flagged: inPanel(".bank-flagged"),
+        review: inPanel(".bank-review"),
         treeEdit: inPanel(".bank-tree-edit"),
         folders: els.mine.querySelector(".mine-folders"),
         mineTotal: els.mine.querySelector(".bank-total"),
@@ -443,25 +458,28 @@ function build() {
         starLabel: t("bank.star"),
         metaHtml: item => rowMetaHtml(item, false),
         emptyHtml: res => emptyHtml(res, "bank"),
-        starOf: item => favorites.has(item.id),
-        onOpen: (item, index) => openSheet(els.panel, bankList, index, "bank"),
+        starOf: item => (item.status === "draft" ? null : favorites.has(item.id)), // drafts wait for approval
+        onOpen: (item, index) => openSheet(els.panel, bankList, index),
         onAdd: (item, row) => addTasks([item.id], row),
         onStar: item => toggleFavorite(item.id),
         onPointerDown: (e, item, row) => dragRows(e, item, row, bankList, "bank"),
         onSelection: ids => updateSelbar(els.panel, ids)
     });
-    // The left list shows one's own tasks, or the starred shared ones (which behave as bank tasks)
-    const starredView = () => mine.folderId === "favorites";
+    // The left list shows one's own tasks; starred and tagged views mix in shared ones, which behave
+    // as bank tasks (item.own tells them apart). Everything here can be starred, nicknamed and tagged.
     mineList = createTaskList(els.mineListEl, {
         addLabel: t("bank.add"),
         starLabel: t("bank.star"),
-        metaHtml: item => rowMetaHtml(item, !starredView()),
+        renameLabel: t("bank.nickname"),
+        renamePlaceholder: t("bank.nicknamePlaceholder"),
+        metaHtml: item => rowMetaHtml(item, item.own, true),
         emptyHtml: res => emptyHtml(res, "mine"),
-        starOf: item => (starredView() ? favorites.has(item.id) : null),
-        onOpen: (item, index) => openSheet(els.mine, mineList, index, starredView() ? "bank" : "mine"),
+        starOf: item => favorites.has(item.id),
+        onOpen: (item, index) => openSheet(els.mine, mineList, index),
         onAdd: (item, row) => addTasks([item.id], row),
         onStar: item => toggleFavorite(item.id),
-        onPointerDown: (e, item, row) => dragRows(e, item, row, mineList, starredView() ? "bank" : "mine"),
+        onRename: (item, text) => saveLabels(item, { nickname: text }),
+        onPointerDown: (e, item, row) => dragRows(e, item, row, mineList, item.own ? "mine" : "bank"),
         onSelection: ids => updateSelbar(els.mine, ids)
     });
 
@@ -486,7 +504,7 @@ function relabel() {
     });
     [...els.sort.options].forEach(option => { option.textContent = t(`bank.sort.${option.value}`); });
     bankList.relabel(t("bank.add"), t("bank.star"));
-    mineList.relabel(t("bank.add"), t("bank.star"));
+    mineList.relabel(t("bank.add"), t("bank.star"), t("bank.nickname"), t("bank.nicknamePlaceholder"));
     if (bank.started) {
         renderFilters();
         renderTree();
@@ -521,6 +539,12 @@ function wireCommon() {
             addTasks(ids, null);
         });
         aside.querySelector(".bank-selbar-clear").addEventListener("click", () => list.clearSelection());
+        aside.querySelector(".bank-selbar-submit")?.addEventListener("click", () => {
+            const chosen = new Set(list.selected);
+            const own = list.items.filter(item => item.own && chosen.has(item.id)).map(item => item.id);
+            list.clearSelection();
+            submitToBank(own);
+        });
         aside.querySelector(".bank-selbar-edit").addEventListener("click", () => openBulkEdit(aside, list));
     }
     // The editor's File menu: the quiz's questions into the bank
@@ -624,13 +648,9 @@ function wireBank() {
         renderFold();
     });
     // Admins: every shared task with an open report, whatever the filters
-    els.flagged.addEventListener("click", () => {
-        bank.flagged = !bank.flagged;
-        els.flagged.setAttribute("aria-pressed", String(bank.flagged));
-        els.flagged.hidden = !flaggedCount && !bank.flagged;
-        els.panel.classList.toggle("is-flagged", bank.flagged);
-        reloadBank();
-    });
+    els.flagged.addEventListener("click", () => setQueue(bank.flagged ? null : "flagged"));
+    // Admins: creators' tasks waiting for approval
+    els.review.addEventListener("click", () => setQueue(bank.review ? null : "review"));
     // Admins: the tree's own upkeep (new topics, names, descriptions, curriculum, place)
     els.treeEdit.addEventListener("click", () => {
         bank.editing = !bank.editing;
@@ -676,6 +696,18 @@ function wireBank() {
 }
 
 const parseTopic = value => (value === "all" ? null : value === "none" ? "none" : Number(value));
+
+// One of the admins' queues instead of the filtered bank: reported tasks, or tasks waiting for approval
+function setQueue(name) {
+    bank.flagged = name === "flagged";
+    bank.review = name === "review";
+    els.flagged.setAttribute("aria-pressed", String(bank.flagged));
+    els.review.setAttribute("aria-pressed", String(bank.review));
+    els.flagged.hidden = !flaggedCount && !bank.flagged;
+    els.review.hidden = !reviewCount && !bank.review;
+    els.panel.classList.toggle("is-flagged", !!name);
+    reloadBank();
+}
 
 function startBank() {
     bank.started = true;
@@ -757,6 +789,12 @@ async function reloadBank() {
         if (res) els.bankTotal.textContent = res.ok ? t("bank.flaggedTotal").replace("{n}", res.data.total ?? 0) : "";
         return;
     }
+    if (bank.review) {
+        const res = await bankList.reset((cursor, signal) =>
+            api.listItems({ review: 1, status: "draft", limit: PAGE, cursor, facets: "none" }, signal));
+        if (res) els.bankTotal.textContent = res.ok ? t("bank.reviewTotal").replace("{n}", res.data.total ?? 0) : "";
+        return;
+    }
     const filter = listFilter();
     renderTree();
     const res = await bankList.reset((cursor, signal) =>
@@ -817,6 +855,21 @@ async function refreshFlagged() {
     els.flagged.querySelector("span").textContent = flaggedCount;
     els.flagged.title = t("bank.flaggedTitle");
     els.flagged.setAttribute("aria-label", `${t("bank.flaggedTitle")}: ${flaggedCount}`);
+}
+
+// How many creators' tasks wait for approval: admins see the number, and with it the queue
+async function refreshReview() {
+    if (!isAdmin() || !els.review) {
+        if (els.review) els.review.hidden = true;
+        return;
+    }
+    const res = await api.listItems({ review: 1, status: "draft", limit: 1, facets: "none" });
+    if (!res.ok) return;
+    reviewCount = res.data.total ?? 0;
+    els.review.hidden = !reviewCount && !bank.review;
+    els.review.querySelector("span").textContent = reviewCount;
+    els.review.title = t("bank.reviewTitle");
+    els.review.setAttribute("aria-label", `${t("bank.reviewTitle")}: ${reviewCount}`);
 }
 
 // Whether a grade's curriculum has this topic or one of its subtopics
@@ -1028,7 +1081,9 @@ function wireMine() {
 }
 
 const SPECIAL_FOLDERS = ["all", "favorites", "none"];
-const parseFolder = value => (SPECIAL_FOLDERS.includes(value) ? value : Number(value));
+const isTagView = id => typeof id === "string" && id.startsWith("tag:");
+const tagOfView = id => (isTagView(id) ? id.slice(4) : null);
+const parseFolder = value => (SPECIAL_FOLDERS.includes(value) || isTagView(value) ? value : Number(value));
 const folderById = id => mine.folders.find(folder => folder.id === id) || null;
 
 function isInside(id, ancestorId) {
@@ -1044,9 +1099,76 @@ function folderLabel(folderId) {
 
 function startMine() {
     mine.started = true;
-    mine.folderId = typeof prefs.mineFolder === "number" || SPECIAL_FOLDERS.includes(prefs.mineFolder) ? prefs.mineFolder : "all";
+    const saved = prefs.mineFolder;
+    mine.folderId = typeof saved === "number" || SPECIAL_FOLDERS.includes(saved) || isTagView(saved) ? saved : "all";
     reloadFolders();
     reloadMine();
+}
+
+// One's own #tags with how many tasks carry each; a tag no task carries any more leaves the list
+async function reloadTags() {
+    const res = await api.listTags();
+    if (!res.ok) return;
+    mine.tags = res.data.tags || [];
+    if (isTagView(mine.folderId) && !mine.tags.some(row => row.tag === tagOfView(mine.folderId))) {
+        mine.folderId = "all";
+        prefs.mineFolder = "all";
+        savePrefs();
+        reloadMine();
+    }
+    renderFolders();
+}
+
+/**
+ * Saves a task's nickname and/or tags (only this user sees them) and shows them on its row and in the
+ * preview. Resolves to whether it was saved.
+ */
+// Saves go one after another, so a quick second tag never overtakes (and undoes) the first
+let labelChain = Promise.resolve(true);
+function saveLabels(item, labels) {
+    labelChain = labelChain.then(() => sendLabels(item, labels), () => sendLabels(item, labels));
+    return labelChain;
+}
+
+async function sendLabels(item, labels) {
+    const res = await api.setLabels(item.id, labels);
+    if (!res.ok) {
+        toast(errorText(res), "error");
+        return false;
+    }
+    const fields = { nickname: res.data.nickname, tags: res.data.tags };
+    mineList.patch(item.id, fields);
+    if (sheet?.list?.items[sheet.index]?.id === item.id) renderSheetLabels();
+    if (labels.tags !== undefined) reloadTags();
+    return true;
+}
+
+// Own tasks into the shared bank: a creator's wait for an admin, an admin's go in at once
+async function submitToBank(ids) {
+    if (!ids.length) {
+        toast(t("bank.submitOwnOnly"), "error");
+        return;
+    }
+    const res = await api.submitItems(ids);
+    if (!res.ok) {
+        toast(errorText(res), "error");
+        return;
+    }
+    const { submitted = 0, published = 0, pending = 0, exists = 0 } = res.data;
+    const parts = [];
+    if (submitted) parts.push(t("bank.submitted").replace("{n}", submitted));
+    if (published) parts.push(t("bank.published").replace("{n}", published));
+    if (pending) parts.push(t("bank.alreadyPending").replace("{n}", pending));
+    if (exists) parts.push(t("bank.alreadyShared").replace("{n}", exists));
+    toast(parts.join(" · ") || t("bank.saveFailed"), submitted || published ? "ok" : "error");
+    for (const result of res.data.results || []) {
+        const status = result.submitted || result.pending ? "pending" : result.published ? "approved" : null;
+        if (status) mineList.patch(result.id, { submission: { status, note: null } });
+    }
+    // The open preview shows the new state (its badge, buttons and the rejection note go)
+    if (sheet?.list === mineList && sheet.list.items[sheet.index]) showSheetItem();
+    if (published) reloadBank();
+    refreshReview();
 }
 
 async function loadFavorites() {
@@ -1081,6 +1203,7 @@ async function toggleFavorite(id) {
 }
 
 async function reloadFolders() {
+    reloadTags();
     const res = await api.listFolders();
     if (res.ok) {
         mine.folders = res.data.folders || [];
@@ -1096,9 +1219,11 @@ async function reloadFolders() {
 
 async function reloadMine() {
     const starred = mine.folderId === "favorites";
-    const folder = mine.folderId === "all" || starred ? null : mine.folderId;
+    const tag = tagOfView(mine.folderId);
+    const scope = starred ? "favorites" : tag ? "tagged" : "mine";
+    const folder = scope !== "mine" || mine.folderId === "all" ? null : mine.folderId;
     const res = await mineList.reset((cursor, signal) =>
-        api.listItems({ scope: starred ? "favorites" : "mine", folder, q: mine.q.trim(), limit: PAGE, cursor, facets: "none" }, signal));
+        api.listItems({ scope, tag, folder, q: mine.q.trim(), limit: PAGE, cursor, facets: "none" }, signal));
     if (!res) return;
     mine.listed = res.data.total ?? 0;
     els.mineTotal.textContent = res.ok ? countLabel(mine.listed) : "";
@@ -1119,6 +1244,11 @@ function renderFolders() {
         if (open) children.forEach(child => walk(child, depth + 1));
     };
     kids(null).forEach(folder => walk(folder, 0));
+    // One's #tags: each a view of every task (own or shared) that carries it
+    if (mine.tags.length) {
+        rows.push(`<div class="mine-tags-head" role="presentation">${escapeHtml(t("bank.tags"))}</div>`);
+        mine.tags.forEach(row => rows.push(folderHtml({ id: `tag:${row.tag}`, name: `#${row.tag}` }, 0, row.n, null, "hash")));
+    }
     const focused = els.folders.contains(document.activeElement) ? document.activeElement.dataset.folder : null;
     els.folders.innerHTML = rows.join("");
     if (focused) els.folders.querySelector(`[data-folder="${focused}"]`)?.focus({ preventScroll: true });
@@ -1285,8 +1415,10 @@ function addMineDropZone() {
 }
 
 function folderTakes(payload, folderId) {
-    // Stars are for shared tasks: bank tasks dropped there are starred, nothing else is taken
-    if (folderId === "favorites") return payload.kind === "tasks" && payload.source === "bank";
+    // Tasks dropped on Starred are starred, on a #tag tagged; questions of the quiz are not tasks yet
+    if (folderId === "favorites" || isTagView(folderId)) {
+        return payload.kind === "tasks" && payload.source !== "topic" && !(payload.source === "mine" && folderId === mine.folderId);
+    }
     if (payload.kind === "folder") {
         return folderId === "all" || (typeof folderId === "number" && folderId !== payload.id && !isInside(folderId, payload.id));
     }
@@ -1304,7 +1436,23 @@ async function dropOnFolder(payload, folderId) {
         toast(t("bank.starred").replace("{n}", payload.ids.length));
         renderFolders();
         bankList.refresh();
+        mineList.refresh();
         if (mine.folderId === "favorites") reloadMine();
+        return true;
+    }
+    if (isTagView(folderId)) {
+        const tag = tagOfView(folderId);
+        const res = await api.tagItems(payload.ids, { add: [tag] });
+        if (!res.ok) {
+            toast(errorText(res), "error");
+            return false;
+        }
+        toast(t("bank.tagged").replace("{tag}", `#${tag}`).replace("{n}", payload.ids.length));
+        for (const id of payload.ids) {
+            const item = mineList.items.find(listed => listed.id === id);
+            if (item && !item.tags?.includes(tag)) mineList.patch(id, { tags: [...(item.tags || []), tag].sort() });
+        }
+        reloadTags();
         return true;
     }
     const target = typeof folderId === "number" ? folderId : null;
@@ -1839,7 +1987,7 @@ function addTreeDropZone() {
     };
     addDropZone({
         el: els.tree,
-        accepts: payload => shown && !bank.flagged && payload.kind === "tasks"
+        accepts: payload => shown && !bank.flagged && !bank.review && payload.kind === "tasks"
             && ((payload.source === "mine" && limits.writeMine) || (payload.source === "bank" && limits.writeShared)),
         over(payload, x, y, target) {
             const node = target.closest(".bank-node");
@@ -1973,7 +2121,9 @@ async function moveTopic(topic, step) {
 
 // --- Preview ---
 
-function openSheet(aside, list, index, scope) {
+// The preview of a listed task. What it offers follows the task (item.own: one's own, or shared) and
+// the column: in "Mano užduotys" a task also gets one's nickname and #tags.
+function openSheet(aside, list, index) {
     if (justDragged() || !list.items[index]) return;
     if (sheet?.aside === aside && sheet.list) {
         sheet.index = index;
@@ -1981,6 +2131,7 @@ function openSheet(aside, list, index, scope) {
         return;
     }
     closeSheet();
+    const left = aside === els.mine;
     const el = document.createElement("div");
     el.className = "bank-sheet";
     el.innerHTML = `
@@ -1988,13 +2139,19 @@ function openSheet(aside, list, index, scope) {
         <div class="bank-sheet-card" role="dialog" aria-label="${t("bank.preview")}" tabindex="-1">
             <div class="bank-sheet-head">
                 <div class="bank-sheet-meta"></div>
-                ${scope === "bank" ? `
                 <button type="button" class="bank-icon-btn bank-sheet-star" data-act="star" aria-pressed="false" aria-label="${t("bank.star")}" title="${t("bank.star")}">${icon("star")}</button>
-                <button type="button" class="bank-icon-btn" data-act="report" aria-label="${t("bank.report")}" title="${t("bank.report")}">${icon("flag")}</button>` : ""}
+                <button type="button" class="bank-icon-btn" data-act="report" aria-label="${t("bank.report")}" title="${t("bank.report")}">${icon("flag")}</button>
                 <button type="button" class="bank-icon-btn" data-act="prev" aria-label="${t("bank.prev")}" title="${t("bank.prev")}">${icon("prev")}</button>
                 <button type="button" class="bank-icon-btn" data-act="next" aria-label="${t("bank.next")}" title="${t("bank.next")}">${icon("next")}</button>
                 <button type="button" class="bank-icon-btn" data-act="close" aria-label="${t("bank.close")}" title="${t("bank.close")}">${icon("close")}</button>
             </div>
+            ${left ? `<div class="bank-labels">
+                <label class="bank-label-nick" title="${t("bank.nicknameHint")}">${icon("edit", 14)}<input type="text" maxlength="120" data-field="nickname"
+                    autocomplete="off" placeholder="${t("bank.nicknamePlaceholder")}" aria-label="${t("bank.nickname")}"></label>
+                <div class="bank-label-tags" title="${t("bank.tagsHint")}">${icon("hash", 14)}<span class="bank-tag-chips"></span><input type="text" maxlength="41"
+                    data-field="tag" list="bank-tag-suggest" autocomplete="off" placeholder="${t("bank.tagPlaceholder")}" aria-label="${t("bank.addTag")}"></div>
+                <datalist id="bank-tag-suggest"></datalist>
+            </div>` : ""}
             <div class="bank-sheet-body"></div>
             <form class="bank-report" hidden>
                 <p class="bank-report-title">${t("bank.reportTitle")}</p>
@@ -2007,18 +2164,14 @@ function openSheet(aside, list, index, scope) {
                     <button type="button" class="btn btn-secondary" data-act="report-cancel">${t("bank.cancel")}</button>
                 </div>
             </form>
-            <div class="bank-sheet-actions">
-                <button type="button" class="btn btn-primary" data-act="add">${icon("plus", 16)}<span>${t("bank.add")}</span></button>
-                ${scope === "bank"
-                    ? (limits.writeMine ? `<button type="button" class="btn btn-secondary" data-act="save">${icon("folder", 16)}<span>${t("bank.saveMine")}</span></button>` : "")
-                    : `<button type="button" class="btn btn-secondary" data-act="remove">${icon("trash", 16)}<span>${t("bank.remove")}</span></button>`}
-            </div>
+            <div class="bank-sheet-actions"></div>
         </div>`;
     aside.appendChild(el);
-    sheet = { el, aside, list, index, scope, full: null };
+    sheet = { el, aside, list, index, left, full: null };
     el.addEventListener("click", onSheetClick);
     el.addEventListener("keydown", onSheetKey);
     el.querySelector(".bank-report").addEventListener("submit", sendReport);
+    if (left) wireSheetLabels(el);
     requestAnimationFrame(() => el.classList.add("is-open"));
     el.querySelector(".bank-sheet-card").focus({ preventScroll: true });
     showSheetItem();
@@ -2029,22 +2182,181 @@ async function showSheetItem() {
     const item = current.list.items[current.index];
     if (!item) return;
     current.full = null;
-    current.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, current.scope === "mine");
+    current.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, item.own, current.left);
     current.el.querySelector('[data-act="prev"]').disabled = current.index <= 0;
     current.el.querySelector('[data-act="next"]').disabled = current.index >= current.list.items.length - 1;
+    // A draft waiting for approval is neither starred nor reported; one's own task is not reported
+    current.el.querySelector('[data-act="star"]').hidden = item.status === "draft";
+    current.el.querySelector('[data-act="report"]').hidden = item.own || item.status === "draft";
     closeReportForm();
     sheetStar();
+    renderSheetLabels();
+    renderSheetActions();
     const body = current.el.querySelector(".bank-sheet-body");
     body.classList.add("is-loading");
-    if (bank.flagged && current.scope === "bank") api.forgetItems([item.id]); // reviewing reports: always fresh
+    if ((bank.flagged || bank.review) && !item.own) api.forgetItems([item.id]); // reviewing: always fresh
     const [full] = await api.loadItems([item.id]);
     if (sheet !== current || current.list.items[current.index] !== item) return;
     current.full = full;
     body.classList.remove("is-loading");
-    body.innerHTML = full ? reportsHtml(full) + questionHtml(full.content) : `<p class="bank-muted">${t("bank.loadFailed")}</p>`;
+    body.innerHTML = full
+        ? rejectedHtml(item) + reviewHtml(full) + reportsHtml(full) + questionHtml(full.content)
+        : `<p class="bank-muted">${t("bank.loadFailed")}</p>`;
     typeset(body);
     body.scrollTop = 0;
     sheetReportButton();
+}
+
+// What the sheet's buttons offer for this task
+function renderSheetActions() {
+    const bar = sheet?.el.querySelector(".bank-sheet-actions");
+    const item = sheet?.list?.items[sheet.index];
+    if (!bar || !item) return;
+    const button = (act, ico, label, { primary = false, disabled = false, iconOnly = false } = {}) =>
+        `<button type="button" class="btn ${primary ? "btn-primary" : "btn-secondary"}${iconOnly ? " bank-btn-icon" : ""}" data-act="${act}"${disabled ? " disabled" : ""}
+            ${iconOnly ? `title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` : ""}>${icon(ico, 16)}${iconOnly ? "" : `<span>${escapeHtml(label)}</span>`}</button>`;
+    const parts = [button("add", "plus", t("bank.add"), { primary: true })];
+    if (!item.own) {
+        if (limits.writeMine && item.status !== "draft") parts.push(button("save", "folder", t("bank.saveMine")));
+    } else {
+        // Staff send their own tasks to the shared bank: once waiting or in, the button says so
+        if (isStaff()) {
+            const state = item.submission?.status;
+            if (state === "pending") parts.push(button("submit", "clock", t("bank.pending"), { disabled: true }));
+            else if (state === "approved") parts.push(button("submit", "check", t("bank.inBank"), { disabled: true }));
+            else parts.push(button("submit", "send", t(state === "rejected" ? "bank.resubmit" : isAdmin() ? "bank.publish" : "bank.submit")));
+        }
+        parts.push(button("remove", "trash", t("bank.remove"), { iconOnly: isStaff() }));
+    }
+    bar.innerHTML = parts.join("");
+}
+
+// One's nickname and #tags of the task, in the left column's preview
+const tagKey = raw => String(raw ?? "").normalize("NFC").trim().replace(/^[#@]+/, "").toLowerCase().replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}_-]+/gu, "").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); // as the server's normalizeTag
+const MAX_TAGS = 12;
+
+function renderSheetLabels() {
+    const box = sheet?.el.querySelector(".bank-labels");
+    const item = sheet?.list?.items[sheet.index];
+    if (!box || !item) return;
+    const nick = box.querySelector('[data-field="nickname"]');
+    if (document.activeElement !== nick) nick.value = item.nickname || "";
+    box.querySelector(".bank-tag-chips").innerHTML = (item.tags || []).map(tag =>
+        `<span class="bank-tag">#${escapeHtml(tag)}<button type="button" data-untag="${escapeHtml(tag)}" aria-label="${escapeHtml(t("bank.removeTag").replace("{tag}", `#${tag}`))}">${icon("close", 11)}</button></span>`).join("");
+    box.querySelector("#bank-tag-suggest").innerHTML = mine.tags
+        .filter(row => !(item.tags || []).includes(row.tag))
+        .map(row => `<option value="#${escapeHtml(row.tag)}"></option>`).join("");
+    box.querySelector('[data-field="tag"]').hidden = (item.tags || []).length >= MAX_TAGS;
+}
+
+function wireSheetLabels(el) {
+    const box = el.querySelector(".bank-labels");
+    const nick = box.querySelector('[data-field="nickname"]');
+    const tagInput = box.querySelector('[data-field="tag"]');
+    const current = () => sheet?.list?.items[sheet.index];
+    const saveNick = () => {
+        const item = current();
+        const text = nick.value.trim();
+        if (item && text !== (item.nickname || "")) saveLabels(item, { nickname: text });
+    };
+    // Shown at once, put back if the server refuses
+    const setTags = async tags => {
+        const item = current();
+        if (!item) return;
+        const before = item.tags || [];
+        mineList.patch(item.id, { tags });
+        renderSheetLabels();
+        if (!(await saveLabels(item, { tags }))) {
+            mineList.patch(item.id, { tags: before });
+            renderSheetLabels();
+        }
+    };
+    const addTag = () => {
+        const item = current();
+        const tag = tagKey(tagInput.value);
+        tagInput.value = "";
+        if (item && tag && !(item.tags || []).includes(tag)) setTags([...(item.tags || []), tag].sort());
+    };
+    nick.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            nick.blur();
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation(); // the typing is undone, the preview stays
+            nick.value = current()?.nickname || "";
+            nick.blur();
+        }
+    });
+    nick.addEventListener("blur", saveNick);
+    tagInput.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === "," || (e.key === " " && tagInput.value.trim())) {
+            e.preventDefault();
+            addTag();
+        } else if (e.key === "Backspace" && !tagInput.value) {
+            const tags = current()?.tags || [];
+            if (tags.length) setTags(tags.slice(0, -1));
+        } else if (e.key === "Escape" && tagInput.value) {
+            e.preventDefault();
+            e.stopPropagation();
+            tagInput.value = "";
+        }
+    });
+    // A suggestion picked from the list arrives as a whole value
+    tagInput.addEventListener("input", e => {
+        if (!e.inputType || e.inputType === "insertReplacementText") addTag();
+    });
+    tagInput.addEventListener("blur", () => { if (tagInput.value.trim()) addTag(); });
+    box.addEventListener("click", e => {
+        const chip = e.target.closest("[data-untag]");
+        if (!chip) return;
+        setTags((current()?.tags || []).filter(tag => tag !== chip.dataset.untag));
+    });
+}
+
+// One's own task an admin sent back, with why
+function rejectedHtml(item) {
+    if (!item.own || item.submission?.status !== "rejected") return "";
+    return `<section class="bank-reports bank-rejected">
+        <p class="bank-reports-title">${icon("alert", 15)}${escapeHtml(t("bank.rejectedTitle"))}</p>
+        ${item.submission.note ? `<p class="bank-rejected-note">„${escapeHtml(item.submission.note)}“</p>` : ""}
+    </section>`;
+}
+
+// Admins: a creator's task waiting for approval, with who sent it and the answer
+function reviewHtml(full) {
+    if (!full.submitted || !isAdmin()) return "";
+    const date = new Date(full.submitted.createdAt).toLocaleDateString(getLanguage() === "lt" ? "lt-LT" : "en-GB");
+    const unsorted = !full.topicId || !full.gradeId;
+    return `<section class="bank-reports bank-review-box">
+        <p class="bank-reports-title">${icon("clock", 15)}${escapeHtml(t("bank.reviewFrom").replace("{user}", full.submitted.user || "—").replace("{date}", date))}</p>
+        ${unsorted ? `<p class="bank-muted">${escapeHtml(t("bank.reviewUnsorted"))}</p>` : ""}
+        <textarea class="bank-report-note bank-review-note" rows="2" maxlength="500" placeholder="${t("bank.rejectNote")}" aria-label="${t("bank.rejectNote")}"></textarea>
+        <div class="bank-reports-actions">
+            <button type="button" class="btn btn-primary" data-act="approve">${icon("check", 15)}<span>${t("bank.approve")}</span></button>
+            <button type="button" class="btn btn-secondary" data-act="reject">${t("bank.reject")}</button>
+        </div>
+    </section>`;
+}
+
+async function decide(action) {
+    const current = sheet;
+    const id = current?.full?.id;
+    if (!id) return;
+    const note = current.el.querySelector(".bank-review-note")?.value || "";
+    current.el.querySelectorAll('[data-act="approve"], [data-act="reject"]').forEach(button => { button.disabled = true; });
+    const res = await api.decideSubmission(id, action, note);
+    if (!res.ok) {
+        current.el.querySelectorAll('[data-act="approve"], [data-act="reject"]').forEach(button => { button.disabled = false; });
+        toast(errorText(res), "error");
+        return;
+    }
+    api.forgetItems([id]);
+    toast(t(action === "approve" ? "bank.approved" : "bank.rejected"));
+    refreshReview();
+    closeSheet();
+    reloadBank();
 }
 
 function sheetStar() {
@@ -2182,6 +2494,8 @@ function onSheetClick(e) {
     } else if (act === "add") addTasks([item.id], sheet.list.rowOf(item.id));
     else if (act === "save") saveToMine([item.id]);
     else if (act === "remove") removeMine(item);
+    else if (act === "submit") submitToBank([item.id]);
+    else if (act === "approve" || act === "reject") decide(act);
     else if (act === "star") toggleFavorite(item.id);
     else if (act === "report") openReportForm();
     else if (act === "report-cancel") closeReportForm();
@@ -2252,11 +2566,17 @@ function typeset(el) {
 
 // --- Small shared pieces ---
 
-// A row's second line; in the bank the chosen topic is not repeated on every row
-function rowMetaHtml(item, mineScope) {
+// A row's second line; in the bank the chosen topic is not repeated on every row. In the left
+// column (`left`) it also carries one's #tags and, on one's own tasks, how sending it to the
+// shared bank went.
+const SUBMISSION_PILLS = { pending: ["clock", "bank.pendingShort"], approved: ["check", "bank.inBankShort"], rejected: ["alert", "bank.rejectedShort"] };
+function rowMetaHtml(item, mineScope, left = false) {
     const parts = [];
-    if (bank.flagged && !mineScope) parts.push(`<span class="bank-flag" title="${t("bank.flaggedTitle")}">${icon("flag", 12)}</span>`);
+    if (bank.flagged && !mineScope && !left) parts.push(`<span class="bank-flag" title="${t("bank.flaggedTitle")}">${icon("flag", 12)}</span>`);
+    const pill = left && item.own && SUBMISSION_PILLS[item.submission?.status];
+    if (pill) parts.push(`<span class="bank-sent is-${item.submission.status}">${icon(pill[0], 12)}${escapeHtml(t(pill[1]))}</span>`);
     if (inQuiz.has(item.id)) parts.push(`<span class="bank-in-quiz">${icon("check", 12)}${escapeHtml(t("bank.inQuiz"))}</span>`);
+    if (left && item.tags?.length) parts.push(`<span class="bank-row-tags">${item.tags.map(tag => `<span>#${escapeHtml(tag)}</span>`).join("")}</span>`);
     const level = meta?.levelsById.get(item.difficultyId);
     if (level) parts.push(`<span class="bank-pill" style="--lvl:${escapeHtml(level.color || "var(--muted)")}"><i aria-hidden="true"></i>${escapeHtml(level.name)}</span>`);
     if (item.gradeId) parts.push(`<span>${escapeHtml(t("bank.gradeShort").replace("{n}", item.gradeId))}</span>`);
@@ -2278,6 +2598,7 @@ function emptyHtml(res, scope) {
     if (scope !== "mine") return emptyState("search", "bank.empty", "bank.emptyHint");
     if (mine.q.trim()) return emptyState("search", "bank.empty", "bank.mineSearchHint");
     if (mine.folderId === "favorites") return emptyState("star", "bank.favoritesEmpty", "bank.favoritesHint");
+    if (isTagView(mine.folderId)) return emptyState("hash", "bank.tagEmpty", "bank.tagHint");
     if (mine.folderId === "all") return emptyState("folder", "bank.mineEmpty", "bank.mineHint");
     if (mine.folderId === "none") return emptyState("inbox", "bank.unfiledEmpty", "bank.unfiledHint");
     return emptyState("folder", "bank.folderEmpty", "bank.folderHint");

@@ -238,6 +238,58 @@ describe('starred and reported tasks', () => {
     it('lets the optimizer start from the few starred or reported tasks', () => {
         expect(core.listIndex({ scope: 'favorites', subject: '1', grade: '7' })).toBeNull();
         expect(core.listIndex({ flagged: '1', subject: '1' })).toBeNull();
+        expect(core.listIndex({ scope: 'tagged', tag: 'x' })).toBeNull();
+        expect(core.listIndex({ review: '1', status: 'draft' })).toBeNull();
+    });
+});
+
+describe('one\'s own labels and the approval queue', () => {
+    it('reads #Tags, @tags and spaced words as one tag', () => {
+        expect(core.normalizeTag('#Lygtys 7kl')).toBe('lygtys-7kl');
+        expect(core.normalizeTag('@lygtys-7kl')).toBe('lygtys-7kl');
+        expect(core.normalizeTag('  Šaknys!! ')).toBe('šaknys');
+        expect(core.normalizeTag('#')).toBe('');
+        expect(core.normalizeTag('--a  -- b--')).toBe('a-b');
+        expect(core.normalizeTag('x'.repeat(60))).toHaveLength(core.TAG_LENGTH);
+    });
+
+    it('lists one\'s own and shared tasks together, by tag', () => {
+        const tagged = core.buildFilter({}, { ...ctx, ownerIds: [0, 42], tagOf: { userId: 42, tag: 'lygtys' } });
+        expect(tagged.where[0]).toBe('i.owner_id IN (?)');
+        expect(tagged.args[0]).toEqual([0, 42]);
+        expect(tagged.where).toContain('i.id IN (SELECT item_id FROM bank_tags WHERE user_id = ? AND tag = ?)');
+        expect(placeholders(tagged.where)).toBe(tagged.args.length);
+        expect(core.groupCountable({ scope: 'tagged' })).toBe(false);
+        expect(core.listItem({ id: 1, owner_id: 0 }).own).toBe(false);
+        expect(core.listItem({ id: 2, owner_id: 42 }).own).toBe(true);
+    });
+
+    it('finds one\'s tasks by nickname or tag as well as by their words', () => {
+        const { where, args } = core.buildFilter({ q: 'lygtis x' }, { ...ctx, ownerId: 42, labelsOf: 42 });
+        const search = where[where.length - 1];
+        expect(search).toContain('MATCH(i.search_text)');
+        expect(search).toContain('bank_nicknames');
+        expect(search).toContain('bank_tags');
+        expect(search.startsWith('(')).toBe(true); // one OR group, not loose clauses
+        expect(args).toContain('%lygtis x%');
+        expect(placeholders(where)).toBe(args.length);
+        // "#word" looks at tags only; LIKE wildcards typed in are taken literally
+        const byTag = core.buildFilter({ q: '#lyg' }, { ...ctx, labelsOf: 42 });
+        expect(byTag.where[byTag.where.length - 1]).toContain('bank_tags');
+        expect(byTag.where.join(' ')).not.toContain('MATCH');
+        expect(byTag.args).toContain('lyg%');
+        const literal = core.buildFilter({ q: '50%_off' }, { ...ctx, labelsOf: 42 });
+        expect(literal.args).toContain('%50\\%\\_off%');
+        // The shared bank's search is unchanged
+        const shared = core.buildFilter({ q: 'lygtis' }, ctx);
+        expect(shared.where.join(' ')).not.toContain('bank_nicknames');
+    });
+
+    it('lists the tasks waiting for approval', () => {
+        const review = core.buildFilter({}, { ...ctx, status: 'draft', review: true });
+        expect(review.where).toContain("i.id IN (SELECT item_id FROM bank_submissions WHERE status = 'pending')");
+        expect(review.args[1]).toBe('draft');
+        expect(core.groupCountable({ review: '1' })).toBe(false);
     });
 });
 

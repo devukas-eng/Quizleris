@@ -50,6 +50,15 @@ export const setFavorite = (id, on) => request(`/favorites/${id}`, { method: on 
 export const reportItem = (id, reason, note) => request(`/items/${id}/reports`, { method: "POST", body: { reason, note } });
 export const closeReports = (id, status) => request(`/items/${id}/reports`, { method: "PATCH", body: { status } });
 
+// One's own nicknames and #tags (seen by nobody else)
+export const listTags = () => request("/tags");
+export const setLabels = (id, labels) => request(`/labels/${id}`, { method: "PUT", body: labels });
+export const tagItems = (ids, { add = [], remove = [] }) => request("/labels/tags", { method: "POST", body: { ids, add, remove } });
+
+// Staff's own tasks into the shared bank; admins approve or reject a creator's
+export const submitItems = ids => request("/submissions", { method: "POST", body: { ids } });
+export const decideSubmission = (id, action, note = "") => request(`/submissions/${id}`, { method: "PATCH", body: { action, note } });
+
 // The topic tree (admins)
 export const createTopic = body => request("/topics", { method: "POST", body });
 export const updateTopic = (id, body) => request(`/topics/${id}`, { method: "PATCH", body });

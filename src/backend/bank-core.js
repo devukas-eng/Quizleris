@@ -133,6 +133,27 @@ function idList(value, max) {
     return [...ids];
 }
 
+const TAG_LENGTH = 40;
+
+/**
+ * A personal tag as stored: "#Lygtys 7kl", "@lygtys-7kl" and "lygtys-7kl" are one tag. Letters of any
+ * script, digits, "-" and "_"; spaces become "-". Empty when nothing usable is left.
+ */
+function normalizeTag(raw) {
+    return String(raw ?? '')
+        .normalize('NFC')
+        .trim()
+        .replace(/^[#@]+/, '')
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\p{L}\p{N}_-]+/gu, '')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, TAG_LENGTH);
+}
+
+const likeEscape = text => text.replace(/[\\%_]/g, ch => `\\${ch}`);
+
 function clampInt(value, min, max, fallback) {
     if (value == null || value === '') return fallback;
     const n = Math.round(Number(value));
@@ -167,8 +188,9 @@ function addNullableIn(add, column, raw) {
  * classifier. `omit` leaves one filter out, so facet counts show the choices for that filter.
  */
 function buildFilter(params, ctx, omit = null) {
-    const where = ['i.owner_id = ?', 'i.status = ?'];
-    const args = [ctx.ownerId, ctx.status];
+    // ownerIds lists several banks at once: a user's starred or tagged tasks are their own and shared ones
+    const where = [ctx.ownerIds ? 'i.owner_id IN (?)' : 'i.owner_id = ?', 'i.status = ?'];
+    const args = [ctx.ownerIds || ctx.ownerId, ctx.status];
     const add = (clause, ...values) => {
         where.push(clause);
         args.push(...values);
@@ -191,6 +213,9 @@ function buildFilter(params, ctx, omit = null) {
     // One teacher's starred tasks; tasks with open reports of mistakes (admins)
     if (ctx.favoritesOf) add('i.id IN (SELECT item_id FROM bank_favorites WHERE user_id = ?)', ctx.favoritesOf);
     if (ctx.flagged) add("i.id IN (SELECT item_id FROM bank_item_reports WHERE status = 'open')");
+    // One user's tag; creators' tasks waiting for an admin's approval
+    if (ctx.tagOf) add('i.id IN (SELECT item_id FROM bank_tags WHERE user_id = ? AND tag = ?)', ctx.tagOf.userId, ctx.tagOf.tag);
+    if (ctx.review) add("i.id IN (SELECT item_id FROM bank_submissions WHERE status = 'pending')");
     if (omit !== 'difficulty') addNullableIn(add, 'i.difficulty_id', params.difficulty);
     if (omit !== 'kind' && KINDS.includes(params.kind)) add('i.kind = ?', params.kind);
     if (omit !== 'qtype') {
@@ -201,10 +226,44 @@ function buildFilter(params, ctx, omit = null) {
     for (const ids of ctx.groupValues(idList(params.values, 50))) {
         add('i.id IN (SELECT item_id FROM bank_item_values WHERE value_id IN (?))', ids);
     }
-    const search = searchTerms(params.q);
-    if (search.fulltext) add('MATCH(i.search_text) AGAINST(? IN BOOLEAN MODE)', search.fulltext);
-    for (const word of search.short) add('i.search_text LIKE ?', `% ${word}%`);
+    addSearch(add, params.q, ctx.labelsOf);
     return { where, args };
+}
+
+/**
+ * The search box. In one's own lists (`labelsOf` is the user) a task is also found by the nickname
+ * or a tag that user gave it, and "#word" (or "@word") looks for tags alone.
+ */
+function addSearch(add, rawQuery, labelsOf) {
+    const raw = String(rawQuery ?? '').trim().slice(0, 100);
+    if (labelsOf && /^[#@]/.test(raw)) {
+        const tag = normalizeTag(raw);
+        if (tag) add('i.id IN (SELECT item_id FROM bank_tags WHERE user_id = ? AND tag LIKE ?)', labelsOf, `${likeEscape(tag)}%`);
+        return;
+    }
+    const search = searchTerms(raw);
+    const clauses = [];
+    const values = [];
+    if (search.fulltext) {
+        clauses.push('MATCH(i.search_text) AGAINST(? IN BOOLEAN MODE)');
+        values.push(search.fulltext);
+    }
+    for (const word of search.short) {
+        clauses.push('i.search_text LIKE ?');
+        values.push(`% ${word}%`);
+    }
+    if (!labelsOf) {
+        clauses.forEach((clause, i) => add(clause, values[i]));
+        return;
+    }
+    if (!raw) return;
+    const tag = normalizeTag(raw);
+    const own = [
+        ...(clauses.length ? [`(${clauses.join(' AND ')})`] : []),
+        'i.id IN (SELECT item_id FROM bank_nicknames WHERE user_id = ? AND nickname LIKE ?)',
+        ...(tag ? ['i.id IN (SELECT item_id FROM bank_tags WHERE user_id = ? AND tag LIKE ?)'] : [])
+    ];
+    add(`(${own.join(' OR ')})`, ...values, labelsOf, `%${likeEscape(raw)}%`, ...(tag ? [labelsOf, `${likeEscape(tag)}%`] : []));
 }
 
 function sortKey(sort, levelIds = []) {
@@ -217,7 +276,7 @@ function sortKey(sort, levelIds = []) {
     return null; // newest first: the ID alone
 }
 
-const LIST_COLUMNS = 'i.id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.has_image, i.uses';
+const LIST_COLUMNS = 'i.id, i.owner_id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.has_image, i.uses';
 
 // Counting and picking leave the index to the optimizer, except the single-column ones that exist
 // for the foreign keys
@@ -232,8 +291,9 @@ const FROM_ITEMS = 'bank_items i IGNORE INDEX (bank_items_subject_ref, bank_item
  */
 function listIndex(params) {
     if (searchTerms(params.q).fulltext || idList(params.values, 50).length) return null;
-    // Starred or reported tasks are few: the optimizer reads them first and looks the tasks up
-    if (params.scope === 'favorites' || params.flagged !== undefined) return null;
+    // Starred, tagged, reported or submitted tasks are few: the optimizer reads them first and looks
+    // the tasks up
+    if (params.scope === 'favorites' || params.scope === 'tagged' || params.flagged !== undefined || params.review !== undefined) return null;
     const subject = toId(params.subject);
     const grade = toId(params.grade);
     const sort = params.sort === 'popular' || params.sort === 'level' ? params.sort : 'new';
@@ -309,7 +369,7 @@ function buildFacetQueries(params, ctx) {
 function groupCountable(params) {
     const search = searchTerms(params.q);
     return !search.fulltext && !search.short.length && !idList(params.values, 50).length && params.folder === undefined
-        && params.scope !== 'favorites' && params.flagged === undefined;
+        && params.scope !== 'favorites' && params.scope !== 'tagged' && params.flagged === undefined && params.review === undefined;
 }
 
 /**
@@ -354,6 +414,7 @@ function countFromGroups(groups, params, ctx) {
 function listItem(row) {
     return {
         id: row.id,
+        own: row.owner_id !== 0, // listings hold only the shared bank and the asker's own tasks
         kind: row.kind,
         qtype: row.qtype,
         preview: row.preview,
@@ -369,8 +430,8 @@ function listItem(row) {
 }
 
 module.exports = {
-    QTYPES, KINDS, STATUSES, FROM_ITEMS,
-    plainText, foldText, previewText, searchText, contentHash, imageSlots, hasImage,
+    QTYPES, KINDS, STATUSES, FROM_ITEMS, TAG_LENGTH,
+    normalizeTag, plainText, foldText, previewText, searchText, contentHash, imageSlots, hasImage,
     encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms, groupCountable, countFromGroups,
     buildFilter, listIndex, buildListQuery, buildFacetQueries, listItem
 };

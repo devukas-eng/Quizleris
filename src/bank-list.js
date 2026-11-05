@@ -14,6 +14,12 @@ const typeset = new Map(); // task id + preview → typeset HTML
 
 const MATH_DELIMITERS = [{ left: "\\(", right: "\\)", display: false }];
 
+// A nickname the user gave the task leads the row; the task's own text follows, smaller
+function rowTextHtml(item) {
+    if (!item.nickname) return previewHtml(item);
+    return `<b class="bank-row-nick">${escapeHtml(item.nickname)}</b><span class="bank-row-sub">${previewHtml(item)}</span>`;
+}
+
 function previewHtml(item) {
     const key = `${item.id}:${item.preview}`;
     if (typeset.has(key)) return typeset.get(key);
@@ -35,8 +41,10 @@ function previewHtml(item) {
  * options:
  *   metaHtml(item) → HTML of the row's second line
  *   addLabel, starLabel: the "+" and star buttons' labels
- *   starOf(item) → true / false, or null for no star (a teacher's own task)
+ *   renameLabel: with onRename, rows get a pencil that renames them in place
+ *   starOf(item) → true / false, or null for no star
  *   onOpen(item, index), onAdd(item, rowEl), onStar(item, rowEl), onPointerDown(event, item, rowEl)
+ *   onRename(item, text): a name typed in place ("" clears it); resolves once saved
  *   emptyHtml(): what an empty listing shows
  *   onSelection(ids): selection changed (Ctrl/Cmd/Shift + click; Esc clears)
  * Rows are one Tab stop: arrow keys move, Enter opens, "+" adds, "*" stars.
@@ -63,6 +71,7 @@ export function createTaskList(container, options) {
     const rows = new Map();  // index → row element
     const spare = [];
     const selected = new Set();
+    let editing = null;      // { id, input } while a row is renamed in place
 
     function rowFor(index) {
         let row = rows.get(index);
@@ -83,6 +92,9 @@ export function createTaskList(container, options) {
                 <div class="bank-row-text"></div>
                 <div class="bank-row-meta"></div>
             </div>
+            ${options.onRename ? `<button type="button" class="bank-row-rename" tabindex="-1" aria-label="${escapeHtml(options.renameLabel)}" title="${escapeHtml(options.renameLabel)}">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-4-4L4 16z"/></svg>
+            </button>` : ""}
             <button type="button" class="bank-row-star" tabindex="-1" aria-pressed="false" aria-label="${escapeHtml(options.starLabel)}" title="${escapeHtml(options.starLabel)}">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/></svg>
             </button>
@@ -106,7 +118,14 @@ export function createTaskList(container, options) {
         row.classList.remove("is-skeleton");
         if (row.dataset.id !== String(item.id)) {
             row.dataset.id = item.id;
-            row.querySelector(".bank-row-text").innerHTML = previewHtml(item);
+            const text = row.querySelector(".bank-row-text");
+            // The row being renamed keeps its field (and the caret) through a refresh
+            if (editing?.id === item.id) {
+                if (!text.contains(editing.input)) text.replaceChildren(editing.input);
+            } else {
+                text.innerHTML = rowTextHtml(item);
+            }
+            row.classList.toggle("is-renaming", editing?.id === item.id);
             row.querySelector(".bank-row-meta").innerHTML = options.metaHtml(item);
         }
         row.classList.toggle("is-selected", selected.has(item.id));
@@ -126,6 +145,8 @@ export function createTaskList(container, options) {
         const last = Math.min(count - 1, Math.ceil((top + height) / ROW) + OVERSCAN);
         for (const [index, row] of rows) {
             if (index < first || index > last) {
+                // Scrolled away while renamed: the name typed so far is kept
+                if (editing && items[index]?.id === editing.id) queueMicrotask(() => finishRename(true));
                 rows.delete(index);
                 spare.push(row);
             }
@@ -187,9 +208,13 @@ export function createTaskList(container, options) {
     container.addEventListener("click", e => {
         const row = e.target.closest(".bank-row");
         const item = itemOf(row);
-        if (!item) return;
+        if (!item || e.target.closest(".bank-row-input")) return;
         if (e.target.closest(".bank-row-add")) {
             options.onAdd(item, row);
+            return;
+        }
+        if (e.target.closest(".bank-row-rename")) {
+            startRename(item, row);
             return;
         }
         if (e.target.closest(".bank-row-star")) {
@@ -225,6 +250,9 @@ export function createTaskList(container, options) {
         } else if (e.key === "*" && row.dataset.star) {
             e.preventDefault();
             options.onStar?.(item, row);
+        } else if (e.key === "F2" && options.onRename) {
+            e.preventDefault();
+            startRename(item, row);
         } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
             e.preventDefault(); // every task listed so far
             items.forEach(listed => selected.add(listed.id));
@@ -243,9 +271,68 @@ export function createTaskList(container, options) {
     container.addEventListener("pointerdown", e => {
         const row = e.target.closest(".bank-row");
         const item = itemOf(row);
-        if (!item || e.target.closest(".bank-row-add, .bank-row-star")) return;
+        if (!item || e.target.closest(".bank-row-add, .bank-row-star, .bank-row-rename, .bank-row-input")) return;
         options.onPointerDown(e, item, row);
     });
+
+    // Renaming in place: Enter or leaving the field saves, Esc keeps the old name
+    function startRename(item, row) {
+        if (!options.onRename) return;
+        if (editing) {
+            editing.input.focus();
+            return;
+        }
+        const input = document.createElement("input");
+        input.className = "bank-row-input";
+        input.maxLength = 120;
+        input.value = item.nickname || "";
+        input.placeholder = options.renamePlaceholder || "";
+        input.setAttribute("aria-label", options.renameLabel);
+        editing = { id: item.id, input, row };
+        row.querySelector(".bank-row-text").replaceChildren(input);
+        row.classList.add("is-renaming");
+        input.addEventListener("keydown", e => {
+            e.stopPropagation(); // not the list's keys, nor the editor's shortcuts
+            if (e.key === "Enter") {
+                e.preventDefault();
+                finishRename(true);
+            } else if (e.key === "Escape") {
+                e.preventDefault();
+                finishRename(false);
+            }
+        });
+        input.addEventListener("blur", () => finishRename(true));
+        input.focus();
+        input.select();
+    }
+
+    async function finishRename(save) {
+        if (!editing) return;
+        const { id, input, row } = editing;
+        editing = null;
+        const item = items.find(listed => listed.id === id);
+        const text = input.value.trim();
+        const refill = () => {
+            for (const [index, shown] of rows) {
+                if (items[index]?.id !== id) continue;
+                shown.removeAttribute("data-id");
+                fill(shown, index);
+            }
+        };
+        input.remove();
+        row.classList.remove("is-renaming");
+        refill();
+        if (save && item && text !== (item.nickname || "")) {
+            const before = item.nickname;
+            item.nickname = text || null; // shown at once; put back if the server refuses
+            refill();
+            if (!(await options.onRename(item, text))) {
+                item.nickname = before;
+                refill();
+            }
+        }
+        if (row.dataset.id === String(id)) row.focus({ preventScroll: true });
+    }
 
     container.addEventListener("focusin", e => {
         const row = e.target.closest?.(".bank-row");
@@ -270,6 +357,7 @@ export function createTaskList(container, options) {
     return {
         /** Lists from the start with a new loader; resolves to the first page's response. */
         async reset(newLoader, { keepScroll = false } = {}) {
+            if (editing) finishRename(true); // saved before the rows go
             generation++;
             controller?.abort();
             loader = newLoader;
@@ -309,11 +397,12 @@ export function createTaskList(container, options) {
             return null;
         },
         /** After a language switch: new texts on the rows already made. */
-        relabel(addLabel, starLabel) {
-            Object.assign(options, { addLabel, starLabel });
+        relabel(addLabel, starLabel, renameLabel = options.renameLabel, renamePlaceholder = options.renamePlaceholder) {
+            Object.assign(options, { addLabel, starLabel, renameLabel, renamePlaceholder });
             for (const row of [...rows.values(), ...spare]) {
-                for (const [selector, label] of [[".bank-row-add", addLabel], [".bank-row-star", starLabel]]) {
+                for (const [selector, label] of [[".bank-row-add", addLabel], [".bank-row-star", starLabel], [".bank-row-rename", renameLabel]]) {
                     const button = row.querySelector(selector);
+                    if (!button) continue;
                     button.title = label;
                     button.setAttribute("aria-label", label);
                 }
@@ -325,6 +414,17 @@ export function createTaskList(container, options) {
         refresh() {
             for (const row of rows.values()) row.removeAttribute("data-id");
             for (const [index, row] of rows) fill(row, index);
+        },
+        /** Changes a listed task's fields (a nickname, tags) and writes its row again. */
+        patch(id, fields) {
+            const item = items.find(listed => listed.id === id);
+            if (!item) return;
+            Object.assign(item, fields);
+            for (const [index, row] of rows) {
+                if (items[index] !== item) continue;
+                row.removeAttribute("data-id");
+                fill(row, index);
+            }
         },
         focusIndex
     };
