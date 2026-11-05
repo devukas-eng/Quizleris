@@ -247,7 +247,9 @@ function openEditor(quizId) {
 
 function profileCard(user, limits, quizCount) {
     const isAdmin = user.role === "admin";
-    const premium = isAdmin || user.premium_active;
+    // Staff (admins and creators) have premium's limits for good (src/backend/plans.js)
+    const staff = isAdmin || user.role === "creator";
+    const premium = staff || user.premium_active;
 
     let planLabel = t("profile.planFree");
     let planClass = "free";
@@ -257,7 +259,7 @@ function profileCard(user, limits, quizCount) {
 
     let validity = "—";
     if (premium) {
-        validity = user.subscription_expires_at && !isAdmin ? formatDate(user.subscription_expires_at) : t("profile.noExpiry");
+        validity = user.subscription_expires_at && !staff ? formatDate(user.subscription_expires_at) : t("profile.noExpiry");
     } else if (user.subscription_tier === "premium" && user.subscription_expires_at) {
         validity = `${t("profile.expired")} ${formatDate(user.subscription_expires_at)}`;
     }

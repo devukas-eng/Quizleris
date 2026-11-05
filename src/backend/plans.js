@@ -13,9 +13,8 @@ const hasActivePremium = (user) =>
     user.subscription_tier === 'premium' &&
     (!user.subscription_expires_at || new Date(user.subscription_expires_at) > new Date());
 
-// Admins get everything premium gives. Creators do not: they are staff for the task bank, and
-// their own quizzes follow their plan like a teacher's.
-const isPremium = (user) => user.role === 'admin' || hasActivePremium(user);
+// Staff get everything premium gives: admins, and creators (in-house task-bank authors)
+const isPremium = (user) => user.role === 'admin' || user.role === 'creator' || hasActivePremium(user);
 
 function planOf(user) {
     if (user.role === 'admin') return 'admin';
@@ -31,7 +30,7 @@ function planCapabilities(user) {
         max_quizzes: premium ? null : FREE_QUIZ_LIMIT,
         private_expiry_days: premium ? null : PRIVATE_EXPIRY_DAYS,
         // Importing several files at once (checked in the page: importing runs in the browser)
-        import_many: premium || user.role === 'creator',
+        import_many: premium,
         // Own themes and the chosen theme saved in the account, so they follow to other devices
         theme_sync: premium,
     };

@@ -932,6 +932,20 @@ async function deleteOrphanAttempts() {
 // Expired private quizzes are promised to be deleted, not just hidden.
 async function purgeExpiredQuizzes() {
     try {
+        // Owners who now have premium's limits (staff, or premium granted since) keep their private
+        // quizzes: the expiry was set while they were on the free plan. Mirrors isPremium in plans.js.
+        const [kept] = await pool.query(`
+            UPDATE quizzes q JOIN users u ON u.id = q.owner_id
+            SET q.expires_at = NULL, q.updated_at = q.updated_at
+            WHERE q.expires_at IS NOT NULL
+              AND (u.role IN ('admin', 'creator')
+                   OR (u.subscription_tier = 'premium' AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())))
+        `);
+        if (kept.affectedRows > 0) console.log(`[CLEANUP] ${kept.affectedRows} private quiz(zes) no longer expire (owner has premium)`);
+    } catch (error) {
+        console.error('[CLEANUP] premium owners:', error.code || error.message);
+    }
+    try {
         const [result] = await pool.query('DELETE FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
         if (result.affectedRows > 0) console.log(`[CLEANUP] deleted ${result.affectedRows} expired quiz(zes)`);
         await deleteOrphanAttempts();
