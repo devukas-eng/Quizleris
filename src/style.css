@@ -2406,7 +2406,7 @@ kbd {
 #theme-picker-popup.open {
     opacity: 1;
     transform: translateY(0) scale(1);
-    pointer-events: all;
+    pointer-events: auto;
 }
 
 .theme-picker-label {
@@ -2966,7 +2966,7 @@ kbd {
 
 #legal-modal.open {
     opacity: 1;
-    pointer-events: all;
+    pointer-events: auto;
 }
 
 .legal-modal-card {
@@ -4153,23 +4153,59 @@ math-virtual-keyboard::part(action-toolbar) {
 .dash-kpi-item {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 10px 12px;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 12px 14px;
     border: 1px solid var(--control-border);
     border-radius: var(--control-radius);
     background: var(--card-bg);
-}
-
-.dash-kpi-val {
-    font-size: 1.25rem;
-    font-weight: 800;
-    color: var(--accent);
+    min-height: 84px;
+    box-sizing: border-box;
 }
 
 .dash-kpi-lbl {
-    font-size: 0.74rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 700;
     color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+}
+
+.dash-kpi-val-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.dash-kpi-val {
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--accent);
+    letter-spacing: -0.01em;
+}
+
+.dash-kpi-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    line-height: 1;
+}
+
+.dash-kpi-sub {
+    font-size: 0.76rem;
+    font-weight: 500;
+    color: var(--muted);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .dash-chart-box {

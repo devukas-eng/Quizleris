@@ -188,8 +188,8 @@ export function initThemePicker({ onOpen } = {}) {
         const box = document.getElementById(id);
         if (!box) continue;
         box.addEventListener("click", (e) => {
-            const fsBtn = e.target.closest("[data-font-size]");
-            if (fsBtn) {
+            const fsBtn = e.target.closest("button[data-font-size], .tp-fontsize-btn");
+            if (fsBtn && box.contains(fsBtn)) {
                 e.stopPropagation();
                 applyFontSize(fsBtn.dataset.fontSize, { persist: true });
                 refreshThemePicker();

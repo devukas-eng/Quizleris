@@ -251,6 +251,11 @@ function formatDurationSec(sec) {
     return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
 }
 
+function formatDelta(n) {
+    const v = Number(n || 0);
+    return v > 0 ? `+${v}` : (v === 0 ? "+0" : `${v}`);
+}
+
 function formatStorageBytes(bytes) {
     const b = Number(bytes || 0);
     if (b < 1024) return `${b} B`;
@@ -322,19 +327,34 @@ function renderAdminOverviewTab(panel) {
                 <div class="dash-analytics-kpis">
                     <div class="dash-kpi-item">
                         <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
-                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi24h7dSub").replace("{t}", an.attemptsToday ?? 0).replace("{w}", an.attempts7d ?? 0))}</strong>
+                        <div class="dash-kpi-val-row">
+                            <strong class="dash-kpi-val">${escapeHtml(an.attemptsToday ?? 0)}</strong>
+                            <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadgeToday"))}</span>
+                        </div>
+                        <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpi7dContext").replace("{w}", an.attempts7d ?? 0))}</span>
                     </div>
                     <div class="dash-kpi-item">
                         <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewUsers"))}</span>
-                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newUsers7d ?? 0).replace("{t}", an.newUsersToday ?? 0))}</strong>
+                        <div class="dash-kpi-val-row">
+                            <strong class="dash-kpi-val">+${escapeHtml(an.newUsers7d ?? 0)}</strong>
+                            <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadge7d"))}</span>
+                        </div>
+                        <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiTodaySub").replace("{t}", formatDelta(an.newUsersToday ?? 0)))}</span>
                     </div>
                     <div class="dash-kpi-item">
                         <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewQuizzes"))}</span>
-                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newQuizzes7d ?? 0).replace("{t}", an.newQuizzesToday ?? 0))}</strong>
+                        <div class="dash-kpi-val-row">
+                            <strong class="dash-kpi-val">+${escapeHtml(an.newQuizzes7d ?? 0)}</strong>
+                            <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadge7d"))}</span>
+                        </div>
+                        <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiTodaySub").replace("{t}", formatDelta(an.newQuizzesToday ?? 0)))}</span>
                     </div>
                     <div class="dash-kpi-item">
                         <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiStorage"))}</span>
-                        <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                        <div class="dash-kpi-val-row">
+                            <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                        </div>
+                        <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiStorageSub"))}</span>
                     </div>
                 </div>
             </div>
@@ -372,28 +392,48 @@ function renderAdminAnalyticsTab(panel) {
             <div class="dash-analytics-kpis">
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
-                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi24h7dSub").replace("{t}", an.attemptsToday ?? 0).replace("{w}", an.attempts7d ?? 0))}</strong>
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">${escapeHtml(an.attemptsToday ?? 0)}</strong>
+                        <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadgeToday"))}</span>
+                    </div>
+                    <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpi7dContext").replace("{w}", an.attempts7d ?? 0))}</span>
                 </div>
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiAvgScore"))}</span>
-                    <strong class="dash-kpi-val">${an.avgScorePct != null ? `${escapeHtml(an.avgScorePct)}%` : "—"}</strong>
-                    ${an.avgScorePct != null ? `<div class="dash-meter"><span style="width:${Math.min(100, Math.max(0, an.avgScorePct))}%"></span></div>` : ""}
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">${an.avgScorePct != null ? `${escapeHtml(an.avgScorePct)}%` : "—"}</strong>
+                    </div>
+                    ${an.avgScorePct != null ? `<div class="dash-meter"><span style="width:${Math.min(100, Math.max(0, an.avgScorePct))}%"></span></div>` : `<span class="dash-kpi-sub">—</span>`}
                 </div>
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiAvgDuration"))}</span>
-                    <strong class="dash-kpi-val">${escapeHtml(formatDurationSec(an.avgDurationSec))}</strong>
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">${escapeHtml(formatDurationSec(an.avgDurationSec))}</strong>
+                    </div>
+                    <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiAvgDurationSub"))}</span>
                 </div>
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewUsers"))}</span>
-                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newUsers7d ?? 0).replace("{t}", an.newUsersToday ?? 0))}</strong>
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">+${escapeHtml(an.newUsers7d ?? 0)}</strong>
+                        <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadge7d"))}</span>
+                    </div>
+                    <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiTodaySub").replace("{t}", formatDelta(an.newUsersToday ?? 0)))}</span>
                 </div>
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiNewQuizzes"))}</span>
-                    <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi7dTodaySub").replace("{w}", an.newQuizzes7d ?? 0).replace("{t}", an.newQuizzesToday ?? 0))}</strong>
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">+${escapeHtml(an.newQuizzes7d ?? 0)}</strong>
+                        <span class="dash-kpi-badge">${escapeHtml(t("adminGui.kpiBadge7d"))}</span>
+                    </div>
+                    <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiTodaySub").replace("{t}", formatDelta(an.newQuizzesToday ?? 0)))}</span>
                 </div>
                 <div class="dash-kpi-item">
                     <span class="dash-kpi-lbl">${escapeHtml(t("adminGui.kpiStorage"))}</span>
-                    <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                    <div class="dash-kpi-val-row">
+                        <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                    </div>
+                    <span class="dash-kpi-sub">${escapeHtml(t("adminGui.kpiStorageSub"))}</span>
                 </div>
             </div>
 
