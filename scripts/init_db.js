@@ -46,11 +46,17 @@ async function initDB() {
                 max_score INT NOT NULL DEFAULT 0,
                 duration_seconds INT NOT NULL DEFAULT 0,
                 mode VARCHAR(20) NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'completed',
                 details JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX quiz_attempts_quiz_time (quiz_id, created_at)
             )
         `);
+        try {
+            await pool.query("ALTER TABLE quiz_attempts ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'completed'");
+        } catch {
+            // Column may already exist
+        }
         console.log("✅ Quiz attempts table created or already exists.");
 
         // Task bank tables with their starting classifiers (the server also does this on start)

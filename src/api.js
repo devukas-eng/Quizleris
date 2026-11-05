@@ -173,6 +173,32 @@ export async function submitAttempt(quizId, attempt) {
     }
 }
 
+/** Sends an attempt immediately using sendBeacon or keepalive fetch, ideal when leaving or closing a quiz. */
+export function submitAttemptBeacon(quizId, attempt) {
+    if (!quizId) return false;
+    const url = `${API_BASE}/quizzes/${encodeURIComponent(quizId)}/attempts`;
+    const payload = JSON.stringify(attempt);
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        try {
+            const blob = new Blob([payload], { type: 'application/json' });
+            if (navigator.sendBeacon(url, blob)) return true;
+        } catch {
+            // fallback to fetch
+        }
+    }
+    try {
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: payload.length < 60000
+        }).catch(() => {});
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function attemptsRequest(path, options = {}) {
     const token = getToken();
     if (!token) return { ok: false, status: 401 };

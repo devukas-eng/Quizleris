@@ -2,11 +2,105 @@ import { QuizState, quiz, setQuiz, isTypedSlot, matchTypedAnswers, studentChoice
 import { questionContainer, answersContainer, statusContainer } from "./dom.js";
 import { startTimer, clearTimer } from "./timer.js";
 import { saveResult } from "./storage.js";
-import { submitAttempt } from "./api.js";
+import { submitAttempt, submitAttemptBeacon } from "./api.js";
 import { renderStartMenu } from "./menu.js";
 import { t, getLanguage } from "./lang.js";
 import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
 import { confirmDialog } from "./dialog.js";
+
+let quizSessionActive = false;
+let quizSessionEnded = false;
+
+export function isQuizActive() {
+    return !!quiz && quizSessionActive && !quizSessionEnded && !document.getElementById("results-container");
+}
+
+export function recordQuizQuit({ beacon = false } = {}) {
+    if (!quiz || quizSessionEnded) return false;
+    quizSessionEnded = true;
+    quizSessionActive = false;
+
+    const params = new URLSearchParams(window.location.search);
+    const isPreview = params.get("preview") === "true";
+    const studentName = localStorage.getItem("current_student_name") || "Anonymous";
+    const results = quiz.getResults();
+    const timeSpentSec = results.totalTime / 1000;
+    const avgSpeed = results.total > 0 ? (timeSpentSec / results.total).toFixed(1) : 0;
+
+    saveResult({
+        name: studentName,
+        quizId: quiz.quiz.id,
+        quizTitle: quiz.quiz.title,
+        score: results.correctCount,
+        xpScore: results.score,
+        maxScore: results.total,
+        date: new Date().toISOString(),
+        heartsLeft: window.quizHearts !== undefined ? window.quizHearts : 0,
+        avgSpeed: avgSpeed,
+        mode: quiz.quiz.mode || 'practice',
+        status: 'quit',
+        details: results.questionResults
+    });
+
+    if (!isPreview && quiz.quiz.id) {
+        const attempt = {
+            name: studentName === "Anonymous" ? "" : studentName,
+            score: results.correctCount,
+            maxScore: results.total,
+            durationSeconds: Math.round(timeSpentSec),
+            mode: quiz.quiz.mode || 'practice',
+            status: 'quit',
+            details: results.questionResults
+        };
+        if (beacon) {
+            submitAttemptBeacon(quiz.quiz.id, attempt);
+        } else {
+            submitAttempt(quiz.quiz.id, attempt);
+        }
+    }
+    return true;
+}
+
+export async function quitQuizGracefully() {
+    if (!quiz || quizSessionEnded) return false;
+    const confirmed = await confirmDialog({
+        title: t("dialog.leaveQuizTitle"),
+        message: t("quiz.backConfirm"),
+        confirmText: t("dialog.leave"),
+        danger: true
+    });
+    if (!confirmed) return false;
+
+    recordQuizQuit({ beacon: true });
+    clearTimer();
+    setQuiz(null);
+
+    const quizHeader = document.querySelector('.quiz-header');
+    const quizMain = document.querySelector('.quiz-main');
+    if (quizHeader) quizHeader.style.display = 'none';
+    if (quizMain) quizMain.style.display = 'none';
+
+    if (window.location.search || window.location.pathname !== '/') {
+        window.location.href = '/';
+    } else {
+        renderStartMenu();
+    }
+    return true;
+}
+
+if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", () => {
+        if (isQuizActive()) {
+            recordQuizQuit({ beacon: true });
+        }
+    });
+    window.addEventListener("beforeunload", (e) => {
+        if (isQuizActive()) {
+            e.preventDefault();
+            e.returnValue = "";
+        }
+    });
+}
 
 // Setup Mute Button. It sits in the top-right controls beside the language flags and shows
 // only while a quiz is on screen, which is exactly when the quiz header is shown.
@@ -120,12 +214,14 @@ export function renderQuestion(q) {
     prompt.textContent = q.prompt;
     questionContainer.appendChild(prompt);
     // Ask KaTeX to render LaTeX
-    window.renderMathInElement(questionContainer, {
-        delimiters: [
-            { left: "\\(", right: "\\)", display: false },
-            { left: "\\[", right: "\\]", display: true },
-        ],
-    });
+    if (typeof window.renderMathInElement === "function") {
+        window.renderMathInElement(questionContainer, {
+            delimiters: [
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true },
+            ],
+        });
+    }
 }
 // Main Answers Dispatcher
 export function renderAnswers(q) {
@@ -153,12 +249,14 @@ export function renderAnswers(q) {
             renderImageUpload(q);
             break;
     }
-    window.renderMathInElement(answersContainer, {
-        delimiters: [
-            { left: "\\(", right: "\\)", display: false },
-            { left: "\\[", right: "\\]", display: true },
-        ],
-    });
+    if (typeof window.renderMathInElement === "function") {
+        window.renderMathInElement(answersContainer, {
+            delimiters: [
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true },
+            ],
+        });
+    }
 }
 /**
  * Specialized renderer for Multiple Choice Questions.
@@ -908,9 +1006,13 @@ export function renderNextButton() {
  * Stops timers, calculates final results, saves to local history, and displays the results card.
  */
 export function showResults() {
-    if (!quiz)
+    if (!quiz || quizSessionEnded)
         return;
+    quizSessionEnded = true;
+    quizSessionActive = false;
     clearTimer();
+    const backBtn = document.getElementById('quiz-back-btn');
+    if (backBtn) backBtn.style.display = 'none';
     const params = new URLSearchParams(window.location.search);
     const isPreview = params.get("preview") === "true";
     const results = quiz.getResults();
@@ -929,6 +1031,7 @@ export function showResults() {
         heartsLeft: window.quizHearts !== undefined ? window.quizHearts : 0,
         avgSpeed: avgSpeed,
         mode: quiz.quiz.mode || 'practice',
+        status: 'completed',
         details: results.questionResults
     });
     // The teacher sees the attempt in the quiz's results (not for the teacher's own preview).
@@ -944,6 +1047,7 @@ export function showResults() {
             maxScore: results.total,
             durationSeconds: Math.round(timeSpentSec),
             mode: quiz.quiz.mode || 'practice',
+            status: 'completed',
             details: results.questionResults
         };
         const send = async () => {
@@ -1046,9 +1150,11 @@ export function showResults() {
     
     clearElement(container);
     container.appendChild(card);
-    window.renderMathInElement(container, {
-        delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }]
-    });
+    if (typeof window.renderMathInElement === "function") {
+        window.renderMathInElement(container, {
+            delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }]
+        });
+    }
 }
 
 function buildResultsReviewList(results, card) {
@@ -1147,14 +1253,21 @@ function buildResultsActions(quiz, container, isPreview, card) {
     card.appendChild(actions);
 
     setTimeout(() => {
-        document.getElementById("restart-quiz-btn").onclick = () => {
-            setQuiz(new QuizState(quiz.quiz));
-            container.remove();
-            questionContainer.style.display = "block";
-            answersContainer.style.display = "block";
-            statusContainer.style.display = "flex";
-            renderQuiz();
-        };
+        const restartBtn = document.getElementById("restart-quiz-btn");
+        if (restartBtn) {
+            restartBtn.onclick = () => {
+                quizSessionActive = true;
+                quizSessionEnded = false;
+                setQuiz(new QuizState(quiz.quiz));
+                container.remove();
+                questionContainer.style.display = "block";
+                answersContainer.style.display = "block";
+                statusContainer.style.display = "flex";
+                const backBtn = document.getElementById('quiz-back-btn');
+                if (backBtn) backBtn.style.display = 'inline-flex';
+                renderQuiz();
+            };
+        }
         document.getElementById("back-to-menu-btn")?.addEventListener("click", () => {
             window.location.href = "/";
         });
@@ -1182,35 +1295,12 @@ function appendResultAnswer(r, parent) {
     parent.appendChild(document.createTextNode(txt || t('quiz.noAnswer')));
 }
 export function initializeQuiz(quizData) {
+    quizSessionActive = true;
+    quizSessionEnded = false;
     setQuiz(new QuizState(quizData));
-    // Show/hide back button for demo/premade quizzes only
     const backBtn = document.getElementById('quiz-back-btn');
-    const isPremadeOrDemo = quizData.id.startsWith('demo') ||
-        quizData.id.startsWith('algebra') ||
-        quizData.id.startsWith('combinatorics');
     if (backBtn) {
-        if (isPremadeOrDemo) {
-            backBtn.style.display = 'inline-flex';
-            backBtn.onclick = async () => {
-                if (await confirmDialog({ title: t('dialog.leaveQuizTitle'), message: t('quiz.backConfirm'), confirmText: t('dialog.leave'), danger: true })) {
-                    // Clear quiz state
-                    setQuiz(null);
-                    clearTimer();
-                    // Hide quiz interface
-                    const quizHeader = document.querySelector('.quiz-header');
-                    const quizMain = document.querySelector('.quiz-main');
-                    if (quizHeader)
-                        quizHeader.style.display = 'none';
-                    if (quizMain)
-                        quizMain.style.display = 'none';
-                    // Show start menu
-                    renderStartMenu();
-                }
-            };
-        }
-        else {
-            backBtn.style.display = 'none';
-        }
+        backBtn.style.display = 'inline-flex';
     }
     renderQuiz();
 }

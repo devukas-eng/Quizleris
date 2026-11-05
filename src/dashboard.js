@@ -100,9 +100,10 @@ function renderServerAttempts({ quiz, attempts }) {
                 </tr></thead>
                 <tbody>${shown.map(a => {
                     const pct = percentOf(a);
+                    const isQuit = a.status === 'quit';
                     return `<tr data-attempt="${a.id}">
                         <td>${escapeHtml(new Date(a.created_at).toLocaleString(getLanguage() === "lt" ? "lt-LT" : "en-GB", { dateStyle: "medium", timeStyle: "short" }))}</td>
-                        <td>${escapeHtml(a.student_name || t("results.anonymous"))}</td>
+                        <td>${escapeHtml(a.student_name || t("results.anonymous"))}${isQuit ? ` <span class="badge badge-quit" style="font-size:0.75rem; padding:2px 6px; border-radius:4px; background:rgba(239,68,68,0.15); color:var(--danger, #ef4444); border:1px solid rgba(239,68,68,0.3); margin-left:6px;">${escapeHtml(t("results.quitBadge"))}</span>` : ""}</td>
                         <td class="score-${scoreClass(pct)}">${a.score}/${a.max_score} (${pct}%)</td>
                         <td>${formatDuration(a.duration_seconds || 0)}</td>
                         <td class="att-actions">
@@ -138,6 +139,7 @@ function renderServerAttempts({ quiz, attempts }) {
                 date: a.created_at,
                 correctCount: a.score,
                 maxScore: a.max_score,
+                status: a.status,
                 details: Array.isArray(a.details) ? a.details : []
             });
             return;
@@ -174,6 +176,7 @@ function showResultDetails(result) {
             <h2 style="margin:0; font-size: 1.5rem; color: var(--accent);">${t('dashboard.resultDetail')} ${escapeHtml(result.name)}</h2>
             <button id="close-detail-btn" class="btn btn-secondary">${t('dashboard.closeDetails')}</button>
         </div>
+        ${result.status === 'quit' ? `<div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:10px 14px; margin-bottom:16px; color:var(--danger, #ef4444); font-weight:600;">⚠️ ${escapeHtml(t('results.studentQuitNotice'))}</div>` : ''}
         <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.quiz')}: <strong>${escapeHtml(result.quizTitle || result.quizId)}</strong></p>
         <p style="font-size: 1.1rem; margin-bottom: 8px;">${t('dashboard.date')}: <strong>${new Date(result.date).toLocaleString(getLanguage() === "lt" ? "lt-LT" : "en-GB", { dateStyle: "medium", timeStyle: "short" })}</strong></p>
         <p style="font-size: 1.1rem; margin-bottom: 24px;">${t('dashboard.score')}: <strong class="text-success">${(result.correctCount !== undefined ? result.correctCount : (result.score > result.maxScore ? Math.round((result.percentage || 0) / 100 * result.maxScore) : result.score))} / ${result.maxScore}</strong></p>

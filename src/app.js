@@ -12,6 +12,7 @@ import { syncCloudQuizzes } from "./sync.js";
 import { isAdminAccessAllowed } from "./auth.js";
 import { initThemePicker, refreshThemePicker, closeThemePicker } from "./theme-picker.js";
 import { initThemeSync } from "./theme-sync.js";
+import { isQuizActive, quitQuizGracefully } from "./render.js";
 
 // The task bank's code is fetched only for signed-in teachers and admins: students never load it
 let bankWorkspace = null;
@@ -97,6 +98,10 @@ async function initApp() {
                     if ((questionCounter || examNav || isQuizVisible) && !isResultVisible) {
                         // Double check we are not just on an empty container (e.g. before render)
                         // But usually if quizMain is visible and no results, we are in a quiz.
+                        if (isQuizActive()) {
+                            await quitQuizGracefully();
+                            return;
+                        }
                         if (await confirmLeaveQuiz()) {
                             window.location.href = "/";
                         }
@@ -119,11 +124,8 @@ async function initApp() {
                 quizBackBtn.addEventListener("click", async () => {
                     // Check if active quiz
                     const isResultVisible = !!document.getElementById("results-container");
-                    // Back button usually only appears IN quiz, but let's be safe
-                    if (!isResultVisible) {
-                        if (await confirmLeaveQuiz()) {
-                            window.location.href = "/";
-                        }
+                    if (!isResultVisible && isQuizActive()) {
+                        await quitQuizGracefully();
                     } else {
                         // If result is visible, just go home
                         window.location.href = "/";

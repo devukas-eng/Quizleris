@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 
 document.body.innerHTML = `
         <div id="quiz-container"></div>
+        <button id="quiz-back-btn"></button>
         <div id="question-container"></div>
         <div id="answers-container"></div>
         <div id="status-container"></div>
@@ -57,6 +58,7 @@ document.body.innerHTML = `
         <div id="topics-overlay"></div>
     `;
     window.alert = () => {};
+    window.renderMathInElement = vi.fn();
     window.AudioContext = class {
         createOscillator() {
             return {

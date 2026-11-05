@@ -113,6 +113,7 @@ export function getHighScores(allResults) {
     const results = allResults || getResults();
     const highScores = new Map();
     results.forEach(r => {
+        if (r.status === 'quit') return;
         if (!highScores.has(r.quizId) || r.score > highScores.get(r.quizId).score) {
             highScores.set(r.quizId, r);
         }

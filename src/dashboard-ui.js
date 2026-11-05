@@ -486,7 +486,7 @@ function renderAdminAnalyticsTab(panel) {
                                 return `
                                     <div class="dash-mini-row">
                                         <div class="dash-mini-info">
-                                            <div class="dash-mini-title">${escapeHtml(student)} <span class="dash-muted">→ ${escapeHtml(ra.quizTitle || ra.quizId)}</span></div>
+                                            <div class="dash-mini-title">${escapeHtml(student)} <span class="dash-muted">→ ${escapeHtml(ra.quizTitle || ra.quizId)}</span>${ra.status === 'quit' ? ` <span class="dash-chip" style="color:var(--danger,#ef4444); font-size:0.7rem; padding:1px 5px;">${escapeHtml(t("results.quitBadge"))}</span>` : ""}</div>
                                             <div class="dash-muted">${escapeHtml(formatDurationSec(ra.durationSeconds))} · ${escapeHtml(formatDate(ra.createdAt))}</div>
                                         </div>
                                         <span class="dash-chip ${pct >= 75 ? "public" : "private"}">${escapeHtml(ra.score)}/${escapeHtml(ra.maxScore)} (${pct}%)</span>

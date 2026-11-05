@@ -746,13 +746,20 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
 
             const [recRows] = await pool.query(`
                 SELECT a.id, a.quiz_id, q.title AS quiz_title, a.student_name,
+                       a.score, a.max_score, a.duration_seconds, a.status, a.created_at
+                FROM quiz_attempts a
+                LEFT JOIN quizzes q ON q.id = a.quiz_id
+                ORDER BY a.created_at DESC
+                LIMIT 6
+            `).catch(() => pool.query(`
+                SELECT a.id, a.quiz_id, q.title AS quiz_title, a.student_name,
                        a.score, a.max_score, a.duration_seconds, a.created_at
                 FROM quiz_attempts a
                 LEFT JOIN quizzes q ON q.id = a.quiz_id
                 ORDER BY a.created_at DESC
                 LIMIT 6
-            `).catch(() => [[]]);
-            analytics.recentAttempts = recRows.map(r => ({
+            `).catch(() => [[]]));
+            analytics.recentAttempts = (recRows || []).map(r => ({
                 id: r.id,
                 quizId: r.quiz_id,
                 quizTitle: r.quiz_title,
@@ -760,6 +767,7 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                 score: Number(r.score || 0),
                 maxScore: Number(r.max_score || 0),
                 durationSeconds: Number(r.duration_seconds || 0),
+                status: r.status || 'completed',
                 createdAt: r.created_at
             }));
         }
@@ -1229,18 +1237,40 @@ app.post('/api/quizzes/:id/attempts', attemptLimiter, async (req, res) => {
         }
         const maxScore = toInt(body.maxScore, 0, 1000);
         const name = String(body.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
-        const [result] = await pool.query(`
-            INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score, duration_seconds, mode, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [
-            quiz.id,
-            name,
-            toInt(body.score, 0, maxScore),
-            maxScore,
-            toInt(body.durationSeconds, 0, 7 * 24 * 3600),
-            String(body.mode || '').slice(0, 20) || null,
-            detailsJson
-        ]);
+        const status = body.status === 'quit' ? 'quit' : 'completed';
+        let result;
+        try {
+            [result] = await pool.query(`
+                INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score, duration_seconds, mode, status, details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                quiz.id,
+                name,
+                toInt(body.score, 0, maxScore),
+                maxScore,
+                toInt(body.durationSeconds, 0, 7 * 24 * 3600),
+                String(body.mode || '').slice(0, 20) || null,
+                status,
+                detailsJson
+            ]);
+        } catch (insertErr) {
+            if (insertErr.code === 'ER_BAD_FIELD_ERROR' || insertErr.errno === 1054) {
+                [result] = await pool.query(`
+                    INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score, duration_seconds, mode, details)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    quiz.id,
+                    name,
+                    toInt(body.score, 0, maxScore),
+                    maxScore,
+                    toInt(body.durationSeconds, 0, 7 * 24 * 3600),
+                    String(body.mode || '').slice(0, 20) || null,
+                    detailsJson
+                ]);
+            } else {
+                throw insertErr;
+            }
+        }
         res.status(201).json({ id: result.insertId });
     } catch (error) {
         console.error('[SAVE ATTEMPT]', error);
@@ -1274,11 +1304,25 @@ app.get('/api/quizzes/:id/attempts', authenticateToken, async (req, res) => {
             where += ' AND student_name LIKE ?';
             params.push(`%${search.replace(/[\\%_]/g, ch => `\\${ch}`)}%`);
         }
-        const [rows] = await pool.query(`
-            SELECT id, student_name, score, max_score, duration_seconds, mode, created_at
-            FROM quiz_attempts WHERE ${where}
-            ORDER BY created_at DESC, id DESC LIMIT 2000
-        `, params);
+        let rows;
+        try {
+            [rows] = await pool.query(`
+                SELECT id, student_name, score, max_score, duration_seconds, mode, status, created_at
+                FROM quiz_attempts WHERE ${where}
+                ORDER BY created_at DESC, id DESC LIMIT 2000
+            `, params);
+        } catch (selectErr) {
+            if (selectErr.code === 'ER_BAD_FIELD_ERROR' || selectErr.errno === 1054) {
+                const [oldRows] = await pool.query(`
+                    SELECT id, student_name, score, max_score, duration_seconds, mode, created_at
+                    FROM quiz_attempts WHERE ${where}
+                    ORDER BY created_at DESC, id DESC LIMIT 2000
+                `, params);
+                rows = oldRows.map(r => ({ ...r, status: 'completed' }));
+            } else {
+                throw selectErr;
+            }
+        }
         res.json({ quiz: { id: quiz.id, title: quiz.title }, attempts: rows });
     } catch (error) {
         console.error('[LIST ATTEMPTS]', error);
@@ -1291,10 +1335,23 @@ app.get('/api/quizzes/:id/attempts/:attemptId', authenticateToken, async (req, r
     try {
         const quiz = await ownQuizForAttempts(req, res);
         if (!quiz) return;
-        const [rows] = await pool.query(
-            'SELECT id, student_name, score, max_score, duration_seconds, mode, details, created_at FROM quiz_attempts WHERE id = ? AND quiz_id = ?',
-            [toInt(req.params.attemptId, 0, Number.MAX_SAFE_INTEGER), quiz.id]
-        );
+        let rows;
+        try {
+            [rows] = await pool.query(
+                'SELECT id, student_name, score, max_score, duration_seconds, mode, status, details, created_at FROM quiz_attempts WHERE id = ? AND quiz_id = ?',
+                [toInt(req.params.attemptId, 0, Number.MAX_SAFE_INTEGER), quiz.id]
+            );
+        } catch (selectErr) {
+            if (selectErr.code === 'ER_BAD_FIELD_ERROR' || selectErr.errno === 1054) {
+                [rows] = await pool.query(
+                    'SELECT id, student_name, score, max_score, duration_seconds, mode, details, created_at FROM quiz_attempts WHERE id = ? AND quiz_id = ?',
+                    [toInt(req.params.attemptId, 0, Number.MAX_SAFE_INTEGER), quiz.id]
+                );
+                if (rows[0]) rows[0].status = 'completed';
+            } else {
+                throw selectErr;
+            }
+        }
         if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
         const attempt = rows[0];
         if (typeof attempt.details === 'string') attempt.details = JSON.parse(attempt.details);
@@ -1456,11 +1513,17 @@ async function ensureSchema() {
                 max_score INT NOT NULL DEFAULT 0,
                 duration_seconds INT NOT NULL DEFAULT 0,
                 mode VARCHAR(20) NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'completed',
                 details JSON NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX quiz_attempts_quiz_time (quiz_id, created_at)
             )
         `);
+        try {
+            await pool.query("ALTER TABLE quiz_attempts ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'completed'");
+        } catch {
+            // Column may already exist
+        }
         attemptsReady = true;
     } catch (error) {
         // Non-fatal: quizzes work, results just stay on the students' devices
