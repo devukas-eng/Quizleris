@@ -13,6 +13,17 @@ import {
     deleteAdminUser,
     updateShowcaseSettings,
 } from "./api.js";
+import {
+    fetchMeta as fetchBankMeta,
+    listItems as listBankItems,
+    loadItems as loadBankItems,
+    forgetItems as forgetBankItems,
+    updateItems as updateBankItems,
+    updateItem as updateBankItem,
+    archiveItems as archiveBankItems,
+    decideSubmission as decideBankSubmission,
+    closeReports as closeBankReports,
+} from "./bank-api.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import { shareStripHtml, wireCopyButtons } from "./share-links.js";
@@ -28,10 +39,19 @@ let adminState = {
     overview: null,
     allQuizzes: null,
     users: null,
+    bankMeta: null,
     quizSearch: "",
     quizFilter: "all",
     userSearch: "",
     userRoleFilter: "all",
+    bankFilter: {
+        q: "",
+        subject: "",
+        grade: "",
+        topic: "",
+        difficulty: "",
+        sort: "new",
+    },
 };
 
 export function initDashboardUI() {
@@ -40,7 +60,6 @@ export function initDashboardUI() {
             <div class="dash-window" role="dialog" aria-modal="true" aria-labelledby="dashboard-title">
                 <div class="dash-header">
                     <h2 id="dashboard-title"></h2>
-                    <button id="dashboard-invites-btn" class="btn btn-secondary dash-invites-btn" hidden aria-expanded="false" aria-controls="dash-invites"></button>
                     <button id="dashboard-logout-btn" class="btn btn-secondary dash-logout"></button>
                     <button id="dashboard-modal-close-btn" class="btn btn-secondary btn-icon dash-close" aria-label="Close">&times;</button>
                 </div>
@@ -72,7 +91,6 @@ export function initDashboardUI() {
         logoutUser();
         closeDashboard();
     });
-    document.getElementById("dashboard-invites-btn").addEventListener("click", toggleInvites);
 
     document.addEventListener("open-dashboard", () => {
         if (!getCurrentUser()) {
@@ -161,13 +179,6 @@ function setHeader(role) {
     document.getElementById("dashboard-title").textContent = role === "admin" ? t("profile.adminTitle")
         : role === "creator" ? t("profile.creatorTitle") : t("profile.teacherTitle");
     document.getElementById("dashboard-logout-btn").textContent = t("profile.logout");
-    const invitesBtn = document.getElementById("dashboard-invites-btn");
-    invitesBtn.hidden = role !== "admin";
-    // The label hides on phones (style.css), leaving the key
-    invitesBtn.innerHTML = `<span aria-hidden="true">🔑</span> <span class="dash-invites-label">${escapeHtml(t("invites.button"))}</span>`;
-    invitesBtn.title = t("invites.button");
-    invitesBtn.setAttribute("aria-label", t("invites.button"));
-    invitesBtn.setAttribute("aria-expanded", String(role === "admin" && activeAdminTab === "invites"));
 }
 
 // --- Admin Multi-Tab Workspace ---
@@ -178,8 +189,6 @@ function switchAdminTab(tab) {
         showcasePreviewTimer = null;
     }
     activeAdminTab = tab;
-    const invitesBtn = document.getElementById("dashboard-invites-btn");
-    if (invitesBtn) invitesBtn.setAttribute("aria-expanded", String(tab === "invites"));
     const body = document.getElementById("dashboard-body");
     if (body && adminState.profile) {
         renderAdminWorkspace(body);
@@ -188,9 +197,11 @@ function switchAdminTab(tab) {
 
 function renderAdminWorkspace(body) {
     const ov = adminState.overview;
-    const pendingTotal = (ov?.bank?.pendingReview || 0) + (ov?.bank?.openReports || 0);
     const tabs = [
-        { id: "overview", icon: "📊", label: t("adminGui.tabOverview"), badge: pendingTotal > 0 ? pendingTotal : null },
+        { id: "overview", icon: "📊", label: t("adminGui.tabOverview"), badge: null },
+        { id: "approvals", icon: "⏳", label: t("adminGui.tabApprovals"), badge: ov?.bank?.pendingReview ?? 0 },
+        { id: "reports", icon: "🚩", label: t("adminGui.tabReports"), badge: ov?.bank?.openReports ?? 0 },
+        { id: "bank", icon: "📚", label: t("adminGui.tabBank"), badge: ov?.bank?.published ?? null },
         { id: "quizzes", icon: "🗂", label: t("adminGui.tabAllQuizzes"), badge: ov?.quizzes?.total ?? null },
         { id: "showcase", icon: "✨", label: t("adminGui.tabShowcase"), badge: ov?.quizzes?.featured ?? null },
         { id: "users", icon: "👥", label: t("adminGui.tabUsers"), badge: ov?.users?.total ?? null },
@@ -217,6 +228,9 @@ function renderAdminWorkspace(body) {
 
     const panel = body.querySelector("#dash-admin-panel");
     if (activeAdminTab === "overview") renderAdminOverviewTab(panel);
+    else if (activeAdminTab === "approvals") renderAdminApprovalsTab(panel);
+    else if (activeAdminTab === "reports") renderAdminReportsTab(panel);
+    else if (activeAdminTab === "bank") renderAdminBankTab(panel);
     else if (activeAdminTab === "mine") renderAdminMyQuizzesTab(panel);
     else if (activeAdminTab === "quizzes") renderAdminAllQuizzesTab(panel);
     else if (activeAdminTab === "showcase") renderAdminShowcaseTab(panel);
@@ -244,9 +258,9 @@ function renderAdminOverviewTab(panel) {
     const qTotal = ov?.quizzes?.total ?? "—";
     const qSub = ov
         ? t("adminGui.quizzesBreakdown")
-            .replace("{pub}", ov.quizzes.publicCount)
-            .replace("{priv}", ov.quizzes.privateCount)
-            .replace("{feat}", ov.quizzes.featured)
+            .replace("{pub}", ov.quizzes.publicCount ?? ov.quizzes.public ?? 0)
+            .replace("{priv}", ov.quizzes.privateCount ?? ov.quizzes.private ?? 0)
+            .replace("{feat}", ov.quizzes.featured ?? 0)
         : "";
 
     const aTotal = ov?.quizzes?.attempts ?? "—";
@@ -281,23 +295,23 @@ function renderAdminOverviewTab(panel) {
                     <div class="dash-overview-val">${escapeHtml(aTotal)}</div>
                     <div class="dash-overview-sub">${escapeHtml(t("adminGui.attemptsSub"))}</div>
                 </div>
-                <div class="dash-overview-card">
+                <button type="button" class="dash-overview-card is-clickable" data-jump-tab="bank">
                     <div class="dash-overview-label">📚 ${escapeHtml(t("adminGui.bankTasks"))}</div>
                     <div class="dash-overview-val">${escapeHtml(bTotal)}</div>
                     <div class="dash-overview-sub">${escapeHtml(bSub)}</div>
-                </div>
+                </button>
             </div>
 
             <div class="dash-moderation-box">
                 <div class="dash-moderation-title">${escapeHtml(t("adminGui.moderationTitle"))}</div>
                 <div class="dash-moderation-actions">
-                    <button type="button" class="btn ${pendingCount > 0 ? "btn-primary" : "btn-secondary"}" data-open-bank-queue="review">
+                    <button type="button" class="btn ${pendingCount > 0 ? "btn-primary" : "btn-secondary"}" data-jump-tab="approvals">
                         ${escapeHtml(t("adminGui.openReviewQueue").replace("{n}", pendingCount))}
                     </button>
-                    <button type="button" class="btn ${flaggedCount > 0 ? "btn-primary" : "btn-secondary"}" data-open-bank-queue="flagged">
+                    <button type="button" class="btn ${flaggedCount > 0 ? "btn-primary" : "btn-secondary"}" data-jump-tab="reports">
                         ${escapeHtml(t("adminGui.openFlaggedQueue").replace("{n}", flaggedCount))}
                     </button>
-                    <button type="button" class="btn btn-secondary" data-open-bank-editor="1">
+                    <button type="button" class="btn btn-secondary" data-jump-tab="bank">
                         ${escapeHtml(t("adminGui.openBankEditor"))}
                     </button>
                     <button type="button" class="btn btn-secondary" data-jump-tab="showcase">
@@ -313,10 +327,633 @@ function renderAdminOverviewTab(panel) {
     panel.querySelectorAll("[data-jump-tab]").forEach(btn => {
         btn.addEventListener("click", () => switchAdminTab(btn.dataset.jumpTab));
     });
-    panel.querySelectorAll("[data-open-bank-queue]").forEach(btn => {
-        btn.addEventListener("click", () => openEditor(undefined, btn.dataset.openBankQueue));
+}
+
+// --- Dedicated Task Bank, Pending Approvals & Error Reports Pages ---
+
+async function ensureBankMeta() {
+    if (adminState.bankMeta) return adminState.bankMeta;
+    const res = await fetchBankMeta();
+    if (!res.ok) return { subjects: [], grades: [], difficulties: [], topics: [] };
+    adminState.bankMeta = {
+        subjects: res.data.subjects || [],
+        grades: res.data.grades || [],
+        difficulties: res.data.difficulties || [],
+        topics: res.data.topics || [],
+    };
+    return adminState.bankMeta;
+}
+
+function buildTopicOptionsHtml(meta, subjectId, selectedTopicId) {
+    const topics = (meta?.topics || []).filter(tp => !tp.archived && (!subjectId || Number(tp.subjectId) === Number(subjectId)));
+    const byParent = new Map();
+    for (const tp of topics) {
+        const key = tp.parentId || 0;
+        if (!byParent.has(key)) byParent.set(key, []);
+        byParent.get(key).push(tp);
+    }
+    const out = [];
+    const walk = (parentId, depth) => {
+        for (const tp of byParent.get(parentId) || []) {
+            const indent = "\u00A0\u00A0".repeat(depth);
+            const sel = Number(selectedTopicId) === Number(tp.id) ? " selected" : "";
+            out.push(`<option value="${tp.id}"${sel}>${indent}${escapeHtml(tp.name)}</option>`);
+            walk(tp.id, depth + 1);
+        }
+    };
+    walk(0, 0);
+    return out.join("");
+}
+
+function renderClassificationBarHtml(meta, item) {
+    const subjId = item.subjectId || meta.subjects[0]?.id || "";
+    return `
+        <div class="dash-bank-classify" data-classify-id="${item.id}">
+            <label title="${escapeHtml(t("bank.subject"))}">
+                <span>${escapeHtml(t("bank.subject"))}</span>
+                <select class="admin-select-compact" name="subjectId">
+                    <option value="">—</option>
+                    ${meta.subjects.map(s => `<option value="${s.id}" ${Number(item.subjectId) === Number(s.id) ? "selected" : ""}>${escapeHtml(`${s.icon || ""} ${s.name}`.trim())}</option>`).join("")}
+                </select>
+            </label>
+            <label title="${escapeHtml(t("bank.grade"))}">
+                <span>${escapeHtml(t("bank.grade"))}</span>
+                <select class="admin-select-compact" name="gradeId">
+                    <option value="">—</option>
+                    ${meta.grades.map(g => `<option value="${g.id}" ${Number(item.gradeId) === Number(g.id) ? "selected" : ""}>${escapeHtml(t("bank.gradeShort").replace("{n}", g.id))}</option>`).join("")}
+                </select>
+            </label>
+            <label class="dash-bank-classify-topic" title="${escapeHtml(t("bank.topic"))}">
+                <span>${escapeHtml(t("bank.topic"))}</span>
+                <select class="admin-select-compact" name="topicId">
+                    <option value="">${escapeHtml(t("bank.noTopic"))}</option>
+                    ${buildTopicOptionsHtml(meta, subjId, item.topicId)}
+                </select>
+            </label>
+            <label title="${escapeHtml(t("bank.level"))}">
+                <span>${escapeHtml(t("bank.level"))}</span>
+                <select class="admin-select-compact" name="difficultyId">
+                    <option value="">—</option>
+                    ${meta.difficulties.map(d => `<option value="${d.id}" ${Number(item.difficultyId) === Number(d.id) ? "selected" : ""}>${escapeHtml(d.name)}</option>`).join("")}
+                </select>
+            </label>
+        </div>
+    `;
+}
+
+function readClassificationBar(barEl) {
+    if (!barEl) return {};
+    const val = (name) => {
+        const v = barEl.querySelector(`[name="${name}"]`)?.value;
+        return v ? Number(v) : null;
+    };
+    return {
+        subjectId: val("subjectId"),
+        gradeId: val("gradeId"),
+        topicId: val("topicId"),
+        difficultyId: val("difficultyId"),
+    };
+}
+
+function wireClassificationBars(container, meta, { autoSave = false } = {}) {
+    container.querySelectorAll(".dash-bank-classify").forEach(bar => {
+        const id = Number(bar.dataset.classifyId);
+        const subjSel = bar.querySelector('[name="subjectId"]');
+        const topicSel = bar.querySelector('[name="topicId"]');
+        subjSel?.addEventListener("change", () => {
+            const sId = subjSel.value ? Number(subjSel.value) : null;
+            topicSel.innerHTML = `<option value="">${escapeHtml(t("bank.noTopic"))}</option>${buildTopicOptionsHtml(meta, sId, null)}`;
+            if (autoSave) saveBarClassification(bar, id);
+        });
+        if (autoSave) {
+            bar.querySelectorAll('select:not([name="subjectId"])').forEach(sel => {
+                sel.addEventListener("change", () => saveBarClassification(bar, id));
+            });
+        }
     });
-    panel.querySelector("[data-open-bank-editor]")?.addEventListener("click", () => openEditor());
+}
+
+async function saveBarClassification(barEl, id) {
+    const set = readClassificationBar(barEl);
+    await updateBankItems([id], set, "shared");
+    forgetBankItems([id]);
+}
+
+function renderBankTaskPreviewHtml(q) {
+    if (!q) return "";
+    const picture = src => (src ? `<img class="bank-q-img" src="${escapeHtml(src)}" alt="">` : "");
+    const type = q.type || "multiple-choice";
+    let answer;
+    if (type === "multiple-choice") {
+        answer = `<ol class="bank-q-choices">${(q.choices || []).map(choice => `
+            <li class="${choice.isCorrect ? "is-correct" : ""}">${picture(choice.image)}<span class="bank-math">${escapeHtml(choice.text || "")}</span>${choice.isCorrect ? " ✓" : ""}</li>`).join("")}</ol>`;
+    } else if (type === "numeric") {
+        const tolerance = Number(q.toleranceValue) ? ` ± ${escapeHtml(String(q.toleranceValue))}` : "";
+        answer = `<p class="bank-q-answer"><span>${escapeHtml(t("bank.answer"))}:</span> <b class="bank-math">${escapeHtml(String(q.correctAnswerNumber ?? "—"))}${tolerance}</b></p>`;
+    } else if (type === "true-false") {
+        answer = `<p class="bank-q-answer"><span>${escapeHtml(t("bank.answer"))}:</span> <b class="bank-math">${escapeHtml(q.isTrue ? t("bank.true") : t("bank.false"))}</b></p>`;
+    } else if (type === "fill-blank") {
+        answer = `<p class="bank-q-answer"><span>${escapeHtml(t("bank.answers"))}:</span> <b class="bank-math">${escapeHtml((q.blankAnswers || []).join("; ") || "—")}</b></p>`;
+    } else {
+        answer = `<p class="bank-q-note">${escapeHtml(t(type === "image-upload" ? "bank.upload" : "bank.freeText"))}</p>`;
+    }
+    return `
+        <div class="dash-bank-task-preview">
+            ${picture(q.image)}
+            <div class="bank-q-prompt bank-math">${escapeHtml(q.prompt || "")}</div>
+            ${answer}
+        </div>
+    `;
+}
+
+function renderInlineTaskEditFormHtml(full) {
+    const q = full?.content || {};
+    const type = q.type || "multiple-choice";
+    let answerFields = "";
+    if (type === "multiple-choice") {
+        answerFields = `
+            <div class="dash-task-edit-choices">
+                ${(q.choices || []).map((c, idx) => `
+                    <label class="dash-task-edit-choice">
+                        <input type="checkbox" data-choice-correct="${idx}" ${c.isCorrect ? "checked" : ""} title="${escapeHtml(t("admin.markCorrect"))}">
+                        <input type="text" class="input-field" data-choice-text="${idx}" value="${escapeHtml(c.text || "")}">
+                    </label>
+                `).join("")}
+            </div>
+        `;
+    } else if (type === "numeric") {
+        answerFields = `
+            <div class="dash-task-edit-row">
+                <label>${escapeHtml(t("admin.numAnswer"))}
+                    <input type="number" step="any" class="input-field" name="correctAnswerNumber" value="${escapeHtml(q.correctAnswerNumber ?? "")}">
+                </label>
+                <label>${escapeHtml(t("admin.numTolerance"))}
+                    <input type="number" step="any" class="input-field" name="toleranceValue" value="${escapeHtml(q.toleranceValue ?? 0)}">
+                </label>
+            </div>
+        `;
+    } else if (type === "true-false") {
+        answerFields = `
+            <label class="dash-showcase-check">
+                <input type="checkbox" name="isTrue" ${q.isTrue ? "checked" : ""}>
+                <span>${escapeHtml(t("admin.isTrue"))}</span>
+            </label>
+        `;
+    } else if (type === "fill-blank") {
+        answerFields = `
+            <label>${escapeHtml(t("admin.blankAnswers"))}
+                <input type="text" class="input-field" name="blankAnswers" value="${escapeHtml((q.blankAnswers || []).join("; "))}">
+            </label>
+        `;
+    }
+    return `
+        <form class="dash-task-edit-form" data-edit-form="${full.id}" hidden>
+            <label>${escapeHtml(t("admin.promptLabel"))}
+                <textarea class="input-field" name="prompt" rows="2">${escapeHtml(q.prompt || "")}</textarea>
+            </label>
+            ${answerFields}
+            <div class="dash-task-edit-actions">
+                <button type="submit" class="btn btn-primary btn-compact">${escapeHtml(t("adminGui.saveTaskChanges"))}</button>
+                <button type="button" class="btn btn-secondary btn-compact" data-cancel-edit="${full.id}">${escapeHtml(t("dialog.cancel"))}</button>
+            </div>
+        </form>
+    `;
+}
+
+function wireInlineTaskEditors(container, fullItemsMap, onSaved) {
+    container.querySelectorAll("[data-toggle-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const id = Number(btn.dataset.toggleEdit);
+            const form = container.querySelector(`[data-edit-form="${id}"]`);
+            if (form) form.hidden = !form.hidden;
+        });
+    });
+    container.querySelectorAll("[data-cancel-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const id = Number(btn.dataset.cancelEdit);
+            const form = container.querySelector(`[data-edit-form="${id}"]`);
+            if (form) form.hidden = true;
+        });
+    });
+    container.querySelectorAll("[data-edit-form]").forEach(form => {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const id = Number(form.dataset.editForm);
+            const full = fullItemsMap.get(id);
+            if (!full) return;
+            const content = JSON.parse(JSON.stringify(full.content || {}));
+            content.prompt = form.prompt.value.trim();
+            const type = content.type || "multiple-choice";
+            if (type === "multiple-choice" && Array.isArray(content.choices)) {
+                content.choices.forEach((c, idx) => {
+                    const txt = form.querySelector(`[data-choice-text="${idx}"]`);
+                    const chk = form.querySelector(`[data-choice-correct="${idx}"]`);
+                    if (txt) c.text = txt.value;
+                    if (chk) c.isCorrect = chk.checked;
+                });
+            } else if (type === "numeric") {
+                content.correctAnswerNumber = Number(form.correctAnswerNumber?.value || 0);
+                content.toleranceValue = Number(form.toleranceValue?.value || 0);
+            } else if (type === "true-false") {
+                content.isTrue = Boolean(form.isTrue?.checked);
+            } else if (type === "fill-blank") {
+                content.blankAnswers = String(form.blankAnswers?.value || "").split(";").map(s => s.trim()).filter(Boolean);
+            }
+            const card = form.closest(".dash-bank-card");
+            const cls = readClassificationBar(card?.querySelector(".dash-bank-classify"));
+            const submitBtn = form.querySelector("button[type=submit]");
+            submitBtn.disabled = true;
+            const res = await updateBankItem(id, {
+                content,
+                subjectId: cls.subjectId ?? full.subjectId,
+                gradeId: cls.gradeId ?? full.gradeId,
+                topicId: cls.topicId ?? full.topicId,
+                difficultyId: cls.difficultyId ?? full.difficultyId,
+            });
+            submitBtn.disabled = false;
+            if (!res.ok) {
+                await alertDialog(t("profile.loadError"), res.data?.error || "");
+                return;
+            }
+            forgetBankItems([id]);
+            onSaved();
+        });
+    });
+}
+
+function typesetMath(el) {
+    try {
+        window.renderMathInElement?.(el, {
+            delimiters: [{ left: "\\(", right: "\\)", display: false }, { left: "\\[", right: "\\]", display: true }],
+            throwOnError: false,
+        });
+    } catch {
+        // leave plain text if KaTeX is unavailable
+    }
+}
+
+async function renderAdminApprovalsTab(panel) {
+    panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+    const [meta, listRes] = await Promise.all([
+        ensureBankMeta(),
+        listBankItems({ review: 1, sort: "new", limit: 100, facets: "none" }),
+    ]);
+    if (!listRes.ok) {
+        panel.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
+        return;
+    }
+    const items = listRes.data.items || [];
+    if (adminState.overview?.bank) {
+        adminState.overview.bank.pendingReview = listRes.data.total ?? items.length;
+    }
+    updateAdminTabBadges();
+
+    if (items.length === 0) {
+        panel.innerHTML = `
+            <section class="dash-section">
+                <div class="dash-section-head"><h3>⏳ ${escapeHtml(t("bank.reviewTitle"))} <span class="dash-muted">(0)</span></h3></div>
+                <div class="dash-empty">
+                    <div class="dash-empty-icon" aria-hidden="true">⏳</div>
+                    <p class="dash-muted">${escapeHtml(t("adminGui.approvalsEmpty"))}</p>
+                </div>
+            </section>
+        `;
+        return;
+    }
+
+    forgetBankItems(items.map(i => i.id));
+    const fullList = (await loadBankItems(items.map(i => i.id))).filter(Boolean);
+    const fullMap = new Map(fullList.map(f => [f.id, f]));
+
+    panel.innerHTML = `
+        <section class="dash-section">
+            <div class="dash-section-head">
+                <h3>⏳ ${escapeHtml(t("bank.reviewTitle"))} <span class="dash-muted">(${fullList.length})</span></h3>
+            </div>
+            <div class="dash-bank-list">
+                ${fullList.map(full => {
+                    const sender = full.submitted?.user || "—";
+                    const dateStr = full.submitted?.createdAt ? formatDate(full.submitted.createdAt) : "—";
+                    const qtype = full.content?.type || "multiple-choice";
+                    return `
+                        <div class="dash-bank-card" data-bank-card="${full.id}">
+                            <div class="dash-bank-card-head">
+                                <span class="dash-chip public">⏳ ${escapeHtml(t("bank.reviewFrom").replace("{user}", sender).replace("{date}", dateStr))}</span>
+                                <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
+                                <button type="button" class="btn btn-secondary btn-compact" data-toggle-edit="${full.id}" style="margin-left:auto;">✎ ${escapeHtml(t("profile.edit"))}</button>
+                            </div>
+                            ${renderClassificationBarHtml(meta, full)}
+                            ${renderBankTaskPreviewHtml(full.content)}
+                            ${renderInlineTaskEditFormHtml(full)}
+                            <div class="dash-bank-review-footer">
+                                <input type="text" class="input-field dash-reject-note" data-reject-note="${full.id}" maxlength="500" placeholder="${escapeHtml(t("bank.rejectNote"))}">
+                                <div class="dash-bank-review-btns">
+                                    <button type="button" class="btn btn-primary" data-decide-id="${full.id}" data-decide-act="approve">✓ ${escapeHtml(t("bank.approve"))}</button>
+                                    <button type="button" class="btn btn-secondary" data-decide-id="${full.id}" data-decide-act="reject">✕ ${escapeHtml(t("bank.reject"))}</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join("")}
+            </div>
+        </section>
+    `;
+
+    typesetMath(panel);
+    wireClassificationBars(panel, meta, { autoSave: false });
+    wireInlineTaskEditors(panel, fullMap, () => renderAdminApprovalsTab(panel));
+
+    panel.querySelectorAll("[data-decide-id]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const id = Number(btn.dataset.decideId);
+            const action = btn.dataset.decideAct;
+            const card = panel.querySelector(`[data-bank-card="${id}"]`);
+            card.querySelectorAll("[data-decide-id]").forEach(b => { b.disabled = true; });
+            if (action === "approve") {
+                const cls = readClassificationBar(card.querySelector(".dash-bank-classify"));
+                await updateBankItems([id], cls, "shared");
+            }
+            const note = card.querySelector(`[data-reject-note="${id}"]`)?.value || "";
+            const res = await decideBankSubmission(id, action, note);
+            if (!res.ok) {
+                card.querySelectorAll("[data-decide-id]").forEach(b => { b.disabled = false; });
+                await alertDialog(t("profile.loadError"), res.data?.error || "");
+                return;
+            }
+            forgetBankItems([id]);
+            if (adminState.overview?.bank && action === "approve") {
+                adminState.overview.bank.published = (adminState.overview.bank.published || 0) + 1;
+            }
+            renderAdminApprovalsTab(panel);
+        });
+    });
+}
+
+async function renderAdminReportsTab(panel) {
+    panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+    const [meta, listRes] = await Promise.all([
+        ensureBankMeta(),
+        listBankItems({ flagged: 1, sort: "new", limit: 100, facets: "none" }),
+    ]);
+    if (!listRes.ok) {
+        panel.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
+        return;
+    }
+    const items = listRes.data.items || [];
+    if (adminState.overview?.bank) {
+        adminState.overview.bank.openReports = listRes.data.total ?? items.length;
+    }
+    updateAdminTabBadges();
+
+    if (items.length === 0) {
+        panel.innerHTML = `
+            <section class="dash-section">
+                <div class="dash-section-head"><h3>🚩 ${escapeHtml(t("bank.flaggedTitle"))} <span class="dash-muted">(0)</span></h3></div>
+                <div class="dash-empty">
+                    <div class="dash-empty-icon" aria-hidden="true">🚩</div>
+                    <p class="dash-muted">${escapeHtml(t("adminGui.reportsEmpty"))}</p>
+                </div>
+            </section>
+        `;
+        return;
+    }
+
+    forgetBankItems(items.map(i => i.id));
+    const fullList = (await loadBankItems(items.map(i => i.id))).filter(Boolean);
+    const fullMap = new Map(fullList.map(f => [f.id, f]));
+
+    panel.innerHTML = `
+        <section class="dash-section">
+            <div class="dash-section-head">
+                <h3>🚩 ${escapeHtml(t("bank.flaggedTitle"))} <span class="dash-muted">(${fullList.length})</span></h3>
+            </div>
+            <div class="dash-bank-list">
+                ${fullList.map(full => {
+                    const reports = full.reports || [];
+                    return `
+                        <div class="dash-bank-card" data-bank-card="${full.id}">
+                            <div class="dash-reports-box">
+                                <div class="dash-reports-head">🚩 ${escapeHtml(t("bank.reportsOpen").replace("{n}", reports.length))}</div>
+                                <ul class="dash-reports-ul">
+                                    ${reports.map(r => `
+                                        <li>
+                                            <b>${escapeHtml(t(`bank.reason.${r.reason}`))}</b>
+                                            ${r.note ? ` — „${escapeHtml(r.note)}“` : ""}
+                                            <span class="dash-muted"> · ${escapeHtml(r.user || "—")} · ${escapeHtml(formatDate(r.createdAt))}</span>
+                                        </li>
+                                    `).join("")}
+                                </ul>
+                            </div>
+                            ${renderClassificationBarHtml(meta, full)}
+                            ${renderBankTaskPreviewHtml(full.content)}
+                            ${renderInlineTaskEditFormHtml(full)}
+                            <div class="dash-bank-card-actions">
+                                <button type="button" class="btn btn-primary" data-report-act="resolve" data-task-id="${full.id}">✓ ${escapeHtml(t("bank.resolve"))}</button>
+                                <button type="button" class="btn btn-secondary" data-report-act="dismiss" data-task-id="${full.id}">${escapeHtml(t("bank.dismiss"))}</button>
+                                <button type="button" class="btn btn-secondary" data-toggle-edit="${full.id}">✎ ${escapeHtml(t("profile.edit"))}</button>
+                                <button type="button" class="btn btn-secondary dash-delete" data-report-act="archive" data-task-id="${full.id}" style="margin-left:auto;">🗑 ${escapeHtml(t("bank.archiveTask"))}</button>
+                            </div>
+                        </div>
+                    `;
+                }).join("")}
+            </div>
+        </section>
+    `;
+
+    typesetMath(panel);
+    wireClassificationBars(panel, meta, { autoSave: true });
+    wireInlineTaskEditors(panel, fullMap, () => renderAdminReportsTab(panel));
+
+    panel.querySelectorAll("[data-report-act]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const id = Number(btn.dataset.taskId);
+            const act = btn.dataset.reportAct;
+            if (act === "archive") {
+                const ok = await confirmDialog({
+                    title: t("bank.archiveTitle"),
+                    message: t("bank.archiveBody"),
+                    confirmText: t("bank.archiveTask"),
+                    danger: true,
+                });
+                if (!ok) return;
+                btn.disabled = true;
+                const archRes = await archiveBankItems([id], "shared");
+                if (!archRes.ok) {
+                    btn.disabled = false;
+                    await alertDialog(t("profile.loadError"), archRes.data?.error || "");
+                    return;
+                }
+                if (adminState.overview?.bank) {
+                    adminState.overview.bank.published = Math.max(0, (adminState.overview.bank.published || 1) - 1);
+                }
+            }
+            btn.disabled = true;
+            await closeBankReports(id, act === "dismiss" ? "dismissed" : "resolved");
+            forgetBankItems([id]);
+            renderAdminReportsTab(panel);
+        });
+    });
+}
+
+async function renderAdminBankTab(panel) {
+    const meta = await ensureBankMeta();
+    const bf = adminState.bankFilter;
+
+    panel.innerHTML = `
+        <section class="dash-section">
+            <div class="dash-section-head">
+                <h3>📚 ${escapeHtml(t("bank.title"))} <span class="dash-muted" id="dash-bank-total"></span></h3>
+            </div>
+            <div class="dash-filter-bar dash-bank-filters">
+                <input type="search" id="dash-bank-q" class="input-field dash-search-input" placeholder="${escapeHtml(t("bank.search"))}" value="${escapeHtml(bf.q)}">
+                <select id="dash-bank-subj" class="admin-select-compact">
+                    <option value="">${escapeHtml(t("bank.subject"))}: ${escapeHtml(t("adminGui.filterAll"))}</option>
+                    ${meta.subjects.map(s => `<option value="${s.id}" ${String(bf.subject) === String(s.id) ? "selected" : ""}>${escapeHtml(`${s.icon || ""} ${s.name}`.trim())}</option>`).join("")}
+                </select>
+                <select id="dash-bank-grade" class="admin-select-compact">
+                    <option value="">${escapeHtml(t("bank.grade"))}: ${escapeHtml(t("bank.allGrades"))}</option>
+                    ${meta.grades.map(g => `<option value="${g.id}" ${String(bf.grade) === String(g.id) ? "selected" : ""}>${escapeHtml(t("bank.gradeShort").replace("{n}", g.id))}</option>`).join("")}
+                </select>
+                <select id="dash-bank-topic" class="admin-select-compact">
+                    <option value="">${escapeHtml(t("bank.allTopics"))}</option>
+                    <option value="none" ${bf.topic === "none" ? "selected" : ""}>${escapeHtml(t("bank.noTopic"))}</option>
+                    ${buildTopicOptionsHtml(meta, bf.subject, bf.topic)}
+                </select>
+                <select id="dash-bank-diff" class="admin-select-compact">
+                    <option value="">${escapeHtml(t("adminGui.allDifficulties"))}</option>
+                    ${meta.difficulties.map(d => `<option value="${d.id}" ${String(bf.difficulty) === String(d.id) ? "selected" : ""}>${escapeHtml(d.name)}</option>`).join("")}
+                </select>
+                <select id="dash-bank-sort" class="admin-select-compact">
+                    <option value="new" ${bf.sort === "new" ? "selected" : ""}>${escapeHtml(t("bank.sort.new"))}</option>
+                    <option value="popular" ${bf.sort === "popular" ? "selected" : ""}>${escapeHtml(t("bank.sort.popular"))}</option>
+                    <option value="level" ${bf.sort === "level" ? "selected" : ""}>${escapeHtml(t("bank.sort.level"))}</option>
+                </select>
+            </div>
+            <div id="dash-bank-results" class="dash-bank-list"><p class="dash-muted">${t("profile.loading")}</p></div>
+        </section>
+    `;
+
+    const resultsEl = panel.querySelector("#dash-bank-results");
+    const totalEl = panel.querySelector("#dash-bank-total");
+
+    const loadList = async () => {
+        resultsEl.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+        const res = await listBankItems({
+            q: bf.q.trim() || undefined,
+            subject: bf.subject || undefined,
+            grade: bf.grade || undefined,
+            topic: bf.topic || undefined,
+            difficulty: bf.difficulty || undefined,
+            sort: bf.sort,
+            limit: 60,
+            facets: "none",
+        });
+        if (!res.ok) {
+            resultsEl.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
+            return;
+        }
+        const items = res.data.items || [];
+        const total = res.data.total ?? items.length;
+        totalEl.textContent = `(${total})`;
+
+        if (items.length === 0) {
+            resultsEl.innerHTML = `
+                <div class="dash-empty">
+                    <div class="dash-empty-icon" aria-hidden="true">📚</div>
+                    <h4>${escapeHtml(t("bank.empty"))}</h4>
+                    <p class="dash-muted">${escapeHtml(t("bank.emptyHint"))}</p>
+                </div>
+            `;
+            return;
+        }
+
+        const fullList = (await loadBankItems(items.map(i => i.id))).filter(Boolean);
+        const fullMap = new Map(fullList.map(f => [f.id, f]));
+
+        resultsEl.innerHTML = fullList.map(full => {
+            const qtype = full.content?.type || "multiple-choice";
+            return `
+                <div class="dash-bank-card" data-bank-card="${full.id}">
+                    <div class="dash-bank-card-head">
+                        <span class="dash-chip private">#${full.id}</span>
+                        <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
+                        <div class="dash-bank-head-actions">
+                            <button type="button" class="btn btn-secondary btn-compact" data-toggle-edit="${full.id}">✎ ${escapeHtml(t("profile.edit"))}</button>
+                            <button type="button" class="btn btn-secondary btn-icon btn-compact dash-delete" data-archive-task="${full.id}" title="${escapeHtml(t("bank.archiveTask"))}" aria-label="${escapeHtml(t("bank.archiveTask"))}">🗑</button>
+                        </div>
+                    </div>
+                    ${renderClassificationBarHtml(meta, full)}
+                    ${renderBankTaskPreviewHtml(full.content)}
+                    ${renderInlineTaskEditFormHtml(full)}
+                </div>
+            `;
+        }).join("");
+
+        typesetMath(resultsEl);
+        wireClassificationBars(resultsEl, meta, { autoSave: true });
+        wireInlineTaskEditors(resultsEl, fullMap, loadList);
+
+        resultsEl.querySelectorAll("[data-archive-task]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const id = Number(btn.dataset.archiveTask);
+                const ok = await confirmDialog({
+                    title: t("bank.archiveTitle"),
+                    message: t("bank.archiveBody"),
+                    confirmText: t("bank.archiveTask"),
+                    danger: true,
+                });
+                if (!ok) return;
+                btn.disabled = true;
+                const archRes = await archiveBankItems([id], "shared");
+                if (!archRes.ok) {
+                    btn.disabled = false;
+                    await alertDialog(t("profile.loadError"), archRes.data?.error || "");
+                    return;
+                }
+                forgetBankItems([id]);
+                if (adminState.overview?.bank) {
+                    adminState.overview.bank.published = Math.max(0, (adminState.overview.bank.published || 1) - 1);
+                }
+                updateAdminTabBadges();
+                loadList();
+            });
+        });
+    };
+
+    let qTimer = null;
+    panel.querySelector("#dash-bank-q").addEventListener("input", (e) => {
+        bf.q = e.target.value;
+        clearTimeout(qTimer);
+        qTimer = setTimeout(loadList, 250);
+    });
+    panel.querySelector("#dash-bank-subj").addEventListener("change", (e) => {
+        bf.subject = e.target.value;
+        bf.topic = "";
+        panel.querySelector("#dash-bank-topic").innerHTML = `
+            <option value="">${escapeHtml(t("bank.allTopics"))}</option>
+            <option value="none">${escapeHtml(t("bank.noTopic"))}</option>
+            ${buildTopicOptionsHtml(meta, bf.subject, "")}
+        `;
+        loadList();
+    });
+    panel.querySelector("#dash-bank-grade").addEventListener("change", (e) => {
+        bf.grade = e.target.value;
+        loadList();
+    });
+    panel.querySelector("#dash-bank-topic").addEventListener("change", (e) => {
+        bf.topic = e.target.value;
+        loadList();
+    });
+    panel.querySelector("#dash-bank-diff").addEventListener("change", (e) => {
+        bf.difficulty = e.target.value;
+        loadList();
+    });
+    panel.querySelector("#dash-bank-sort").addEventListener("change", (e) => {
+        bf.sort = e.target.value;
+        loadList();
+    });
+
+    loadList();
 }
 
 function renderAdminMyQuizzesTab(panel) {
@@ -479,11 +1116,17 @@ async function renderAdminAllQuizzesTab(panel) {
 function updateAdminTabBadges() {
     const body = document.getElementById("dashboard-body");
     if (!body) return;
+    const setBadge = (tabId, val) => {
+        const el = body.querySelector(`[data-admin-tab="${tabId}"] .dash-admin-tab-badge`);
+        if (el && val != null) el.textContent = String(val);
+    };
     const featCount = adminState.allQuizzes
         ? adminState.allQuizzes.filter(q => q.featured).length
         : adminState.overview?.quizzes?.featured;
-    const showcaseTab = body.querySelector('[data-admin-tab="showcase"] .dash-admin-tab-badge');
-    if (showcaseTab && featCount != null) showcaseTab.textContent = String(featCount);
+    setBadge("showcase", featCount);
+    setBadge("approvals", adminState.overview?.bank?.pendingReview);
+    setBadge("reports", adminState.overview?.bank?.openReports);
+    setBadge("bank", adminState.overview?.bank?.published);
 }
 
 async function renderAdminShowcaseTab(panel) {
@@ -671,25 +1314,7 @@ async function renderAdminShowcaseTab(panel) {
     });
 }
 
-// --- Registration codes (admins): opened from the header button or tab ---
-
-function toggleInvites() {
-    const cachedUser = getCurrentUser();
-    if (cachedUser?.role === "admin") {
-        switchAdminTab(activeAdminTab === "invites" ? "overview" : "invites");
-        return;
-    }
-    const section = document.getElementById("dash-invites");
-    const btn = document.getElementById("dashboard-invites-btn");
-    if (!section) return; // the dashboard is still loading
-    const open = section.hidden;
-    section.hidden = !open;
-    btn.setAttribute("aria-expanded", String(open));
-    if (!open) return;
-    if (!section.dataset.built) buildInvites(section);
-    loadInvites(section);
-    section.scrollIntoView({ block: "nearest" });
-}
+// --- Registration codes (admins) ---
 
 function buildInvites(section) {
     section.dataset.built = "1";

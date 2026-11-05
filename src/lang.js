@@ -845,6 +845,13 @@ const translations = {
         'adminGui.deleteUserConfirm': 'Naudotojas „{name}“ ({email}) bus ištrintas visam laikui.',
         'adminGui.cannotEditSelf': 'Savo paskyros čia ištrinti ar pažeminti negalite',
         'adminGui.userUpdated': 'Atnaujinta ✓',
+        'adminGui.tabApprovals': 'Patvirtinimai',
+        'adminGui.tabReports': 'Pranešimai',
+        'adminGui.tabBank': 'Užduočių bankas',
+        'adminGui.approvalsEmpty': 'Šiuo metu patvirtinimo laukiančių užduočių nėra.',
+        'adminGui.reportsEmpty': 'Šiuo metu atvirų pranešimų apie klaidas nėra.',
+        'adminGui.allDifficulties': 'Visi lygiai',
+        'adminGui.saveTaskChanges': 'Išsaugoti užduotį',
     },
     en: {
         // Start Menu
@@ -1692,6 +1699,13 @@ const translations = {
         'adminGui.deleteUserConfirm': 'User “{name}” ({email}) will be permanently deleted.',
         'adminGui.cannotEditSelf': 'You cannot demote or delete your own account',
         'adminGui.userUpdated': 'Updated ✓',
+        'adminGui.tabApprovals': 'Approvals',
+        'adminGui.tabReports': 'Reports',
+        'adminGui.tabBank': 'Task bank',
+        'adminGui.approvalsEmpty': 'No tasks are waiting for approval right now.',
+        'adminGui.reportsEmpty': 'No tasks have open error reports right now.',
+        'adminGui.allDifficulties': 'All levels',
+        'adminGui.saveTaskChanges': 'Save task',
     }
 };
 let currentLanguage = 'lt'; // Default to Lithuanian

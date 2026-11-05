@@ -42,6 +42,8 @@ export const createItems = (items, defaults = {}, scope = "mine") =>
     request("/items", { method: "POST", body: { scope, items, defaults } });
 export const updateItems = (ids, set, scope = "mine") =>
     request("/items", { method: "PATCH", body: { scope, ids, set } });
+export const updateItem = (id, body) =>
+    request(`/items/${id}`, { method: "PUT", body });
 export const archiveItems = (ids, scope = "mine") =>
     request("/items", { method: "DELETE", body: { scope, ids } });
 

@@ -4366,6 +4366,164 @@ math-virtual-keyboard::part(action-toolbar) {
     max-width: 155px;
 }
 
+.dash-bank-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dash-bank-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--card-bg);
+}
+
+.dash-bank-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.dash-bank-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.dash-bank-classify {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.dash-bank-classify label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.dash-bank-classify-topic {
+    flex: 1 1 200px;
+}
+
+.dash-bank-classify-topic select {
+    width: 100%;
+}
+
+.dash-bank-task-preview {
+    padding: 12px 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--surface-solid) 65%, transparent);
+}
+
+.dash-reports-box {
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.dash-reports-head {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--danger);
+    margin-bottom: 6px;
+}
+
+.dash-reports-ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.86rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dash-bank-review-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding-top: 4px;
+}
+
+.dash-reject-note {
+    flex: 1 1 240px;
+    margin: 0 !important;
+}
+
+.dash-bank-review-btns,
+.dash-bank-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-task-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px dashed var(--accent);
+    border-radius: var(--control-radius);
+    background: color-mix(in srgb, var(--accent) 5%, var(--card-bg));
+}
+
+.dash-task-edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.82rem;
+    color: var(--muted);
+}
+
+.dash-task-edit-form .input-field {
+    margin: 0;
+}
+
+.dash-task-edit-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dash-task-edit-choice {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-task-edit-choice .input-field {
+    flex: 1;
+}
+
+.dash-task-edit-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.dash-task-edit-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .dash-header {
     display: flex;
     align-items: center;
