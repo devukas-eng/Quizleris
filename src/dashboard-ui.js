@@ -243,9 +243,23 @@ function renderAdminWorkspace(body) {
     }
 }
 
+function formatDurationSec(sec) {
+    if (!sec || sec <= 0) return "—";
+    const s = Math.round(sec);
+    return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+}
+
+function formatStorageBytes(bytes) {
+    const b = Number(bytes || 0);
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 function renderAdminOverviewTab(panel) {
     const { user, limits, quizzes } = adminState.profile;
     const ov = adminState.overview;
+    const an = ov?.analytics || {};
 
     const uTotal = ov?.users?.total ?? "—";
     const uSub = ov
@@ -272,9 +286,16 @@ function renderAdminOverviewTab(panel) {
             .replace("{flag}", ov.bank.openReports)
         : "";
 
-    const pendingCount = ov?.bank?.pendingReview ?? 0;
-    const flaggedCount = ov?.bank?.openReports ?? 0;
-    const featuredCount = ov?.quizzes?.featured ?? 0;
+    const daily = Array.isArray(an.dailyAttempts) && an.dailyAttempts.length
+        ? an.dailyAttempts
+        : Array.from({ length: 14 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (13 - i));
+            return { date: d.toISOString().slice(0, 10), count: 0 };
+        });
+    const maxDay = Math.max(1, ...daily.map(d => d.count || 0));
+    const topQuizzes = an.topQuizzes || [];
+    const recentAttempts = an.recentAttempts || [];
 
     panel.innerHTML = `
         <section class="dash-section">
@@ -302,21 +323,88 @@ function renderAdminOverviewTab(panel) {
                 </button>
             </div>
 
-            <div class="dash-moderation-box">
-                <div class="dash-moderation-title">${escapeHtml(t("adminGui.moderationTitle"))}</div>
-                <div class="dash-moderation-actions">
-                    <button type="button" class="btn ${pendingCount > 0 ? "btn-primary" : "btn-secondary"}" data-jump-tab="approvals">
-                        ${escapeHtml(t("adminGui.openReviewQueue").replace("{n}", pendingCount))}
-                    </button>
-                    <button type="button" class="btn ${flaggedCount > 0 ? "btn-primary" : "btn-secondary"}" data-jump-tab="reports">
-                        ${escapeHtml(t("adminGui.openFlaggedQueue").replace("{n}", flaggedCount))}
-                    </button>
-                    <button type="button" class="btn btn-secondary" data-jump-tab="bank">
-                        ${escapeHtml(t("adminGui.openBankEditor"))}
-                    </button>
-                    <button type="button" class="btn btn-secondary" data-jump-tab="showcase">
-                        ${escapeHtml(t("adminGui.manageShowcaseBtn").replace("{n}", featuredCount))}
-                    </button>
+            <div class="dash-analytics-panel">
+                <div class="dash-moderation-title">📈 ${escapeHtml(t("adminGui.analyticsTitle"))}</div>
+
+                <div class="dash-analytics-kpis">
+                    <div class="dash-kpi-item">
+                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpi24h7d"))}</span>
+                        <strong class="dash-kpi-val">${escapeHtml(t("adminGui.kpi24h7dSub").replace("{t}", an.attemptsToday ?? 0).replace("{w}", an.attempts7d ?? 0))}</strong>
+                    </div>
+                    <div class="dash-kpi-item">
+                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiAvgScore"))}</span>
+                        <strong class="dash-kpi-val">${an.avgScorePct != null ? `${escapeHtml(an.avgScorePct)}%` : "—"}</strong>
+                        ${an.avgScorePct != null ? `<div class="dash-meter"><span style="width:${Math.min(100, Math.max(0, an.avgScorePct))}%"></span></div>` : ""}
+                    </div>
+                    <div class="dash-kpi-item">
+                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiAvgDuration"))}</span>
+                        <strong class="dash-kpi-val">${escapeHtml(formatDurationSec(an.avgDurationSec))}</strong>
+                    </div>
+                    <div class="dash-kpi-item">
+                        <span class="dash-kpi-label">${escapeHtml(t("adminGui.kpiStorage"))}</span>
+                        <strong class="dash-kpi-val">${escapeHtml(formatStorageBytes(an.storageBytes))}</strong>
+                    </div>
+                </div>
+
+                <div class="dash-chart-box">
+                    <div class="dash-chart-title">${escapeHtml(t("adminGui.dailyChartTitle"))}</div>
+                    <div class="dash-bar-chart" role="img" aria-label="${escapeHtml(t("adminGui.dailyChartTitle"))}">
+                        ${daily.map(d => {
+                            const pct = Math.round(((d.count || 0) / maxDay) * 100);
+                            const shortDate = d.date.slice(5);
+                            return `
+                                <div class="dash-bar-col" title="${escapeHtml(`${d.date}: ${d.count}`)}">
+                                    <span class="dash-bar-num">${d.count > 0 ? escapeHtml(d.count) : ""}</span>
+                                    <div class="dash-bar-track">
+                                        <div class="dash-bar-fill${d.count > 0 ? " has-val" : ""}" style="height:${Math.max(4, pct)}%"></div>
+                                    </div>
+                                    <span class="dash-bar-date">${escapeHtml(shortDate)}</span>
+                                </div>
+                            `;
+                        }).join("")}
+                    </div>
+                </div>
+
+                <div class="dash-analytics-columns">
+                    <div class="dash-analytics-col">
+                        <div class="dash-chart-title">${escapeHtml(t("adminGui.topQuizzesTitle"))}</div>
+                        ${topQuizzes.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
+                            <div class="dash-mini-list">
+                                ${topQuizzes.map((tq, idx) => `
+                                    <div class="dash-mini-row">
+                                        <span class="dash-showcase-pos">#${idx + 1}</span>
+                                        <div class="dash-mini-main">
+                                            <div class="dash-mini-title">${escapeHtml(tq.title || tq.id)}</div>
+                                            <div class="dash-muted"><code>${escapeHtml(tq.id)}</code>${tq.author ? ` · ${escapeHtml(tq.author)}` : ""}</div>
+                                        </div>
+                                        ${tq.avgPct != null ? `<span class="dash-chip ${tq.avgPct >= 75 ? "public" : "private"}">${escapeHtml(tq.avgPct)}%</span>` : ""}
+                                        <a class="btn btn-secondary btn-compact dash-results" href="/?dashboard=${encodeURIComponent(tq.id)}">📊 ${escapeHtml(tq.attempts)}</a>
+                                    </div>
+                                `).join("")}
+                            </div>
+                        `}
+                    </div>
+
+                    <div class="dash-analytics-col">
+                        <div class="dash-chart-title">${escapeHtml(t("adminGui.recentAttemptsTitle"))}</div>
+                        ${recentAttempts.length === 0 ? `<p class="dash-muted">${escapeHtml(t("adminGui.noAttemptsYet"))}</p>` : `
+                            <div class="dash-mini-list">
+                                ${recentAttempts.map(ra => {
+                                    const pct = ra.maxScore > 0 ? Math.round((ra.score / ra.maxScore) * 100) : 0;
+                                    const student = ra.studentName || t("results.anonymous");
+                                    return `
+                                        <div class="dash-mini-row">
+                                            <div class="dash-mini-main">
+                                                <div class="dash-mini-title">${escapeHtml(student)} <span class="dash-muted">→ ${escapeHtml(ra.quizTitle || ra.quizId)}</span></div>
+                                                <div class="dash-muted">${escapeHtml(formatDurationSec(ra.durationSeconds))} · ${escapeHtml(formatDate(ra.createdAt))}</div>
+                                            </div>
+                                            <span class="dash-chip ${pct >= 75 ? "public" : "private"}">${escapeHtml(ra.score)}/${escapeHtml(ra.maxScore)} (${pct}%)</span>
+                                        </div>
+                                    `;
+                                }).join("")}
+                            </div>
+                        `}
+                    </div>
                 </div>
             </div>
         </section>
@@ -1068,8 +1156,12 @@ async function renderAdminAllQuizzesTab(panel) {
                     return;
                 }
                 item.featured = nextFeatured;
-                if (adminState.overview?.quizzes) {
-                    adminState.overview.quizzes.featured = adminState.allQuizzes.filter(x => x.featured).length;
+                try {
+                    adminState.overview = await fetchAdminOverview();
+                } catch {
+                    if (adminState.overview?.quizzes) {
+                        adminState.overview.quizzes.featured = adminState.allQuizzes.filter(x => x.featured).length;
+                    }
                 }
                 document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
                 renderAdminAllQuizzesTab(panel);
@@ -1129,6 +1221,85 @@ function updateAdminTabBadges() {
     setBadge("bank", adminState.overview?.bank?.published);
 }
 
+function getItemScheduleState(item) {
+    if (item.enabled === false) {
+        return { cls: "is-paused", label: t("adminGui.showcaseStatusPaused") };
+    }
+    const now = Date.now();
+    if (item.scheduleStart) {
+        const s = Date.parse(item.scheduleStart);
+        if (!Number.isNaN(s) && now < s) {
+            return { cls: "is-scheduled", label: t("adminGui.showcaseStatusScheduled") };
+        }
+    }
+    if (item.scheduleEnd) {
+        const e = Date.parse(item.scheduleEnd);
+        if (!Number.isNaN(e) && now > e) {
+            return { cls: "is-ended", label: t("adminGui.showcaseStatusEnded") };
+        }
+    }
+    return { cls: "is-active", label: t("adminGui.showcaseStatusActive") };
+}
+
+function normalizeShowcaseConfig(rawCfg, allQuizzes) {
+    const cfg = rawCfg && typeof rawCfg === "object" ? rawCfg : {};
+    const featured = (allQuizzes || [])
+        .filter(q => q.featured)
+        .sort((a, b) => (a.featured_order || 0) - (b.featured_order || 0));
+
+    let playlists = Array.isArray(cfg.playlists) && cfg.playlists.length > 0
+        ? cfg.playlists.map(pl => ({
+            id: String(pl.id || "default"),
+            name: String(pl.name || t("adminGui.showcaseDefaultPlaylist")),
+            scheduleStart: pl.scheduleStart ? String(pl.scheduleStart).slice(0, 16) : "",
+            scheduleEnd: pl.scheduleEnd ? String(pl.scheduleEnd).slice(0, 16) : "",
+            items: Array.isArray(pl.items) ? pl.items.map(it => ({
+                quizId: String(it.quizId || it.id || "").trim().toUpperCase(),
+                customLabel: String(it.customLabel || ""),
+                scheduleStart: it.scheduleStart ? String(it.scheduleStart).slice(0, 16) : "",
+                scheduleEnd: it.scheduleEnd ? String(it.scheduleEnd).slice(0, 16) : "",
+                enabled: it.enabled !== false,
+            })).filter(it => it.quizId) : [],
+        }))
+        : [{
+            id: "default",
+            name: t("adminGui.showcaseDefaultPlaylist"),
+            scheduleStart: "",
+            scheduleEnd: "",
+            items: featured.map(q => ({
+                quizId: q.id,
+                customLabel: "",
+                scheduleStart: "",
+                scheduleEnd: "",
+                enabled: true,
+            })),
+        }];
+
+    if (playlists.length === 0) {
+        playlists = [{
+            id: "default",
+            name: t("adminGui.showcaseDefaultPlaylist"),
+            scheduleStart: "",
+            scheduleEnd: "",
+            items: [],
+        }];
+    }
+
+    const activePlaylistId = playlists.some(p => p.id === cfg.activePlaylistId)
+        ? cfg.activePlaylistId
+        : playlists[0].id;
+
+    return {
+        enabled: cfg.enabled !== false,
+        intervalSeconds: Math.max(2, Math.min(30, Number(cfg.intervalSeconds) || 4)),
+        action: cfg.action === "start" ? "start" : "fill",
+        animStyle: ["flip", "slide", "typewriter", "fade"].includes(cfg.animStyle) ? cfg.animStyle : "flip",
+        displayFormat: ["both", "code", "label"].includes(cfg.displayFormat) ? cfg.displayFormat : "both",
+        activePlaylistId,
+        playlists,
+    };
+}
+
 async function renderAdminShowcaseTab(panel) {
     if (showcasePreviewTimer) {
         clearInterval(showcasePreviewTimer);
@@ -1145,23 +1316,63 @@ async function renderAdminShowcaseTab(panel) {
         }
     }
 
-    const showcaseCfg = adminState.overview?.showcase || {
-        enabled: true,
-        intervalSeconds: 4,
-        action: "fill"
-    };
+    const showcaseCfg = normalizeShowcaseConfig(adminState.overview?.showcase, adminState.allQuizzes);
+    if (!adminState.selectedPlaylistId || !showcaseCfg.playlists.some(p => p.id === adminState.selectedPlaylistId)) {
+        adminState.selectedPlaylistId = showcaseCfg.activePlaylistId;
+    }
+    const currentPl = showcaseCfg.playlists.find(p => p.id === adminState.selectedPlaylistId) || showcaseCfg.playlists[0];
+    const quizById = new Map(adminState.allQuizzes.map(q => [String(q.id).toUpperCase(), q]));
 
-    const featured = adminState.allQuizzes
-        .filter(q => q.featured)
-        .sort((a, b) => (a.featured_order || 0) - (b.featured_order || 0));
+    const persistShowcase = async (statusEl) => {
+        const activePl = showcaseCfg.playlists.find(p => p.id === showcaseCfg.activePlaylistId) || showcaseCfg.playlists[0];
+        const payload = {
+            enabled: showcaseCfg.enabled,
+            intervalSeconds: showcaseCfg.intervalSeconds,
+            action: showcaseCfg.action,
+            animStyle: showcaseCfg.animStyle,
+            displayFormat: showcaseCfg.displayFormat,
+            activePlaylistId: showcaseCfg.activePlaylistId,
+            playlists: showcaseCfg.playlists,
+            featured_order: activePl.items.filter(i => i.enabled !== false).map(i => i.quizId),
+        };
+        const res = await updateShowcaseSettings(payload);
+        if (!res.ok) {
+            await alertDialog(t("profile.loadError"), res.data?.error || "");
+            return false;
+        }
+        if (!adminState.overview) adminState.overview = {};
+        adminState.overview.showcase = res.data?.showcase || payload;
+
+        const activeSet = new Set(payload.featured_order);
+        adminState.allQuizzes.forEach(q => {
+            q.featured = activeSet.has(q.id);
+            q.featured_order = activeSet.has(q.id) ? payload.featured_order.indexOf(q.id) + 1 : 0;
+        });
+        if (adminState.overview?.quizzes) {
+            adminState.overview.quizzes.featured = activeSet.size;
+        }
+        updateAdminTabBadges();
+        document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
+        if (statusEl) {
+            const orig = statusEl.textContent;
+            statusEl.textContent = t("adminGui.showcaseSaved");
+            setTimeout(() => {
+                if (statusEl.isConnected) statusEl.textContent = orig;
+            }, 900);
+        }
+        return true;
+    };
 
     panel.innerHTML = `
         <section class="dash-section">
-            <div class="dash-section-head"><h3>✨ ${escapeHtml(t("adminGui.showcaseTitle"))}</h3></div>
+            <div class="dash-section-head">
+                <h3>✨ ${escapeHtml(t("adminGui.showcaseTitle"))}</h3>
+                <button type="button" class="btn btn-secondary btn-compact" data-go-pick-quizzes="1">${escapeHtml(t("adminGui.showcasePickQuizzes"))}</button>
+            </div>
             <p class="dash-muted">${escapeHtml(t("adminGui.showcaseIntro"))}</p>
 
             <div class="dash-showcase-preview-box">
-                <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcaseLivePreview"))}</span>
+                <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcaseLivePreview"))} (${escapeHtml(currentPl.name)})</span>
                 <p class="hero-pin-hint" id="dash-showcase-preview-hint"></p>
             </div>
 
@@ -1173,7 +1384,7 @@ async function renderAdminShowcaseTab(panel) {
                 <div class="dash-showcase-fields">
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseInterval"))}</span>
-                        <input type="number" name="intervalSeconds" class="input-field" min="2" max="30" value="${Number(showcaseCfg.intervalSeconds) || 4}">
+                        <input type="number" name="intervalSeconds" class="input-field" min="2" max="30" value="${showcaseCfg.intervalSeconds}">
                     </label>
                     <label>
                         <span>${escapeHtml(t("adminGui.showcaseAction"))}</span>
@@ -1182,35 +1393,156 @@ async function renderAdminShowcaseTab(panel) {
                             <option value="start" ${showcaseCfg.action === "start" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseActionStart"))}</option>
                         </select>
                     </label>
+                    <label>
+                        <span>${escapeHtml(t("adminGui.showcaseAnimStyle"))}</span>
+                        <select name="animStyle" class="admin-select-compact">
+                            <option value="flip" ${showcaseCfg.animStyle === "flip" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimFlip"))}</option>
+                            <option value="slide" ${showcaseCfg.animStyle === "slide" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimSlide"))}</option>
+                            <option value="typewriter" ${showcaseCfg.animStyle === "typewriter" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimType"))}</option>
+                            <option value="fade" ${showcaseCfg.animStyle === "fade" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimFade"))}</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>${escapeHtml(t("adminGui.showcaseDisplayFormat"))}</span>
+                        <select name="displayFormat" class="admin-select-compact">
+                            <option value="both" ${showcaseCfg.displayFormat === "both" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatBoth"))}</option>
+                            <option value="code" ${showcaseCfg.displayFormat === "code" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatCode"))}</option>
+                            <option value="label" ${showcaseCfg.displayFormat === "label" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatLabel"))}</option>
+                        </select>
+                    </label>
                     <button type="submit" class="btn btn-primary">${escapeHtml(t("adminGui.showcaseSave"))}</button>
                 </div>
             </form>
 
-            <div class="dash-section-head" style="margin-top: 20px;">
-                <h4>${escapeHtml(t("adminGui.showcaseOrderTitle"))} <span class="dash-muted">(${featured.length})</span></h4>
-                <button type="button" class="btn btn-secondary btn-compact" data-go-pick-quizzes="1">${escapeHtml(t("adminGui.showcasePickQuizzes"))}</button>
+            <!-- Playlists / Skirsniai Manager -->
+            <div class="dash-playlist-panel">
+                <div class="dash-section-head">
+                    <h4>🗂 ${escapeHtml(t("adminGui.showcasePlaylistsTitle"))}</h4>
+                    <div class="dash-playlist-create">
+                        <input type="text" id="dash-new-playlist-name" class="input-field" maxlength="60" placeholder="${escapeHtml(t("adminGui.showcaseNewPlaylistPlaceholder"))}">
+                        <button type="button" class="btn btn-secondary btn-compact" id="dash-create-playlist-btn">${escapeHtml(t("adminGui.showcaseCreatePlaylist"))}</button>
+                    </div>
+                </div>
+
+                <div class="dash-playlist-tabs">
+                    ${showcaseCfg.playlists.map(pl => {
+                        const isSelected = pl.id === currentPl.id;
+                        const isActive = pl.id === showcaseCfg.activePlaylistId;
+                        const hasSched = Boolean(pl.scheduleStart || pl.scheduleEnd);
+                        return `
+                            <button type="button" class="dash-playlist-tab${isSelected ? " is-selected" : ""}" data-select-playlist="${escapeHtml(pl.id)}">
+                                ${isActive ? `<span class="dash-playlist-dot" title="${escapeHtml(t("adminGui.showcaseActivePlaylist"))}">●</span>` : ""}
+                                ${hasSched ? `<span title="${escapeHtml(t("adminGui.showcaseStatusScheduled"))}">🕒</span>` : ""}
+                                <span>${escapeHtml(pl.name)}</span>
+                                <span class="dash-admin-tab-badge">${pl.items.length}</span>
+                            </button>
+                        `;
+                    }).join("")}
+                </div>
+
+                <div class="dash-playlist-meta-bar">
+                    <div class="dash-playlist-schedule">
+                        <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcasePlaylistSchedule"))}:</span>
+                        <label>
+                            <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
+                            <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(currentPl.scheduleStart || "")}">
+                        </label>
+                        <label>
+                            <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
+                            <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(currentPl.scheduleEnd || "")}">
+                        </label>
+                        <button type="button" class="btn btn-secondary btn-compact" id="dash-save-pl-sched-btn">${escapeHtml(t("adminGui.showcaseSave"))}</button>
+                    </div>
+                    <div class="dash-playlist-actions">
+                        ${currentPl.id === showcaseCfg.activePlaylistId ? `
+                            <span class="dash-status-pill is-active">🟢 ${escapeHtml(t("adminGui.showcaseActivePlaylist"))}</span>
+                        ` : `
+                            <button type="button" class="btn btn-primary btn-compact" id="dash-activate-playlist-btn">${escapeHtml(t("adminGui.showcaseSetActivePlaylist"))}</button>
+                        `}
+                        ${showcaseCfg.playlists.length > 1 && currentPl.id !== "default" ? `
+                            <button type="button" class="btn btn-secondary btn-compact dash-btn-danger" id="dash-delete-playlist-btn">${escapeHtml(t("adminGui.showcaseDeletePlaylist"))}</button>
+                        ` : ""}
+                    </div>
+                </div>
             </div>
-            ${featured.length === 0 ? `
+
+            <!-- Direct Code / Quiz Quick-Add -->
+            <form class="dash-quick-add-box" id="dash-showcase-quick-add">
+                <div class="dash-quick-add-title">➕ ${escapeHtml(t("adminGui.showcaseQuickAddTitle"))} — <strong>${escapeHtml(currentPl.name)}</strong></div>
+                <datalist id="dash-showcase-quiz-datalist">
+                    ${adminState.allQuizzes.map(q => `<option value="${escapeHtml(q.id)}">${escapeHtml(q.title || "—")} (${escapeHtml(q.author || "—")})</option>`).join("")}
+                </datalist>
+                <div class="dash-quick-add-grid">
+                    <label class="dash-quick-add-code">
+                        <span>${escapeHtml(t("adminGui.showcaseQuickAddCodePlaceholder"))}</span>
+                        <input type="text" name="quizCode" list="dash-showcase-quiz-datalist" class="input-field" required placeholder="K7M3QX...">
+                    </label>
+                    <label class="dash-quick-add-label">
+                        <span>${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}</span>
+                        <input type="text" name="customLabel" class="input-field" maxlength="80" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
+                    </label>
+                    <label>
+                        <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
+                        <input type="datetime-local" name="scheduleStart" class="input-field">
+                    </label>
+                    <label>
+                        <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
+                        <input type="datetime-local" name="scheduleEnd" class="input-field">
+                    </label>
+                    <button type="submit" class="btn btn-primary">${escapeHtml(t("adminGui.showcaseAddBtn"))}</button>
+                </div>
+            </form>
+
+            <!-- Ordered Items in Selected Playlist -->
+            <div class="dash-section-head" style="margin-top: 18px;">
+                <h4>${escapeHtml(t("adminGui.showcaseOrderTitle"))} — ${escapeHtml(currentPl.name)} <span class="dash-muted">(${currentPl.items.length})</span></h4>
+            </div>
+            ${currentPl.items.length === 0 ? `
                 <div class="dash-empty">
                     <p class="dash-muted">${escapeHtml(t("adminGui.showcaseEmpty"))}</p>
                 </div>
             ` : `
                 <div class="dash-showcase-list" id="dash-showcase-list">
-                    ${featured.map((q, idx) => `
-                        <div class="dash-showcase-item" data-id="${escapeHtml(q.id)}">
-                            <span class="dash-showcase-pos">#${idx + 1}</span>
-                            <code class="dash-showcase-code">${escapeHtml(q.id)}</code>
-                            <div class="dash-showcase-info">
-                                <div class="dash-showcase-item-title">${escapeHtml(q.title || "—")}</div>
-                                <div class="dash-muted">${escapeHtml(q.author ? t("adminGui.byAuthor").replace("{author}", q.author) : "")}</div>
+                    ${currentPl.items.map((item, idx) => {
+                        const q = quizById.get(item.quizId);
+                        const st = getItemScheduleState(item);
+                        return `
+                            <div class="dash-showcase-item" data-idx="${idx}">
+                                <div class="dash-showcase-item-top">
+                                    <span class="dash-showcase-pos">#${idx + 1}</span>
+                                    <label class="dash-showcase-toggle" title="${escapeHtml(st.label)}">
+                                        <input type="checkbox" data-item-toggle="${idx}" ${item.enabled !== false ? "checked" : ""}>
+                                    </label>
+                                    <code class="dash-showcase-code">${escapeHtml(item.quizId)}</code>
+                                    <div class="dash-showcase-info">
+                                        <div class="dash-showcase-item-title">${escapeHtml(q?.title || item.customLabel || "—")}</div>
+                                        <div class="dash-muted">${escapeHtml(q?.author ? t("adminGui.byAuthor").replace("{author}", q.author) : "")}</div>
+                                    </div>
+                                    <span class="dash-status-pill ${st.cls}">${escapeHtml(st.label)}</span>
+                                    <div class="dash-showcase-item-actions">
+                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="-1" data-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="${escapeHtml(t("admin.moveUp"))}" aria-label="${escapeHtml(t("admin.moveUp"))}">↑</button>
+                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="1" data-idx="${idx}" ${idx === currentPl.items.length - 1 ? "disabled" : ""} title="${escapeHtml(t("admin.moveDown"))}" aria-label="${escapeHtml(t("admin.moveDown"))}">↓</button>
+                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-remove-idx="${idx}" title="${escapeHtml(t("adminGui.showcaseRemove"))}" aria-label="${escapeHtml(t("adminGui.showcaseRemove"))}">✕</button>
+                                    </div>
+                                </div>
+                                <div class="dash-showcase-item-sched">
+                                    <label class="dash-showcase-item-label-input">
+                                        <span>Prierašas / žyma:</span>
+                                        <input type="text" class="input-field" data-item-label="${idx}" maxlength="80" value="${escapeHtml(item.customLabel || "")}" placeholder="${escapeHtml(q?.title || t("adminGui.showcaseCustomLabelPlaceholder"))}">
+                                    </label>
+                                    <label>
+                                        <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}:</span>
+                                        <input type="datetime-local" class="input-field" data-item-start="${idx}" value="${escapeHtml(item.scheduleStart || "")}">
+                                    </label>
+                                    <label>
+                                        <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}:</span>
+                                        <input type="datetime-local" class="input-field" data-item-end="${idx}" value="${escapeHtml(item.scheduleEnd || "")}">
+                                    </label>
+                                    <button type="button" class="btn btn-secondary btn-compact" data-save-item="${idx}">${escapeHtml(t("adminGui.showcaseSave"))}</button>
+                                </div>
                             </div>
-                            <div class="dash-showcase-item-actions">
-                                <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="-1" data-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="${escapeHtml(t("admin.moveUp"))}" aria-label="${escapeHtml(t("admin.moveUp"))}">↑</button>
-                                <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="1" data-idx="${idx}" ${idx === featured.length - 1 ? "disabled" : ""} title="${escapeHtml(t("admin.moveDown"))}" aria-label="${escapeHtml(t("admin.moveDown"))}">↓</button>
-                                <button type="button" class="btn btn-secondary btn-icon btn-compact" data-unfeature="${escapeHtml(q.id)}" title="${escapeHtml(t("adminGui.showcaseRemove"))}" aria-label="${escapeHtml(t("adminGui.showcaseRemove"))}">✕</button>
-                            </div>
-                        </div>
-                    `).join("")}
+                        `;
+                    }).join("")}
                 </div>
             `}
         </section>
@@ -1218,20 +1550,31 @@ async function renderAdminShowcaseTab(panel) {
 
     // Live preview inside the Showcase tab
     const previewHint = panel.querySelector("#dash-showcase-preview-hint");
+    const activePreviewItems = currentPl.items.filter(it => getItemScheduleState(it).cls === "is-active");
     if (previewHint) {
-        if (!showcaseCfg.enabled || featured.length === 0) {
+        if (!showcaseCfg.enabled || activePreviewItems.length === 0) {
             previewHint.textContent = t("menu.pinHint");
         } else {
             let pIdx = 0;
             const drawPreview = (item, animate) => {
-                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animate ? " is-flipping" : ""}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${item.title ? `<span class="hero-code-title"> · ${escapeHtml(item.title)}</span>` : ""}</button>.`;
+                const q = quizById.get(item.quizId);
+                const label = item.customLabel || q?.title || "";
+                const fmt = showcaseCfg.displayFormat || "both";
+                const animCls = animate ? ` is-flipping anim-${showcaseCfg.animStyle || "flip"}` : "";
+                let innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span>`;
+                if (fmt === "label" && label) {
+                    innerHtml = `<span class="hero-code-val">${escapeHtml(label)}</span> <span class="hero-code-title">(${escapeHtml(item.quizId)})</span>`;
+                } else if (fmt === "both" && label) {
+                    innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span><span class="hero-code-title"> · ${escapeHtml(label)}</span>`;
+                }
+                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}">${innerHtml}</button>.`;
             };
-            drawPreview(featured[0], false);
-            if (featured.length > 1) {
+            drawPreview(activePreviewItems[0], false);
+            if (activePreviewItems.length > 1) {
                 const ms = Math.max(2000, Math.min(30000, (Number(showcaseCfg.intervalSeconds) || 4) * 1000));
                 showcasePreviewTimer = setInterval(() => {
-                    pIdx = (pIdx + 1) % featured.length;
-                    drawPreview(featured[pIdx], true);
+                    pIdx = (pIdx + 1) % activePreviewItems.length;
+                    drawPreview(activePreviewItems[pIdx], true);
                 }, ms);
             }
         }
@@ -1242,73 +1585,169 @@ async function renderAdminShowcaseTab(panel) {
         switchAdminTab("quizzes");
     });
 
+    // Global settings form
     const form = panel.querySelector("#dash-showcase-form");
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const submitBtn = form.querySelector("button[type=submit]");
         submitBtn.disabled = true;
-        const payload = {
-            enabled: form.enabled.checked,
-            intervalSeconds: Math.max(2, Math.min(30, Number(form.intervalSeconds.value) || 4)),
-            action: form.action.value === "start" ? "start" : "fill",
-            featured_order: featured.map(q => q.id),
-        };
-        const res = await updateShowcaseSettings(payload);
+        showcaseCfg.enabled = form.enabled.checked;
+        showcaseCfg.intervalSeconds = Math.max(2, Math.min(30, Number(form.intervalSeconds.value) || 4));
+        showcaseCfg.action = form.action.value === "start" ? "start" : "fill";
+        showcaseCfg.animStyle = form.animStyle.value;
+        showcaseCfg.displayFormat = form.displayFormat.value;
+        await persistShowcase(submitBtn);
         submitBtn.disabled = false;
-        if (!res.ok) {
-            await alertDialog(t("profile.loadError"), res.data?.error || "");
-            return;
-        }
-        if (!adminState.overview) adminState.overview = {};
-        adminState.overview.showcase = payload;
-        submitBtn.textContent = t("adminGui.showcaseSaved");
-        document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
-        setTimeout(() => {
-            if (panel.isConnected) renderAdminShowcaseTab(panel);
-        }, 700);
+        renderAdminShowcaseTab(panel);
     });
 
+    // Playlist tabs switching
+    panel.querySelectorAll("[data-select-playlist]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            adminState.selectedPlaylistId = btn.dataset.selectPlaylist;
+            renderAdminShowcaseTab(panel);
+        });
+    });
+
+    // Create new playlist
+    panel.querySelector("#dash-create-playlist-btn")?.addEventListener("click", async () => {
+        const nameInput = panel.querySelector("#dash-new-playlist-name");
+        const name = nameInput.value.trim();
+        if (!name) {
+            nameInput.focus();
+            return;
+        }
+        const newId = "pl_" + Date.now().toString(36);
+        showcaseCfg.playlists.push({
+            id: newId,
+            name,
+            scheduleStart: "",
+            scheduleEnd: "",
+            items: [],
+        });
+        adminState.selectedPlaylistId = newId;
+        await persistShowcase();
+        renderAdminShowcaseTab(panel);
+    });
+
+    // Activate selected playlist
+    panel.querySelector("#dash-activate-playlist-btn")?.addEventListener("click", async (e) => {
+        e.currentTarget.disabled = true;
+        showcaseCfg.activePlaylistId = currentPl.id;
+        await persistShowcase();
+        renderAdminShowcaseTab(panel);
+    });
+
+    // Delete selected playlist
+    panel.querySelector("#dash-delete-playlist-btn")?.addEventListener("click", async () => {
+        showcaseCfg.playlists = showcaseCfg.playlists.filter(p => p.id !== currentPl.id);
+        if (showcaseCfg.activePlaylistId === currentPl.id) {
+            showcaseCfg.activePlaylistId = showcaseCfg.playlists[0].id;
+        }
+        adminState.selectedPlaylistId = showcaseCfg.activePlaylistId;
+        await persistShowcase();
+        renderAdminShowcaseTab(panel);
+    });
+
+    // Save playlist schedule
+    panel.querySelector("#dash-save-pl-sched-btn")?.addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        currentPl.scheduleStart = panel.querySelector("#dash-pl-sched-start")?.value || "";
+        currentPl.scheduleEnd = panel.querySelector("#dash-pl-sched-end")?.value || "";
+        await persistShowcase(btn);
+        btn.disabled = false;
+        renderAdminShowcaseTab(panel);
+    });
+
+    // Quick-add quiz / code directly into current playlist
+    const quickAddForm = panel.querySelector("#dash-showcase-quick-add");
+    quickAddForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const rawInput = quickAddForm.quizCode.value.trim();
+        if (!rawInput) return;
+
+        // Match either exact quiz ID, prefix before space/dash, or search by title
+        let resolvedCode = rawInput.toUpperCase();
+        if (!quizById.has(resolvedCode)) {
+            const byTitle = adminState.allQuizzes.find(q => (q.title || "").toLowerCase() === rawInput.toLowerCase());
+            if (byTitle) {
+                resolvedCode = String(byTitle.id).toUpperCase();
+            } else {
+                const token = rawInput.split(/[\s—–-]+/)[0].trim().toUpperCase();
+                if (quizById.has(token)) resolvedCode = token;
+            }
+        }
+
+        const existingIdx = currentPl.items.findIndex(it => it.quizId === resolvedCode);
+        const newItem = {
+            quizId: resolvedCode,
+            customLabel: quickAddForm.customLabel.value.trim(),
+            scheduleStart: quickAddForm.scheduleStart.value || "",
+            scheduleEnd: quickAddForm.scheduleEnd.value || "",
+            enabled: true,
+        };
+        if (existingIdx >= 0) {
+            currentPl.items[existingIdx] = newItem;
+        } else {
+            currentPl.items.push(newItem);
+        }
+
+        await persistShowcase();
+        renderAdminShowcaseTab(panel);
+    });
+
+    // Per-item enable toggle
+    panel.querySelectorAll("[data-item-toggle]").forEach(chk => {
+        chk.addEventListener("change", async () => {
+            const idx = Number(chk.dataset.itemToggle);
+            if (!currentPl.items[idx]) return;
+            currentPl.items[idx].enabled = chk.checked;
+            await persistShowcase();
+            renderAdminShowcaseTab(panel);
+        });
+    });
+
+    // Per-item inline save (customLabel + scheduleStart + scheduleEnd)
+    panel.querySelectorAll("[data-save-item]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            const idx = Number(btn.dataset.saveItem);
+            const item = currentPl.items[idx];
+            if (!item) return;
+            btn.disabled = true;
+            const lblInput = panel.querySelector(`[data-item-label="${idx}"]`);
+            const startInput = panel.querySelector(`[data-item-start="${idx}"]`);
+            const endInput = panel.querySelector(`[data-item-end="${idx}"]`);
+            item.customLabel = lblInput ? lblInput.value.trim() : "";
+            item.scheduleStart = startInput ? startInput.value : "";
+            item.scheduleEnd = endInput ? endInput.value : "";
+            await persistShowcase(btn);
+            btn.disabled = false;
+            renderAdminShowcaseTab(panel);
+        });
+    });
+
+    // Reorder items
     panel.querySelectorAll("[data-move-dir]").forEach(btn => {
         btn.addEventListener("click", async () => {
             const idx = Number(btn.dataset.idx);
             const dir = Number(btn.dataset.moveDir);
             const swapIdx = idx + dir;
-            if (swapIdx < 0 || swapIdx >= featured.length) return;
-            const temp = featured[idx];
-            featured[idx] = featured[swapIdx];
-            featured[swapIdx] = temp;
-            featured.forEach((q, i) => { q.featured_order = i + 1; });
-
-            const payload = {
-                enabled: form.enabled.checked,
-                intervalSeconds: Math.max(2, Math.min(30, Number(form.intervalSeconds.value) || 4)),
-                action: form.action.value === "start" ? "start" : "fill",
-                featured_order: featured.map(q => q.id),
-            };
-            await updateShowcaseSettings(payload);
-            if (!adminState.overview) adminState.overview = {};
-            adminState.overview.showcase = payload;
-            document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
+            if (swapIdx < 0 || swapIdx >= currentPl.items.length) return;
+            const temp = currentPl.items[idx];
+            currentPl.items[idx] = currentPl.items[swapIdx];
+            currentPl.items[swapIdx] = temp;
+            await persistShowcase();
             renderAdminShowcaseTab(panel);
         });
     });
 
-    panel.querySelectorAll("[data-unfeature]").forEach(btn => {
+    // Remove item from playlist
+    panel.querySelectorAll("[data-remove-idx]").forEach(btn => {
         btn.addEventListener("click", async () => {
-            const qId = btn.dataset.unfeature;
-            btn.disabled = true;
-            const res = await updateAdminQuiz(qId, { featured: false, featured_order: 0 });
-            if (!res.ok) {
-                btn.disabled = false;
-                return;
-            }
-            const item = adminState.allQuizzes.find(q => q.id === qId);
-            if (item) item.featured = false;
-            if (adminState.overview?.quizzes) {
-                adminState.overview.quizzes.featured = adminState.allQuizzes.filter(x => x.featured).length;
-            }
-            document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
-            updateAdminTabBadges();
+            const idx = Number(btn.dataset.removeIdx);
+            currentPl.items.splice(idx, 1);
+            await persistShowcase();
             renderAdminShowcaseTab(panel);
         });
     });

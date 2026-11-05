@@ -116,8 +116,19 @@ async function initHeroShowcase() {
 
     const renderTicker = (item, animate = false) => {
         const prefix = escapeHtml(t("menu.pinHintPrefix"));
-        const titleTip = item.title ? `${item.title} (${item.id})` : item.id;
-        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animate ? " is-flipping" : ""}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${item.title ? `<span class="hero-code-title"> · ${escapeHtml(item.title)}</span>` : ""}</button>.`;
+        const fmt = data.displayFormat || "both";
+        const anim = data.animStyle || "flip";
+        let subtitle = "";
+        if (fmt === "both") {
+            subtitle = item.customLabel && item.title
+                ? `${item.customLabel} · ${item.title}`
+                : item.customLabel || item.title || "";
+        } else if (fmt === "label") {
+            subtitle = item.customLabel || item.title || "";
+        }
+        const titleTip = subtitle ? `${subtitle} (${item.id})` : item.id;
+        const animCls = animate ? ` is-flipping anim-${escapeHtml(anim)}` : "";
+        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
     };
 
     renderTicker(list[0], false);

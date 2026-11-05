@@ -412,17 +412,97 @@ const USER_ROLES = new Set(['teacher', 'creator', 'admin']);
 const USER_TIERS = new Set(['free', 'premium']);
 let siteSettingsReady = false;
 
+const ANIM_STYLES = new Set(['flip', 'slide', 'typewriter', 'fade']);
+const DISPLAY_FORMATS = new Set(['both', 'code', 'label']);
+
+function sanitizePlaylistItem(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const quizId = String(raw.quizId || raw.id || '').trim();
+    if (!quizId || !QUIZ_ID_RE.test(quizId)) return null;
+    return {
+        quizId,
+        customLabel: String(raw.customLabel || '').trim().slice(0, 80),
+        scheduleStart: raw.scheduleStart ? String(raw.scheduleStart).slice(0, 32) : null,
+        scheduleEnd: raw.scheduleEnd ? String(raw.scheduleEnd).slice(0, 32) : null,
+        enabled: raw.enabled !== false
+    };
+}
+
+function sanitizePlaylists(rawList) {
+    if (!Array.isArray(rawList) || !rawList.length) {
+        return [{ id: 'default', name: 'Pagrindinis', scheduleStart: null, scheduleEnd: null, items: [] }];
+    }
+    const out = [];
+    for (const p of rawList.slice(0, 20)) {
+        if (!p || typeof p !== 'object') continue;
+        const id = String(p.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || `pl_${out.length + 1}`;
+        const name = String(p.name || 'Skirsnis').trim().slice(0, 60) || 'Skirsnis';
+        const items = Array.isArray(p.items) ? p.items.map(sanitizePlaylistItem).filter(Boolean).slice(0, 50) : [];
+        out.push({
+            id,
+            name,
+            scheduleStart: p.scheduleStart ? String(p.scheduleStart).slice(0, 32) : null,
+            scheduleEnd: p.scheduleEnd ? String(p.scheduleEnd).slice(0, 32) : null,
+            items
+        });
+    }
+    if (!out.some(p => p.id === 'default')) {
+        out.unshift({ id: 'default', name: 'Pagrindinis', scheduleStart: null, scheduleEnd: null, items: [] });
+    }
+    return out;
+}
+
+function isWithinSchedule(startStr, endStr, now = new Date()) {
+    if (startStr) {
+        const s = new Date(startStr);
+        if (!Number.isNaN(s.getTime()) && now < s) return false;
+    }
+    if (endStr) {
+        const e = new Date(endStr);
+        if (!Number.isNaN(e.getTime()) && now > e) return false;
+    }
+    return true;
+}
+
 async function readShowcaseSettings() {
-    const defaults = { enabled: true, intervalSeconds: 4, action: 'fill' };
+    const defaults = {
+        enabled: true,
+        intervalSeconds: 4,
+        action: 'fill',
+        animStyle: 'flip',
+        displayFormat: 'both',
+        activePlaylistId: 'default',
+        playlists: [{ id: 'default', name: 'Pagrindinis', scheduleStart: null, scheduleEnd: null, items: [] }]
+    };
     if (!siteSettingsReady) return defaults;
     try {
         const [rows] = await pool.query('SELECT v FROM site_settings WHERE k = ?', ['showcase']);
-        if (!rows.length) return defaults;
-        const raw = typeof rows[0].v === 'string' ? JSON.parse(rows[0].v) : rows[0].v;
+        const raw = rows.length ? (typeof rows[0].v === 'string' ? JSON.parse(rows[0].v) : rows[0].v) : {};
+        const playlists = sanitizePlaylists(raw?.playlists);
+
+        // Also sync any quizzes marked featured=1 in DB into the default playlist if not in any playlist yet
+        try {
+            const [featRows] = await pool.query('SELECT id FROM quizzes WHERE featured = 1 ORDER BY featured_order ASC, updated_at DESC LIMIT 50');
+            const knownIds = new Set(playlists.flatMap(p => p.items.map(it => it.quizId.toUpperCase())));
+            const defPl = playlists.find(p => p.id === 'default') || playlists[0];
+            for (const r of featRows) {
+                if (!knownIds.has(String(r.id).toUpperCase())) {
+                    defPl.items.push({ quizId: r.id, customLabel: '', scheduleStart: null, scheduleEnd: null, enabled: true });
+                }
+            }
+        } catch {
+            // featured column may not exist yet
+        }
+
+        const activePlaylistId = playlists.some(p => p.id === raw?.activePlaylistId) ? raw.activePlaylistId : playlists[0].id;
         return {
             enabled: raw?.enabled !== false,
             intervalSeconds: toInt(raw?.intervalSeconds, 2, 30, 4),
-            action: raw?.action === 'start' ? 'start' : 'fill'
+            action: raw?.action === 'start' ? 'start' : 'fill',
+            animStyle: ANIM_STYLES.has(raw?.animStyle) ? raw.animStyle : 'flip',
+            displayFormat: DISPLAY_FORMATS.has(raw?.displayFormat) ? raw.displayFormat : 'both',
+            activePlaylistId,
+            playlists
         };
     } catch {
         return defaults;
@@ -433,20 +513,60 @@ app.get('/api/showcase', async (req, res) => {
     try {
         const settings = await readShowcaseSettings();
         if (!settings.enabled) return res.json({ ...settings, quizzes: [] });
-        let rows = [];
+
+        const now = new Date();
+        // Priority 1: a playlist with an explicit schedule window that is currently active
+        let chosen = settings.playlists.find(p =>
+            (p.scheduleStart || p.scheduleEnd) &&
+            p.items.length > 0 &&
+            isWithinSchedule(p.scheduleStart, p.scheduleEnd, now)
+        );
+        // Priority 2: the selected activePlaylistId (if within its schedule window)
+        if (!chosen) {
+            const active = settings.playlists.find(p => p.id === settings.activePlaylistId);
+            if (active && isWithinSchedule(active.scheduleStart, active.scheduleEnd, now)) {
+                chosen = active;
+            }
+        }
+        if (!chosen) return res.json({ ...settings, quizzes: [] });
+
+        const activeItems = chosen.items.filter(it => it.enabled !== false && isWithinSchedule(it.scheduleStart, it.scheduleEnd, now));
+        if (!activeItems.length) return res.json({ ...settings, activePlaylistName: chosen.name, quizzes: [] });
+
+        const ids = activeItems.map(it => it.quizId);
+        let dbMap = new Map();
         try {
-            [rows] = await pool.query(`
+            const [rows] = await pool.query(`
                 SELECT q.id, q.title, u.username AS author
                 FROM quizzes q
                 LEFT JOIN users u ON q.owner_id = u.id
-                WHERE q.featured = 1 AND (q.expires_at IS NULL OR q.expires_at > NOW())
-                ORDER BY q.featured_order ASC, q.updated_at DESC
-                LIMIT 30
-            `);
+                WHERE q.id IN (?) AND (q.expires_at IS NULL OR q.expires_at > NOW())
+            `, [ids]);
+            dbMap = new Map(rows.map(r => [String(r.id).toUpperCase(), r]));
         } catch {
-            // featured column not added yet
+            // fallback
         }
-        res.json({ ...settings, quizzes: rows });
+
+        const quizzes = activeItems.map(it => {
+            const dbQuiz = dbMap.get(String(it.quizId).toUpperCase());
+            return {
+                id: dbQuiz?.id || it.quizId,
+                title: dbQuiz?.title || '',
+                customLabel: it.customLabel || '',
+                author: dbQuiz?.author || ''
+            };
+        });
+
+        res.json({
+            enabled: settings.enabled,
+            intervalSeconds: settings.intervalSeconds,
+            action: settings.action,
+            animStyle: settings.animStyle,
+            displayFormat: settings.displayFormat,
+            activePlaylistId: chosen.id,
+            activePlaylistName: chosen.name,
+            quizzes
+        });
     } catch (error) {
         console.error('[SHOWCASE]', error);
         res.json({ enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] });
@@ -457,10 +577,20 @@ app.put('/api/admin/showcase', authenticateToken, requireAdmin, async (req, res)
     try {
         const current = await readShowcaseSettings();
         const body = req.body || {};
+        const playlists = body.playlists !== undefined ? sanitizePlaylists(body.playlists) : current.playlists;
+        const activePlaylistId = playlists.some(p => p.id === body.activePlaylistId)
+            ? body.activePlaylistId
+            : playlists.some(p => p.id === current.activePlaylistId)
+                ? current.activePlaylistId
+                : playlists[0].id;
         const next = {
             enabled: body.enabled !== undefined ? Boolean(body.enabled) : current.enabled,
             intervalSeconds: body.intervalSeconds !== undefined ? toInt(body.intervalSeconds, 2, 30, 4) : current.intervalSeconds,
-            action: body.action === 'start' ? 'start' : body.action === 'fill' ? 'fill' : current.action
+            action: body.action === 'start' ? 'start' : body.action === 'fill' ? 'fill' : current.action,
+            animStyle: ANIM_STYLES.has(body.animStyle) ? body.animStyle : current.animStyle,
+            displayFormat: DISPLAY_FORMATS.has(body.displayFormat) ? body.displayFormat : current.displayFormat,
+            activePlaylistId,
+            playlists
         };
         if (siteSettingsReady) {
             await pool.query(
@@ -468,12 +598,15 @@ app.put('/api/admin/showcase', authenticateToken, requireAdmin, async (req, res)
                 ['showcase', JSON.stringify(next)]
             );
         }
-        const orderList = Array.isArray(body.featured_order) ? body.featured_order : Array.isArray(body.order) ? body.order : null;
-        if (orderList) {
-            const ids = orderList.map(x => String(x || '').trim()).filter(id => QUIZ_ID_RE.test(id)).slice(0, 50);
-            for (let i = 0; i < ids.length; i++) {
-                await pool.query('UPDATE quizzes SET featured_order = ?, updated_at = updated_at WHERE id = ?', [i + 1, ids[i]]);
+        // Sync quizzes.featured with all quiz IDs present across playlists
+        const allFeaturedIds = [...new Set(playlists.flatMap(p => p.items.map(it => it.quizId)))];
+        try {
+            await pool.query('UPDATE quizzes SET featured = 0, updated_at = updated_at WHERE featured = 1');
+            for (let i = 0; i < allFeaturedIds.length; i++) {
+                await pool.query('UPDATE quizzes SET featured = 1, featured_order = ?, updated_at = updated_at WHERE id = ?', [i + 1, allFeaturedIds[i]]);
             }
+        } catch {
+            // featured column may not exist yet
         }
         res.json(next);
     } catch (error) {
@@ -496,22 +629,99 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
             SELECT COUNT(*) AS total,
                    SUM(visibility = 'public') AS public_quizzes,
                    SUM(visibility = 'private') AS private_quizzes,
-                   COALESCE(SUM(featured = 1), 0) AS featured_quizzes
+                   COALESCE(SUM(featured = 1), 0) AS featured_quizzes,
+                   COALESCE(SUM(storage_bytes), 0) AS storage_bytes
             FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
         `).catch(async () => {
             const [[fallback]] = await pool.query(`
                 SELECT COUNT(*) AS total,
                        SUM(visibility = 'public') AS public_quizzes,
                        SUM(visibility = 'private') AS private_quizzes,
-                       0 AS featured_quizzes
+                       0 AS featured_quizzes,
+                       COALESCE(SUM(storage_bytes), 0) AS storage_bytes
                 FROM quizzes WHERE expires_at IS NULL OR expires_at > NOW()
             `);
             return [fallback];
         });
         let totalAttempts = 0;
+        const analytics = {
+            attemptsToday: 0,
+            attempts7d: 0,
+            avgScorePct: null,
+            avgDurationSec: null,
+            storageBytes: Number(quizCounts?.storage_bytes || 0),
+            dailyAttempts: [],
+            topQuizzes: [],
+            recentAttempts: []
+        };
         if (attemptsReady) {
-            const [[att]] = await pool.query('SELECT COUNT(*) AS cnt FROM quiz_attempts');
+            const [[att]] = await pool.query(`
+                SELECT COUNT(*) AS cnt,
+                       COALESCE(SUM(created_at >= NOW() - INTERVAL 1 DAY), 0) AS today,
+                       COALESCE(SUM(created_at >= NOW() - INTERVAL 7 DAY), 0) AS week,
+                       ROUND(AVG(CASE WHEN max_score > 0 THEN (score / max_score) * 100 ELSE NULL END)) AS avg_pct,
+                       ROUND(AVG(NULLIF(duration_seconds, 0))) AS avg_dur
+                FROM quiz_attempts
+            `);
             totalAttempts = Number(att?.cnt || 0);
+            analytics.attemptsToday = Number(att?.today || 0);
+            analytics.attempts7d = Number(att?.week || 0);
+            analytics.avgScorePct = att?.avg_pct != null ? Number(att.avg_pct) : null;
+            analytics.avgDurationSec = att?.avg_dur != null ? Number(att.avg_dur) : null;
+
+            const [dailyRows] = await pool.query(`
+                SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS d, COUNT(*) AS cnt
+                FROM quiz_attempts
+                WHERE created_at >= CURDATE() - INTERVAL 13 DAY
+                GROUP BY d
+                ORDER BY d ASC
+            `).catch(() => [[]]);
+            const byDay = new Map(dailyRows.map(r => [r.d, Number(r.cnt || 0)]));
+            const today = new Date();
+            for (let i = 13; i >= 0; i--) {
+                const dt = new Date(today);
+                dt.setDate(today.getDate() - i);
+                const key = dt.toISOString().slice(0, 10);
+                analytics.dailyAttempts.push({ date: key, count: byDay.get(key) || 0 });
+            }
+
+            const [topRows] = await pool.query(`
+                SELECT q.id, q.title, u.username AS author,
+                       COUNT(a.id) AS attempts,
+                       ROUND(AVG(CASE WHEN a.max_score > 0 THEN (a.score / a.max_score) * 100 ELSE NULL END)) AS avg_pct
+                FROM quiz_attempts a
+                JOIN quizzes q ON q.id = a.quiz_id
+                LEFT JOIN users u ON u.id = q.owner_id
+                GROUP BY q.id
+                ORDER BY attempts DESC
+                LIMIT 5
+            `).catch(() => [[]]);
+            analytics.topQuizzes = topRows.map(r => ({
+                id: r.id,
+                title: r.title,
+                author: r.author,
+                attempts: Number(r.attempts || 0),
+                avgPct: r.avg_pct != null ? Number(r.avg_pct) : null
+            }));
+
+            const [recRows] = await pool.query(`
+                SELECT a.id, a.quiz_id, q.title AS quiz_title, a.student_name,
+                       a.score, a.max_score, a.duration_seconds, a.created_at
+                FROM quiz_attempts a
+                LEFT JOIN quizzes q ON q.id = a.quiz_id
+                ORDER BY a.created_at DESC
+                LIMIT 6
+            `).catch(() => [[]]);
+            analytics.recentAttempts = recRows.map(r => ({
+                id: r.id,
+                quizId: r.quiz_id,
+                quizTitle: r.quiz_title,
+                studentName: r.student_name,
+                score: Number(r.score || 0),
+                maxScore: Number(r.max_score || 0),
+                durationSeconds: Number(r.duration_seconds || 0),
+                createdAt: r.created_at
+            }));
         }
         let bankStats = { published: 0, pendingReview: 0, openReports: 0 };
         try {
@@ -548,7 +758,8 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                 attempts: totalAttempts
             },
             bank: bankStats,
-            showcase
+            showcase,
+            analytics
         });
     } catch (error) {
         console.error('[ADMIN OVERVIEW]', error);
@@ -715,6 +926,23 @@ app.patch('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req,
             await pool.query(
                 'UPDATE quizzes SET visibility = ?, featured = ?, featured_order = ?, updated_at = updated_at WHERE id = ?',
                 [nextVis, nextFeat, nextOrder, quiz.id]
+            );
+        }
+        if (siteSettingsReady && body.featured !== undefined) {
+            const current = await readShowcaseSettings();
+            if (!nextFeat) {
+                for (const pl of current.playlists) {
+                    pl.items = pl.items.filter(it => String(it.quizId).toUpperCase() !== String(quiz.id).toUpperCase());
+                }
+            } else {
+                const targetPl = current.playlists.find(p => p.id === current.activePlaylistId) || current.playlists[0];
+                if (!targetPl.items.some(it => String(it.quizId).toUpperCase() === String(quiz.id).toUpperCase())) {
+                    targetPl.items.push({ quizId: quiz.id, customLabel: '', scheduleStart: null, scheduleEnd: null, enabled: true });
+                }
+            }
+            await pool.query(
+                'INSERT INTO site_settings (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)',
+                ['showcase', JSON.stringify(current)]
             );
         }
         res.json({ id: quiz.id, visibility: nextVis, featured: Boolean(nextFeat), featured_order: nextOrder });
