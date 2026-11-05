@@ -6,6 +6,7 @@
     --text: #1F2937;
     --accent: #1B9B7E;
     --accent-strong: #168F6F;
+    --accent-2: #22C997;
     --danger: #f87171;
     --success: #34d399;
     --muted: #6B7280;
@@ -1601,13 +1602,27 @@ body {
     top: 15px;
     left: 20px;
     height: 40px;
+    width: auto;
+    display: block;
+    fill: url(#app-logo-grad);
+    color: var(--accent);
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.2s;
+    transition: opacity 0.2s, transform 0.2s, color 0.4s ease;
     z-index: 1001;
 }
 
+#app-logo .logo-stop-1 {
+    stop-color: var(--logo-color-1, var(--accent));
+    transition: stop-color 0.4s ease;
+}
+
+#app-logo .logo-stop-2 {
+    stop-color: var(--logo-color-2, var(--accent-2, var(--accent)));
+    transition: stop-color 0.4s ease;
+}
+
 #app-logo:hover {
-    opacity: 0.8;
+    opacity: 0.85;
     transform: scale(1.05);
 }
 
