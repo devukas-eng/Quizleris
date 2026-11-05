@@ -41,7 +41,7 @@ const COOKIES_TEXT = `
 <p>Quizleris uses HTML5 <code>localStorage</code> instead of traditional cookies. This allows us to save your:</p>
 <ul>
 <li>High Scores</li>
-<li>Current Theme (Light/Dark mode)</li>
+<li>Current theme and any themes you create</li>
 <li>Custom created quizzes</li>
 </ul>
 <p>without ever sending this data to a remote server.</p>

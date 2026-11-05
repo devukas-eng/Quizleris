@@ -287,9 +287,62 @@ export function themeCss(theme) {
 /** Inline style for an element that previews a theme without touching the page */
 export function previewStyle(theme) {
     const tokens = deriveTokens(theme);
+    // A fixed background would follow the viewport, not the small preview
+    tokens["--bg-grad"] = tokens["--bg-grad"].replace(/\) fixed,/g, "),");
     return ["--bg", "--panel", "--text", "--muted", "--accent", "--accent-2", "--on-accent", "--radius",
-        "--font", "--bg-grad", "--app-bg", "--border-color", "--card-bg", "--btn-bg", "--surface-solid"]
+        "--font", "--bg-grad", "--app-bg", "--border-color", "--card-bg", "--btn-bg", "--surface-solid", "--shadow"]
         .map(k => `${k}: ${tokens[k]}`).join("; ");
+}
+
+function hsl(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return hex([f(0) * 255, f(8) * 255, f(4) * 255]);
+}
+
+/** The same accents on a light or dark base, with background, cards and text to match */
+export function withBase(theme, base) {
+    const next = clone(theme);
+    const a = next.colors.accent;
+    next.base = base;
+    if (base === "dark") {
+        next.colors.bg = mix(a, "#000000", 0.9);
+        next.colors.surface = mix(a, "#000000", 0.8);
+        next.colors.text = mix(a, "#ffffff", 0.92);
+        next.glass = 84;
+    } else {
+        next.colors.bg = mix(a, "#ffffff", 0.95);
+        next.colors.surface = "#ffffff";
+        next.colors.text = mix(a, "#000000", 0.85);
+        next.glass = 94;
+    }
+    return next;
+}
+
+/** A fresh random palette and shape on the given base */
+export function randomTheme(base, rand = Math.random) {
+    const dark = base === "dark";
+    const h = Math.floor(rand() * 360);
+    const pick = list => list[Math.floor(rand() * list.length)];
+    const theme = withBase({
+        base,
+        colors: {
+            bg: "#000000", surface: "#000000", text: "#000000",
+            accent: hsl(h, 65 + rand() * 25, dark ? 60 : 40),
+            accent2: hsl((h + 30 + rand() * 60) % 360, 75, dark ? 62 : 50),
+            danger: dark ? "#f87171" : "#dc2626",
+            success: dark ? "#4ade80" : "#16a34a",
+        },
+    }, base);
+    return {
+        ...theme,
+        radius: pick([4, 8, 12, 16, 20]),
+        font: pick(Object.keys(FONTS)),
+        effect: { kind: pick(EFFECTS), strength: Math.round(30 + rand() * 50) },
+        shadow: 50,
+    };
 }
 
 /** Two-tone swatch used for picker bubbles */

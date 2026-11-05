@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     THEMES, deriveTokens, themeCss, contrastRatio, textOn, readability, fixReadability,
     sanitizeTheme, encodeShareCode, decodeShareCode, upsertCustomTheme, loadCustomThemes,
-    deleteCustomTheme, findTheme, applyTheme, copyTheme, MAX_CUSTOM_THEMES, CUSTOM_THEMES_KEY,
+    deleteCustomTheme, findTheme, applyTheme, copyTheme, withBase, randomTheme, MAX_CUSTOM_THEMES,
+    CUSTOM_THEMES_KEY,
 } from '../src/themes.js';
 
 // Every token the stylesheet reads from a theme
@@ -96,6 +97,19 @@ describe('themes', () => {
         expect(loadCustomThemes()).toHaveLength(1);
         localStorage.setItem(CUSTOM_THEMES_KEY, '{not json');
         expect(loadCustomThemes()).toEqual([]);
+    });
+
+    it('keeps random palettes and base switches readable', () => {
+        let seed = 7;
+        const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        for (let i = 0; i < 200; i++) {
+            const base = i % 2 ? 'dark' : 'light';
+            const theme = sanitizeTheme({ ...randomTheme(base, rand), name: 'x' });
+            expect(theme, `random ${i}`).not.toBeNull();
+            expect(readability(theme).ok, `random ${i}`).toBe(true);
+            const flipped = sanitizeTheme(withBase(theme, base === 'dark' ? 'light' : 'dark'));
+            expect(readability(flipped).text, `flipped ${i}`).toBeGreaterThanOrEqual(4.5);
+        }
     });
 
     it('copies a built-in theme into an editable one', () => {
