@@ -7,11 +7,8 @@ import {
     createInvites,
     deleteInvite,
     fetchAdminOverview,
-    fetchAdminQuizzes,
-    updateAdminQuiz,
     updateAdminUser,
     deleteAdminUser,
-    updateShowcaseSettings,
 } from "./api.js";
 import {
     fetchMeta as fetchBankMeta,
@@ -28,20 +25,19 @@ import { t, getLanguage } from "./lang.js";
 import { confirmDialog, alertDialog } from "./dialog.js";
 import { shareStripHtml, wireCopyButtons } from "./share-links.js";
 import { initGlide } from "./glide.js";
+import { skeletonHtml } from "./dom.js";
+import { renderQuizBrowser } from "./admin-quiz-browser.js";
+import { renderShowcase, stopShowcase } from "./admin-showcase.js";
 
 let dashboardModal = null;
 let activeAdminTab = "overview";
-let showcasePreviewTimer = null;
 
 // Cached admin state for fast tab switching within a session
 let adminState = {
     profile: null,
     overview: null,
-    allQuizzes: null,
     users: null,
     bankMeta: null,
-    quizSearch: "",
-    quizFilter: "all",
     userSearch: "",
     userRoleFilter: "all",
     bankFilter: {
@@ -71,10 +67,7 @@ export function initDashboardUI() {
     dashboardModal = document.getElementById("dashboard-modal");
 
     const closeDashboard = () => {
-        if (showcasePreviewTimer) {
-            clearInterval(showcasePreviewTimer);
-            showcasePreviewTimer = null;
-        }
+        stopShowcase();
         dashboardModal.style.display = "none";
     };
     document.getElementById("dashboard-modal-close-btn").addEventListener("click", closeDashboard);
@@ -92,6 +85,18 @@ export function initDashboardUI() {
         closeDashboard();
     });
 
+    // Results open inside the app, and their back button returns here. Opening one in a new tab
+    // (Ctrl/Cmd-click, middle click) still works as a plain link, and so does one clicked during a
+    // quiz: loading the page is what ends that quiz and records the attempt.
+    dashboardModal.addEventListener("click", (e) => {
+        const link = e.target.closest("a.dash-results");
+        if (!link || e.ctrlKey || e.metaKey || e.shiftKey || document.body.classList.contains("quiz-page")) return;
+        e.preventDefault();
+        closeDashboard();
+        const quizId = new URL(link.href).searchParams.get("dashboard");
+        document.dispatchEvent(new window.CustomEvent("open-results", { detail: { quizId } }));
+    });
+
     document.addEventListener("open-dashboard", () => {
         if (!getCurrentUser()) {
             showAuthModal();
@@ -106,8 +111,14 @@ async function renderDashboard() {
     const body = document.getElementById("dashboard-body");
     const cachedUser = getCurrentUser();
     setHeader(cachedUser.role);
-    body.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
 
+    // An admin coming back finds the page as it was while it refreshes; otherwise placeholders
+    // hold the window's shape until the data is in
+    const returning = cachedUser.role === "admin" && adminState.profile;
+    if (returning) renderAdminWorkspace(body);
+    else body.innerHTML = skeletonHtml(6);
+
+    const overviewRequest = cachedUser.role === "admin" ? fetchAdminOverview().catch(() => null) : null;
     let profile;
     try {
         profile = await fetchProfile();
@@ -124,15 +135,10 @@ async function renderDashboard() {
 
     if (user.role === "admin") {
         adminState.profile = profile;
-        adminState.overview = null;
-        adminState.allQuizzes = null;
         adminState.users = null;
-        try {
-            adminState.overview = await fetchAdminOverview();
-        } catch {
-            adminState.overview = null;
-        }
-        renderAdminWorkspace(body);
+        adminState.overview = (await (overviewRequest || fetchAdminOverview().catch(() => null))) ?? adminState.overview;
+        if (!returning || ["overview", "analytics", "mine"].includes(activeAdminTab)) renderAdminWorkspace(body);
+        else updateAdminTabBadges();
         return;
     }
 
@@ -140,10 +146,10 @@ async function renderDashboard() {
     wireQuizCardEvents(body);
 }
 
-function wireQuizCardEvents(container) {
+function wireQuizCardEvents(container, onDeleted = renderDashboard) {
     wireCopyButtons(container);
     initGlide(container);
-    container.querySelector("#dashboard-create-btn")?.addEventListener("click", () => openEditor());
+    container.querySelector("#dashboard-create-btn")?.addEventListener("click", createQuiz);
     container.querySelectorAll("[data-edit-quiz]").forEach(btn => {
         btn.addEventListener("click", () => openEditor(btn.dataset.editQuiz));
     });
@@ -163,11 +169,8 @@ function wireQuizCardEvents(container) {
                 await alertDialog(t("profile.loadError"), result.error);
                 return;
             }
-            if (adminState.allQuizzes) {
-                adminState.allQuizzes = adminState.allQuizzes.filter(q => q.id !== btn.dataset.deleteQuiz);
-            }
             document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
-            renderDashboard();
+            onDeleted();
         });
     });
 }
@@ -184,10 +187,7 @@ function setHeader(role) {
 // --- Admin Multi-Tab Workspace ---
 
 function switchAdminTab(tab) {
-    if (showcasePreviewTimer) {
-        clearInterval(showcasePreviewTimer);
-        showcasePreviewTimer = null;
-    }
+    stopShowcase();
     activeAdminTab = tab;
     const body = document.getElementById("dashboard-body");
     if (body && adminState.profile) {
@@ -210,6 +210,7 @@ function renderAdminWorkspace(body) {
         { id: "mine", icon: "📝", label: t("adminGui.tabMyQuizzes"), badge: adminState.profile?.quizzes?.length ?? null },
     ];
 
+    stopShowcase();
     body.innerHTML = `
         <nav class="dash-admin-tabs" role="tablist" aria-label="${escapeHtml(t("profile.adminTitle"))}">
             ${tabs.map(tab => `
@@ -234,8 +235,20 @@ function renderAdminWorkspace(body) {
     else if (activeAdminTab === "reports") renderAdminReportsTab(panel);
     else if (activeAdminTab === "bank") renderAdminBankTab(panel);
     else if (activeAdminTab === "mine") renderAdminMyQuizzesTab(panel);
-    else if (activeAdminTab === "quizzes") renderAdminAllQuizzesTab(panel);
-    else if (activeAdminTab === "showcase") renderAdminShowcaseTab(panel);
+    else if (activeAdminTab === "quizzes") renderQuizBrowser(panel, {
+        wireCards: wireQuizCardEvents,
+        createQuiz,
+        formatDate,
+        onCountsChange: refreshOverviewBadges,
+    });
+    else if (activeAdminTab === "showcase") renderShowcase(panel, {
+        settings: adminState.overview?.showcase,
+        onSaved(showcase) {
+            if (!adminState.overview) adminState.overview = {};
+            adminState.overview.showcase = showcase;
+            refreshOverviewBadges();
+        },
+    });
     else if (activeAdminTab === "users") renderAdminUsers(panel);
     else if (activeAdminTab === "invites") {
         panel.innerHTML = `<section class="dash-section dash-invites" id="dash-invites"></section>`;
@@ -765,7 +778,7 @@ function typesetMath(el) {
 }
 
 async function renderAdminApprovalsTab(panel) {
-    panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+    panel.innerHTML = skeletonHtml(5);
     const [meta, listRes] = await Promise.all([
         ensureBankMeta(),
         listBankItems({ review: 1, sort: "new", limit: 100, facets: "none" }),
@@ -862,7 +875,7 @@ async function renderAdminApprovalsTab(panel) {
 }
 
 async function renderAdminReportsTab(panel) {
-    panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+    panel.innerHTML = skeletonHtml(5);
     const [meta, listRes] = await Promise.all([
         ensureBankMeta(),
         listBankItems({ flagged: 1, sort: "new", limit: 100, facets: "none" }),
@@ -968,6 +981,7 @@ async function renderAdminReportsTab(panel) {
 }
 
 async function renderAdminBankTab(panel) {
+    panel.innerHTML = skeletonHtml(5);
     const meta = await ensureBankMeta();
     const bf = adminState.bankFilter;
 
@@ -1001,7 +1015,7 @@ async function renderAdminBankTab(panel) {
                     <option value="level" ${bf.sort === "level" ? "selected" : ""}>${escapeHtml(t("bank.sort.level"))}</option>
                 </select>
             </div>
-            <div id="dash-bank-results" class="dash-bank-list"><p class="dash-muted">${t("profile.loading")}</p></div>
+            <div id="dash-bank-results" class="dash-bank-list">${skeletonHtml(5)}</div>
         </section>
     `;
 
@@ -1009,7 +1023,7 @@ async function renderAdminBankTab(panel) {
     const totalEl = panel.querySelector("#dash-bank-total");
 
     const loadList = async () => {
-        resultsEl.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+        resultsEl.innerHTML = skeletonHtml(5);
         const res = await listBankItems({
             q: bf.q.trim() || undefined,
             subject: bf.subject || undefined,
@@ -1134,217 +1148,13 @@ function renderAdminMyQuizzesTab(panel) {
     wireQuizCardEvents(panel);
 }
 
-function classifyQuizSector(q) {
-    const isTeacher = q.owner_id != null || Boolean(q.author);
-    const myId = adminState.profile?.user?.id;
-    const isMine = myId != null && Number(q.owner_id) === Number(myId);
-    const isPremade = !isTeacher;
-    const rawCat = String(q.category || "").toLowerCase();
-    const idLower = String(q.id || "").toLowerCase();
-    let premadeCat = "math";
-    if (rawCat === "cs" || /\b(cs|sql|python|javascript|js|html|git|algo)\b/.test(idLower)) {
-        premadeCat = "cs";
-    } else if (rawCat === "lang" || /\b(lang|trivia|geo|hist|eng|kalb|lit)\b/.test(idLower)) {
-        premadeCat = "lang";
+async function refreshOverviewBadges() {
+    try {
+        adminState.overview = await fetchAdminOverview();
+        updateAdminTabBadges();
+    } catch {
+        // The badges keep their numbers until the next refresh
     }
-    return { isTeacher, isMine, isPremade, premadeCat };
-}
-
-function matchesQuizSector(q, sector) {
-    const c = classifyQuizSector(q);
-    if (sector === "teachers") return c.isTeacher;
-    if (sector === "mine") return c.isMine;
-    if (sector === "premade") return c.isPremade;
-    if (sector === "math") return c.isPremade && c.premadeCat === "math";
-    if (sector === "cs") return c.isPremade && c.premadeCat === "cs";
-    if (sector === "lang") return c.isPremade && c.premadeCat === "lang";
-    if (sector === "featured") return Boolean(q.featured);
-    if (sector === "public") return q.visibility === "public";
-    if (sector === "private") return q.visibility !== "public";
-    return true;
-}
-
-function toLocalDatetimeValue(date) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function formatScheduleForInput(str) {
-    if (!str) return "";
-    const d = new Date(str);
-    if (Number.isNaN(d.getTime())) return String(str).slice(0, 16);
-    return toLocalDatetimeValue(d);
-}
-
-function parseInputToIso(val) {
-    if (!val) return "";
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toISOString();
-}
-
-async function renderAdminAllQuizzesTab(panel) {
-    if (!adminState.allQuizzes) {
-        panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
-        try {
-            adminState.allQuizzes = await fetchAdminQuizzes();
-        } catch (e) {
-            panel.innerHTML = `<p class="dash-muted">${escapeHtml(e.message)}</p>`;
-            return;
-        }
-    }
-
-    const all = adminState.allQuizzes;
-    const countAll = all.length;
-    const countTeachers = all.filter(q => matchesQuizSector(q, "teachers")).length;
-    const countMine = all.filter(q => matchesQuizSector(q, "mine")).length;
-    const countPremade = all.filter(q => matchesQuizSector(q, "premade")).length;
-    const countFeatured = all.filter(q => q.featured).length;
-    const countPublic = all.filter(q => q.visibility === "public").length;
-    const countPrivate = all.filter(q => q.visibility !== "public").length;
-
-    panel.innerHTML = `
-        <section class="dash-section">
-            <div class="dash-section-head">
-                <h3>${escapeHtml(t("adminGui.allQuizzesTitle"))} <span class="dash-muted">(${countAll})</span></h3>
-                <button id="dashboard-create-btn" class="btn btn-primary">+ ${t("profile.createQuiz")}</button>
-            </div>
-            <div class="dash-filter-bar">
-                <input type="search" id="dash-quiz-search" class="input-field dash-search-input" placeholder="${escapeHtml(t("adminGui.searchQuizzes"))}" value="${escapeHtml(adminState.quizSearch)}">
-                <div class="dash-filter-chips" role="group">
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "all" ? " is-active" : ""}" data-qfilter="all">${escapeHtml(t("adminGui.sectorAll"))} <span>${countAll}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "teachers" ? " is-active" : ""}" data-qfilter="teachers">${escapeHtml(t("adminGui.sectorTeachers"))} <span>${countTeachers}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "mine" ? " is-active" : ""}" data-qfilter="mine">${escapeHtml(t("adminGui.sectorMine"))} <span>${countMine}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "premade" ? " is-active" : ""}" data-qfilter="premade">${escapeHtml(t("adminGui.sectorPremade"))} <span>${countPremade}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "featured" ? " is-active" : ""}" data-qfilter="featured">${escapeHtml(t("adminGui.filterFeatured"))} <span>${countFeatured}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "public" ? " is-active" : ""}" data-qfilter="public">${escapeHtml(t("adminGui.filterPublic"))} <span>${countPublic}</span></button>
-                    <button type="button" class="dash-filter-chip${adminState.quizFilter === "private" ? " is-active" : ""}" data-qfilter="private">${escapeHtml(t("adminGui.filterPrivate"))} <span>${countPrivate}</span></button>
-                </div>
-            </div>
-            <div id="dash-all-quizzes-list" class="dash-quiz-list"></div>
-        </section>
-    `;
-
-    const searchInput = panel.querySelector("#dash-quiz-search");
-    const listEl = panel.querySelector("#dash-all-quizzes-list");
-
-    const drawList = () => {
-        const qStr = adminState.quizSearch.trim().toLowerCase();
-        const filtered = adminState.allQuizzes.filter(q => {
-            if (!matchesQuizSector(q, adminState.quizFilter)) return false;
-            if (!qStr) return true;
-            return (
-                (q.title || "").toLowerCase().includes(qStr) ||
-                (q.id || "").toLowerCase().includes(qStr) ||
-                (q.author || "").toLowerCase().includes(qStr) ||
-                (q.author_email || "").toLowerCase().includes(qStr)
-            );
-        });
-
-        if (filtered.length === 0) {
-            listEl.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("adminGui.noQuizzesMatch"))}</p></div>`;
-            return;
-        }
-
-        listEl.innerHTML = filtered.map(q => {
-            const isPublic = q.visibility === "public";
-            const sec = classifyQuizSector(q);
-            const authorLabel = q.author
-                ? t("adminGui.byAuthor").replace("{author}", q.author)
-                : sec.premadeCat === "cs" ? t("adminGui.sectorCs")
-                : sec.premadeCat === "lang" ? t("adminGui.sectorLang")
-                : t("adminGui.sectorMath");
-            return `
-                <div class="dash-quiz" data-glide>
-                    <div class="dash-quiz-main">
-                        <div class="dash-quiz-title-row">
-                            <button type="button" class="dash-star-btn${q.featured ? " is-active" : ""}" data-feature-quiz="${escapeHtml(q.id)}" title="${escapeHtml(t("adminGui.featureToggle"))}" aria-label="${escapeHtml(t("adminGui.featureToggle"))}" aria-pressed="${Boolean(q.featured)}">★</button>
-                            <div class="dash-quiz-title">${escapeHtml(q.title || "—")}</div>
-                            ${q.featured ? `<span class="dash-chip featured">⭐ ${escapeHtml(t("adminGui.featuredBadge"))}</span>` : ""}
-                        </div>
-                        <div class="dash-quiz-meta">
-                            <button type="button" class="dash-chip dash-chip-btn ${isPublic ? "public" : "private"}" data-toggle-vis="${escapeHtml(q.id)}" title="${escapeHtml(t("adminGui.toggleVisibility"))}">${isPublic ? t("profile.public") : t("profile.private")}</button>
-                            <span class="dash-muted">${escapeHtml(t("adminGui.questionsCount").replace("{n}", q.question_count ?? 0))}</span>
-                            <span class="dash-muted">· ${escapeHtml(authorLabel)}</span>
-                            <span class="dash-muted">· ${t("profile.updated")} ${escapeHtml(formatDate(q.updated_at || q.created_at))}</span>
-                        </div>
-                    </div>
-                    <div class="dash-quiz-actions">
-                        <a class="btn btn-secondary dash-results" href="/?dashboard=${encodeURIComponent(q.id)}">📊 ${t("results.open")}${q.attempts ? ` <span class="dash-count">${q.attempts}</span>` : ""}</a>
-                        <button class="btn btn-secondary" data-edit-quiz="${escapeHtml(q.id)}">${t("profile.edit")}</button>
-                        <button class="btn btn-secondary btn-icon dash-delete" data-delete-quiz="${escapeHtml(q.id)}" data-title="${escapeHtml(q.title || "")}" title="${t("profile.delete")}" aria-label="${t("profile.delete")}">🗑</button>
-                    </div>
-                    ${shareStripHtml(q)}
-                </div>
-            `;
-        }).join("");
-
-        wireQuizCardEvents(listEl);
-
-        listEl.querySelectorAll("[data-feature-quiz]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const qId = btn.dataset.featureQuiz;
-                const item = adminState.allQuizzes.find(x => x.id === qId);
-                if (!item) return;
-                btn.disabled = true;
-                const nextFeatured = !item.featured;
-                const res = await updateAdminQuiz(qId, {
-                    featured: nextFeatured,
-                    featured_order: nextFeatured ? Date.now() % 100000 : 0
-                });
-                btn.disabled = false;
-                if (!res.ok) {
-                    await alertDialog(t("profile.loadError"), res.data?.error || "");
-                    return;
-                }
-                item.featured = nextFeatured;
-                try {
-                    adminState.overview = await fetchAdminOverview();
-                } catch {
-                    if (adminState.overview?.quizzes) {
-                        adminState.overview.quizzes.featured = adminState.allQuizzes.filter(x => x.featured).length;
-                    }
-                }
-                document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
-                renderAdminAllQuizzesTab(panel);
-                updateAdminTabBadges();
-            });
-        });
-
-        listEl.querySelectorAll("[data-toggle-vis]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const qId = btn.dataset.toggleVis;
-                const item = adminState.allQuizzes.find(x => x.id === qId);
-                if (!item) return;
-                btn.disabled = true;
-                const nextVis = item.visibility === "public" ? "private" : "public";
-                const res = await updateAdminQuiz(qId, { visibility: nextVis });
-                btn.disabled = false;
-                if (!res.ok) {
-                    await alertDialog(t("profile.loadError"), res.data?.error || "");
-                    return;
-                }
-                item.visibility = nextVis;
-                renderAdminAllQuizzesTab(panel);
-            });
-        });
-    };
-
-    searchInput.addEventListener("input", () => {
-        adminState.quizSearch = searchInput.value;
-        drawList();
-    });
-
-    panel.querySelectorAll("[data-qfilter]").forEach(chip => {
-        chip.addEventListener("click", () => {
-            adminState.quizFilter = chip.dataset.qfilter;
-            panel.querySelectorAll("[data-qfilter]").forEach(c => c.classList.toggle("is-active", c === chip));
-            drawList();
-        });
-    });
-
-    panel.querySelector("#dashboard-create-btn")?.addEventListener("click", () => openEditor());
-    drawList();
 }
 
 function updateAdminTabBadges() {
@@ -1354,742 +1164,11 @@ function updateAdminTabBadges() {
         const el = body.querySelector(`[data-admin-tab="${tabId}"] .dash-admin-tab-badge`);
         if (el && val != null) el.textContent = String(val);
     };
-    const featCount = adminState.allQuizzes
-        ? adminState.allQuizzes.filter(q => q.featured).length
-        : adminState.overview?.quizzes?.featured;
-    setBadge("showcase", featCount);
+    setBadge("quizzes", adminState.overview?.quizzes?.total);
+    setBadge("showcase", adminState.overview?.quizzes?.featured);
     setBadge("approvals", adminState.overview?.bank?.pendingReview);
     setBadge("reports", adminState.overview?.bank?.openReports);
     setBadge("bank", adminState.overview?.bank?.published);
-}
-
-function getItemScheduleState(item) {
-    if (item.enabled === false) {
-        return { cls: "is-paused", label: t("adminGui.showcaseStatusPaused") };
-    }
-    const now = Date.now();
-    if (item.scheduleStart) {
-        const s = Date.parse(item.scheduleStart);
-        if (!Number.isNaN(s) && now < s) {
-            return { cls: "is-scheduled", label: t("adminGui.showcaseStatusScheduled") };
-        }
-    }
-    if (item.scheduleEnd) {
-        const e = Date.parse(item.scheduleEnd);
-        if (!Number.isNaN(e) && now > e) {
-            return { cls: "is-ended", label: t("adminGui.showcaseStatusEnded") };
-        }
-    }
-    return { cls: "is-active", label: t("adminGui.showcaseStatusActive") };
-}
-
-function normalizeShowcaseConfig(rawCfg, allQuizzes) {
-    const cfg = rawCfg && typeof rawCfg === "object" ? rawCfg : {};
-    const featured = (allQuizzes || [])
-        .filter(q => q.featured)
-        .sort((a, b) => (a.featured_order || 0) - (b.featured_order || 0));
-
-    let playlists = Array.isArray(cfg.playlists) && cfg.playlists.length > 0
-        ? cfg.playlists.map(pl => ({
-            id: String(pl.id || "default"),
-            name: String(pl.name || t("adminGui.showcaseDefaultPlaylist")),
-            scheduleStart: pl.scheduleStart ? String(pl.scheduleStart).slice(0, 36) : "",
-            scheduleEnd: pl.scheduleEnd ? String(pl.scheduleEnd).slice(0, 36) : "",
-            items: Array.isArray(pl.items) ? pl.items.map(it => ({
-                quizId: String(it.quizId || it.id || "").trim().toUpperCase(),
-                customLabel: String(it.customLabel || ""),
-                scheduleStart: it.scheduleStart ? String(it.scheduleStart).slice(0, 36) : "",
-                scheduleEnd: it.scheduleEnd ? String(it.scheduleEnd).slice(0, 36) : "",
-                enabled: it.enabled !== false,
-            })).filter(it => it.quizId) : [],
-        }))
-        : [{
-            id: "default",
-            name: t("adminGui.showcaseDefaultPlaylist"),
-            scheduleStart: "",
-            scheduleEnd: "",
-            items: featured.map(q => ({
-                quizId: q.id,
-                customLabel: "",
-                scheduleStart: "",
-                scheduleEnd: "",
-                enabled: true,
-            })),
-        }];
-
-    if (playlists.length === 0) {
-        playlists = [{
-            id: "default",
-            name: t("adminGui.showcaseDefaultPlaylist"),
-            scheduleStart: "",
-            scheduleEnd: "",
-            items: [],
-        }];
-    }
-
-    const activePlaylistId = playlists.some(p => p.id === cfg.activePlaylistId)
-        ? cfg.activePlaylistId
-        : playlists[0].id;
-
-    return {
-        enabled: cfg.enabled !== false,
-        intervalSeconds: Math.max(2, Math.min(30, Number(cfg.intervalSeconds) || 4)),
-        action: cfg.action === "start" ? "start" : "fill",
-        animStyle: ["flip", "slide", "typewriter", "fade"].includes(cfg.animStyle) ? cfg.animStyle : "flip",
-        displayFormat: ["both", "code", "label"].includes(cfg.displayFormat) ? cfg.displayFormat : "both",
-        activePlaylistId,
-        playlists,
-    };
-}
-
-async function renderAdminShowcaseTab(panel) {
-    if (showcasePreviewTimer) {
-        clearInterval(showcasePreviewTimer);
-        showcasePreviewTimer = null;
-    }
-
-    if (!adminState.allQuizzes) {
-        panel.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
-        try {
-            adminState.allQuizzes = await fetchAdminQuizzes();
-        } catch (e) {
-            panel.innerHTML = `<p class="dash-muted">${escapeHtml(e.message)}</p>`;
-            return;
-        }
-    }
-
-    if (!adminState.showcaseSector) adminState.showcaseSector = "teachers";
-    if (adminState.showcasePickerSearch == null) adminState.showcasePickerSearch = "";
-
-    const showcaseCfg = normalizeShowcaseConfig(adminState.overview?.showcase, adminState.allQuizzes);
-    if (!adminState.selectedPlaylistId || !showcaseCfg.playlists.some(p => p.id === adminState.selectedPlaylistId)) {
-        adminState.selectedPlaylistId = showcaseCfg.activePlaylistId;
-    }
-    const currentPl = showcaseCfg.playlists.find(p => p.id === adminState.selectedPlaylistId) || showcaseCfg.playlists[0];
-    const quizById = new Map(adminState.allQuizzes.map(q => [String(q.id).toUpperCase(), q]));
-    const inCurrentPlSet = new Set(currentPl.items.map(it => String(it.quizId).toUpperCase()));
-
-    const persistShowcase = async (statusEl) => {
-        const activePl = showcaseCfg.playlists.find(p => p.id === showcaseCfg.activePlaylistId) || showcaseCfg.playlists[0];
-        const payload = {
-            enabled: showcaseCfg.enabled,
-            intervalSeconds: showcaseCfg.intervalSeconds,
-            action: showcaseCfg.action,
-            animStyle: showcaseCfg.animStyle,
-            displayFormat: showcaseCfg.displayFormat,
-            activePlaylistId: showcaseCfg.activePlaylistId,
-            playlists: showcaseCfg.playlists,
-            featured_order: activePl.items.filter(i => i.enabled !== false).map(i => i.quizId),
-        };
-        const res = await updateShowcaseSettings(payload);
-        if (!res.ok) {
-            await alertDialog(t("profile.loadError"), res.data?.error || "");
-            return false;
-        }
-        if (!adminState.overview) adminState.overview = {};
-        adminState.overview.showcase = res.data?.showcase || payload;
-
-        const activeSet = new Set(payload.featured_order.map(id => String(id).toUpperCase()));
-        adminState.allQuizzes.forEach(q => {
-            const up = String(q.id).toUpperCase();
-            q.featured = activeSet.has(up);
-            q.featured_order = activeSet.has(up) ? payload.featured_order.findIndex(x => String(x).toUpperCase() === up) + 1 : 0;
-        });
-        if (adminState.overview?.quizzes) {
-            adminState.overview.quizzes.featured = activeSet.size;
-        }
-        updateAdminTabBadges();
-        document.dispatchEvent(new window.CustomEvent("quizleris-showcase-changed"));
-        if (statusEl) {
-            const orig = statusEl.textContent;
-            statusEl.textContent = t("adminGui.showcaseSaved");
-            setTimeout(() => {
-                if (statusEl.isConnected) statusEl.textContent = orig;
-            }, 900);
-        }
-        return true;
-    };
-
-    const all = adminState.allQuizzes;
-    const sectorDefs = [
-        { id: "teachers", label: t("adminGui.sectorTeachers"), count: all.filter(q => matchesQuizSector(q, "teachers")).length },
-        { id: "mine", label: t("adminGui.sectorMine"), count: all.filter(q => matchesQuizSector(q, "mine")).length },
-        { id: "math", label: t("adminGui.sectorMath"), count: all.filter(q => matchesQuizSector(q, "math")).length },
-        { id: "cs", label: t("adminGui.sectorCs"), count: all.filter(q => matchesQuizSector(q, "cs")).length },
-        { id: "lang", label: t("adminGui.sectorLang"), count: all.filter(q => matchesQuizSector(q, "lang")).length },
-        { id: "all", label: t("adminGui.sectorAll"), count: all.length },
-    ];
-
-    const plHasSched = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
-    const plSchedOpen = Boolean(adminState.plSchedOpen || plHasSched);
-
-    panel.innerHTML = `
-        <section class="dash-section">
-            <div class="dash-section-head">
-                <h3>✨ ${escapeHtml(t("adminGui.showcaseTitle"))}</h3>
-            </div>
-            <p class="dash-muted">${escapeHtml(t("adminGui.showcaseIntro"))}</p>
-
-            <div class="dash-showcase-preview-box">
-                <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcaseLivePreview"))} (${escapeHtml(currentPl.name)})</span>
-                <p class="hero-pin-hint" id="dash-showcase-preview-hint"></p>
-            </div>
-
-            <form class="dash-showcase-form" id="dash-showcase-form">
-                <label class="dash-showcase-check">
-                    <input type="checkbox" name="enabled" ${showcaseCfg.enabled !== false ? "checked" : ""}>
-                    <span>${escapeHtml(t("adminGui.showcaseEnabled"))}</span>
-                </label>
-                <div class="dash-showcase-fields">
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseInterval"))}</span>
-                        <input type="number" name="intervalSeconds" class="input-field" min="2" max="30" value="${showcaseCfg.intervalSeconds}">
-                    </label>
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseAction"))}</span>
-                        <select name="action" class="admin-select-compact">
-                            <option value="fill" ${showcaseCfg.action !== "start" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseActionFill"))}</option>
-                            <option value="start" ${showcaseCfg.action === "start" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseActionStart"))}</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseAnimStyle"))}</span>
-                        <select name="animStyle" class="admin-select-compact">
-                            <option value="flip" ${showcaseCfg.animStyle === "flip" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimFlip"))}</option>
-                            <option value="slide" ${showcaseCfg.animStyle === "slide" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimSlide"))}</option>
-                            <option value="typewriter" ${showcaseCfg.animStyle === "typewriter" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimType"))}</option>
-                            <option value="fade" ${showcaseCfg.animStyle === "fade" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseAnimFade"))}</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseDisplayFormat"))}</span>
-                        <select name="displayFormat" class="admin-select-compact">
-                            <option value="both" ${showcaseCfg.displayFormat === "both" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatBoth"))}</option>
-                            <option value="code" ${showcaseCfg.displayFormat === "code" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatCode"))}</option>
-                            <option value="label" ${showcaseCfg.displayFormat === "label" ? "selected" : ""}>${escapeHtml(t("adminGui.showcaseFormatLabel"))}</option>
-                        </select>
-                    </label>
-                    <button type="submit" class="btn btn-primary">${escapeHtml(t("adminGui.showcaseSave"))}</button>
-                </div>
-            </form>
-
-            <!-- Playlists / Skirsniai Manager -->
-            <div class="dash-playlist-panel">
-                <div class="dash-section-head">
-                    <h4>🗂 ${escapeHtml(t("adminGui.showcasePlaylistsTitle"))}</h4>
-                    <div class="dash-playlist-create">
-                        <input type="text" id="dash-new-playlist-name" class="input-field" maxlength="60" placeholder="${escapeHtml(t("adminGui.showcaseNewPlaylistPlaceholder"))}">
-                        <button type="button" class="btn btn-secondary btn-compact" id="dash-create-playlist-btn">${escapeHtml(t("adminGui.showcaseCreatePlaylist"))}</button>
-                    </div>
-                </div>
-
-                <div class="dash-playlist-tabs">
-                    ${showcaseCfg.playlists.map(pl => {
-                        const isSelected = pl.id === currentPl.id;
-                        const isActive = pl.id === showcaseCfg.activePlaylistId;
-                        const hasSched = Boolean(pl.scheduleStart || pl.scheduleEnd);
-                        return `
-                            <button type="button" class="dash-playlist-tab${isSelected ? " is-selected" : ""}" data-select-playlist="${escapeHtml(pl.id)}">
-                                ${isActive ? `<span class="dash-playlist-dot" title="${escapeHtml(t("adminGui.showcaseActivePlaylist"))}">●</span>` : ""}
-                                ${hasSched ? `<span title="${escapeHtml(t("adminGui.showcaseStatusScheduled"))}">🕒</span>` : ""}
-                                <span>${escapeHtml(pl.name)}</span>
-                                <span class="dash-admin-tab-badge">${pl.items.length}</span>
-                            </button>
-                        `;
-                    }).join("")}
-                </div>
-
-                <div class="dash-playlist-meta-bar">
-                    <div class="dash-playlist-actions">
-                        ${currentPl.id === showcaseCfg.activePlaylistId ? `
-                            <span class="dash-status-pill is-active">🟢 ${escapeHtml(t("adminGui.showcaseActivePlaylist"))}</span>
-                        ` : `
-                            <button type="button" class="btn btn-primary btn-compact" id="dash-activate-playlist-btn">${escapeHtml(t("adminGui.showcaseSetActivePlaylist"))}</button>
-                        `}
-                        <button type="button" class="btn btn-secondary btn-compact${plHasSched ? " is-active" : ""}" id="dash-toggle-pl-sched-btn">
-                            ${escapeHtml(t("adminGui.scheduleToggleBtn"))}${plHasSched ? ` (${escapeHtml(formatScheduleForInput(currentPl.scheduleStart).replace("T", " "))} → ${escapeHtml(formatScheduleForInput(currentPl.scheduleEnd).replace("T", " ") || "…")})` : ""}
-                        </button>
-                        ${showcaseCfg.playlists.length > 1 && currentPl.id !== "default" ? `
-                            <button type="button" class="btn btn-secondary btn-compact dash-btn-danger" id="dash-delete-playlist-btn">${escapeHtml(t("adminGui.showcaseDeletePlaylist"))}</button>
-                        ` : ""}
-                    </div>
-                </div>
-
-                <div class="dash-playlist-schedule" id="dash-pl-sched-drawer" ${plSchedOpen ? "" : "hidden"}>
-                    <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.showcasePlaylistSchedule"))}:</span>
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}</span>
-                        <input type="datetime-local" id="dash-pl-sched-start" class="input-field" value="${escapeHtml(formatScheduleForInput(currentPl.scheduleStart))}">
-                    </label>
-                    <label>
-                        <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}</span>
-                        <input type="datetime-local" id="dash-pl-sched-end" class="input-field" value="${escapeHtml(formatScheduleForInput(currentPl.scheduleEnd))}">
-                    </label>
-                    <div class="dash-sched-presets">
-                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="24">${escapeHtml(t("adminGui.preset24h"))}</button>
-                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="168">${escapeHtml(t("adminGui.preset7d"))}</button>
-                        <button type="button" class="btn btn-secondary btn-compact" data-pl-preset="0">${escapeHtml(t("adminGui.presetClear"))}</button>
-                    </div>
-                    <button type="button" class="btn btn-primary btn-compact" id="dash-save-pl-sched-btn">${escapeHtml(t("adminGui.showcaseSave"))}</button>
-                </div>
-            </div>
-
-            <!-- Ordered Items in Selected Playlist -->
-            <div class="dash-section-head" style="margin-top: 8px;">
-                <h4>${escapeHtml(t("adminGui.showcaseOrderTitle"))} — ${escapeHtml(currentPl.name)} <span class="dash-muted">(${currentPl.items.length})</span></h4>
-            </div>
-            ${currentPl.items.length === 0 ? `
-                <div class="dash-empty">
-                    <p class="dash-muted">${escapeHtml(t("adminGui.showcaseEmpty"))}</p>
-                </div>
-            ` : `
-                <div class="dash-showcase-list" id="dash-showcase-list">
-                    ${currentPl.items.map((item, idx) => {
-                        const q = quizById.get(item.quizId);
-                        const st = getItemScheduleState(item);
-                        const hasItemSched = Boolean(item.scheduleStart || item.scheduleEnd);
-                        const isSchedOpen = hasItemSched || adminState.openItemSchedIdx === idx;
-                        return `
-                            <div class="dash-showcase-item" data-idx="${idx}">
-                                <div class="dash-showcase-item-top">
-                                    <span class="dash-showcase-pos">#${idx + 1}</span>
-                                    <label class="dash-showcase-toggle" title="${escapeHtml(st.label)}">
-                                        <input type="checkbox" data-item-toggle="${idx}" ${item.enabled !== false ? "checked" : ""}>
-                                    </label>
-                                    <code class="dash-showcase-code">${escapeHtml(item.quizId)}</code>
-                                    <div class="dash-showcase-info">
-                                        <div class="dash-showcase-item-title">${escapeHtml(q?.title || item.customLabel || "—")}</div>
-                                        <div class="dash-muted">${escapeHtml(q?.author ? t("adminGui.byAuthor").replace("{author}", q.author) : "")}</div>
-                                    </div>
-                                    <input type="text" class="input-field dash-item-inline-label" data-item-label="${idx}" maxlength="80" value="${escapeHtml(item.customLabel || "")}" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
-                                    <span class="dash-status-pill ${st.cls}">${escapeHtml(st.label)}</span>
-                                    <div class="dash-showcase-item-actions">
-                                        <button type="button" class="btn btn-secondary btn-compact${hasItemSched ? " is-active" : ""}" data-toggle-item-sched="${idx}" title="${escapeHtml(t("adminGui.scheduleToggleBtn"))}">🕒</button>
-                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="-1" data-idx="${idx}" ${idx === 0 ? "disabled" : ""} title="${escapeHtml(t("admin.moveUp"))}" aria-label="${escapeHtml(t("admin.moveUp"))}">↑</button>
-                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-move-dir="1" data-idx="${idx}" ${idx === currentPl.items.length - 1 ? "disabled" : ""} title="${escapeHtml(t("admin.moveDown"))}" aria-label="${escapeHtml(t("admin.moveDown"))}">↓</button>
-                                        <button type="button" class="btn btn-secondary btn-icon btn-compact" data-remove-idx="${idx}" title="${escapeHtml(t("adminGui.showcaseRemove"))}" aria-label="${escapeHtml(t("adminGui.showcaseRemove"))}">✕</button>
-                                    </div>
-                                </div>
-                                <div class="dash-showcase-item-sched" data-item-sched-drawer="${idx}" ${isSchedOpen ? "" : "hidden"}>
-                                    <label>
-                                        <span>${escapeHtml(t("adminGui.showcaseScheduleFrom"))}:</span>
-                                        <input type="datetime-local" class="input-field" data-item-start="${idx}" value="${escapeHtml(formatScheduleForInput(item.scheduleStart))}">
-                                    </label>
-                                    <label>
-                                        <span>${escapeHtml(t("adminGui.showcaseScheduleUntil"))}:</span>
-                                        <input type="datetime-local" class="input-field" data-item-end="${idx}" value="${escapeHtml(formatScheduleForInput(item.scheduleEnd))}">
-                                    </label>
-                                    <div class="dash-sched-presets">
-                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="24" data-idx="${idx}">${escapeHtml(t("adminGui.preset24h"))}</button>
-                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="168" data-idx="${idx}">${escapeHtml(t("adminGui.preset7d"))}</button>
-                                        <button type="button" class="btn btn-secondary btn-compact" data-item-preset="0" data-idx="${idx}">${escapeHtml(t("adminGui.presetClear"))}</button>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-compact" data-save-item="${idx}">${escapeHtml(t("adminGui.showcaseSave"))}</button>
-                                </div>
-                            </div>
-                        `;
-                    }).join("")}
-                </div>
-            `}
-
-            <!-- Sectorized Quiz Picker + Direct Code Entry -->
-            <div class="dash-quick-add-box">
-                <form class="dash-direct-code-row" id="dash-showcase-quick-add">
-                    <div class="dash-quick-add-title">➕ ${escapeHtml(t("adminGui.showcaseQuickAddTitle"))} — <strong>${escapeHtml(currentPl.name)}</strong></div>
-                    <div class="dash-direct-inputs">
-                        <input type="text" name="quizCode" class="input-field dash-direct-code-input" required placeholder="${escapeHtml(t("adminGui.showcaseQuickAddCodePlaceholder"))}">
-                        <input type="text" name="customLabel" class="input-field dash-direct-label-input" maxlength="80" placeholder="${escapeHtml(t("adminGui.showcaseCustomLabelPlaceholder"))}">
-                        <button type="submit" class="btn btn-primary btn-compact">${escapeHtml(t("adminGui.showcaseAddBtn"))}</button>
-                    </div>
-                </form>
-
-                <div class="dash-sector-browser">
-                    <div class="dash-sector-header">
-                        <span class="dash-showcase-preview-label">${escapeHtml(t("adminGui.pickerBrowseTitle"))}</span>
-                        <input type="search" id="dash-showcase-sector-search" class="input-field dash-sector-search" placeholder="${escapeHtml(t("adminGui.pickerSearchPlaceholder"))}" value="${escapeHtml(adminState.showcasePickerSearch)}">
-                    </div>
-                    <div class="dash-filter-chips" role="tablist">
-                        ${sectorDefs.map(s => `
-                            <button type="button" class="dash-filter-chip${adminState.showcaseSector === s.id ? " is-active" : ""}" data-showcase-sector="${s.id}">
-                                ${escapeHtml(s.label)} <span>${s.count}</span>
-                            </button>
-                        `).join("")}
-                    </div>
-                    <div class="dash-sector-grid" id="dash-showcase-sector-grid"></div>
-                </div>
-            </div>
-        </section>
-    `;
-
-    // Render sectorized quiz grid inside Vitrina
-    const sectorGrid = panel.querySelector("#dash-showcase-sector-grid");
-    const sectorSearch = panel.querySelector("#dash-showcase-sector-search");
-    const drawSectorGrid = () => {
-        if (!sectorGrid) return;
-        const qStr = (adminState.showcasePickerSearch || "").trim().toLowerCase();
-        const list = adminState.allQuizzes.filter(q => {
-            if (!matchesQuizSector(q, adminState.showcaseSector)) return false;
-            if (!qStr) return true;
-            return (
-                (q.title || "").toLowerCase().includes(qStr) ||
-                (q.id || "").toLowerCase().includes(qStr) ||
-                (q.author || "").toLowerCase().includes(qStr)
-            );
-        });
-
-        if (list.length === 0) {
-            sectorGrid.innerHTML = `<div class="dash-empty" style="grid-column: 1 / -1; padding: 18px;"><p class="dash-muted">${escapeHtml(t("adminGui.noQuizzesMatch"))}</p></div>`;
-            return;
-        }
-
-        sectorGrid.innerHTML = list.map(q => {
-            const upId = String(q.id).toUpperCase();
-            const alreadyIn = inCurrentPlSet.has(upId);
-            const sec = classifyQuizSector(q);
-            const subMeta = q.author
-                ? t("adminGui.byAuthor").replace("{author}", q.author)
-                : sec.premadeCat === "cs" ? t("adminGui.sectorCs")
-                : sec.premadeCat === "lang" ? t("adminGui.sectorLang")
-                : t("adminGui.sectorMath");
-            return `
-                <div class="dash-sector-card${alreadyIn ? " is-added" : ""}">
-                    <code class="dash-showcase-code">${escapeHtml(q.id)}</code>
-                    <div class="dash-sector-card-info">
-                        <div class="dash-sector-card-title">${escapeHtml(q.title || "—")}</div>
-                        <div class="dash-muted">${escapeHtml(subMeta)} · ${escapeHtml(t("adminGui.questionsCount").replace("{n}", q.question_count ?? 0))}</div>
-                    </div>
-                    ${alreadyIn ? `
-                        <span class="dash-status-pill is-active">${escapeHtml(t("adminGui.inPlaylistBadge"))}</span>
-                    ` : `
-                        <button type="button" class="btn btn-secondary btn-compact" data-pick-quiz="${escapeHtml(q.id)}">${escapeHtml(t("adminGui.addQuizBtn"))}</button>
-                    `}
-                </div>
-            `;
-        }).join("");
-
-        sectorGrid.querySelectorAll("[data-pick-quiz]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                btn.disabled = true;
-                const code = String(btn.dataset.pickQuiz || "").toUpperCase();
-                if (!code || inCurrentPlSet.has(code)) return;
-                currentPl.items.push({
-                    quizId: code,
-                    customLabel: "",
-                    scheduleStart: "",
-                    scheduleEnd: "",
-                    enabled: true,
-                });
-                await persistShowcase();
-                renderAdminShowcaseTab(panel);
-            });
-        });
-    };
-    drawSectorGrid();
-
-    sectorSearch?.addEventListener("input", () => {
-        adminState.showcasePickerSearch = sectorSearch.value;
-        drawSectorGrid();
-    });
-
-    panel.querySelectorAll("[data-showcase-sector]").forEach(chip => {
-        chip.addEventListener("click", () => {
-            adminState.showcaseSector = chip.dataset.showcaseSector;
-            panel.querySelectorAll("[data-showcase-sector]").forEach(c => c.classList.toggle("is-active", c === chip));
-            drawSectorGrid();
-        });
-    });
-
-    // Live preview inside the Showcase tab
-    const previewHint = panel.querySelector("#dash-showcase-preview-hint");
-    const activePreviewItems = currentPl.items.filter(it => getItemScheduleState(it).cls === "is-active");
-    if (previewHint) {
-        if (!showcaseCfg.enabled || activePreviewItems.length === 0) {
-            previewHint.textContent = t("menu.pinHint");
-        } else {
-            let pIdx = 0;
-            const drawPreview = (item, animate) => {
-                const q = quizById.get(item.quizId);
-                const label = item.customLabel || q?.title || "";
-                const fmt = showcaseCfg.displayFormat || "both";
-                const animCls = animate ? ` is-flipping anim-${showcaseCfg.animStyle || "flip"}` : "";
-                let innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span>`;
-                if (fmt === "label" && label) {
-                    innerHtml = `<span class="hero-code-val">${escapeHtml(label)}</span> <span class="hero-code-title">(${escapeHtml(item.quizId)})</span>`;
-                } else if (fmt === "both" && label) {
-                    innerHtml = `<span class="hero-code-val">${escapeHtml(item.quizId)}</span><span class="hero-code-title"> · ${escapeHtml(label)}</span>`;
-                }
-                previewHint.innerHTML = `${escapeHtml(t("menu.pinHintPrefix"))} <button type="button" class="hero-code-ticker${animCls}">${innerHtml}</button>.`;
-            };
-            drawPreview(activePreviewItems[0], true);
-            if (activePreviewItems.length > 1) {
-                const ms = Math.max(2000, Math.min(30000, (Number(showcaseCfg.intervalSeconds) || 4) * 1000));
-                showcasePreviewTimer = setInterval(() => {
-                    pIdx = (pIdx + 1) % activePreviewItems.length;
-                    drawPreview(activePreviewItems[pIdx], true);
-                }, ms);
-            }
-        }
-    }
-
-    // Global settings form
-    const form = panel.querySelector("#dash-showcase-form");
-    form.addEventListener("change", () => {
-        showcaseCfg.animStyle = form.animStyle.value;
-        showcaseCfg.displayFormat = form.displayFormat.value;
-        if (activePreviewItems.length > 0) {
-            drawPreview(activePreviewItems[pIdx % activePreviewItems.length], true);
-        }
-    });
-    form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const submitBtn = form.querySelector("button[type=submit]");
-        submitBtn.disabled = true;
-        showcaseCfg.enabled = form.enabled.checked;
-        showcaseCfg.intervalSeconds = Math.max(2, Math.min(30, Number(form.intervalSeconds.value) || 4));
-        showcaseCfg.action = form.action.value === "start" ? "start" : "fill";
-        showcaseCfg.animStyle = form.animStyle.value;
-        showcaseCfg.displayFormat = form.displayFormat.value;
-        await persistShowcase(submitBtn);
-        submitBtn.disabled = false;
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Playlist tabs switching
-    panel.querySelectorAll("[data-select-playlist]").forEach(btn => {
-        btn.addEventListener("click", () => {
-            adminState.selectedPlaylistId = btn.dataset.selectPlaylist;
-            adminState.openItemSchedIdx = null;
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Create new playlist
-    panel.querySelector("#dash-create-playlist-btn")?.addEventListener("click", async () => {
-        const nameInput = panel.querySelector("#dash-new-playlist-name");
-        const name = nameInput.value.trim();
-        if (!name) {
-            nameInput.focus();
-            return;
-        }
-        const newId = "pl_" + Date.now().toString(36);
-        showcaseCfg.playlists.push({
-            id: newId,
-            name,
-            scheduleStart: "",
-            scheduleEnd: "",
-            items: [],
-        });
-        adminState.selectedPlaylistId = newId;
-        await persistShowcase();
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Activate selected playlist
-    panel.querySelector("#dash-activate-playlist-btn")?.addEventListener("click", async (e) => {
-        e.currentTarget.disabled = true;
-        showcaseCfg.activePlaylistId = currentPl.id;
-        await persistShowcase();
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Delete selected playlist
-    panel.querySelector("#dash-delete-playlist-btn")?.addEventListener("click", async () => {
-        showcaseCfg.playlists = showcaseCfg.playlists.filter(p => p.id !== currentPl.id);
-        if (showcaseCfg.activePlaylistId === currentPl.id) {
-            showcaseCfg.activePlaylistId = showcaseCfg.playlists[0].id;
-        }
-        adminState.selectedPlaylistId = showcaseCfg.activePlaylistId;
-        await persistShowcase();
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Toggle playlist schedule drawer
-    panel.querySelector("#dash-toggle-pl-sched-btn")?.addEventListener("click", () => {
-        const drawer = panel.querySelector("#dash-pl-sched-drawer");
-        if (!drawer) return;
-        drawer.hidden = !drawer.hidden;
-        adminState.plSchedOpen = !drawer.hidden;
-    });
-
-    // Playlist schedule presets
-    panel.querySelectorAll("[data-pl-preset]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const hours = Number(btn.dataset.plPreset);
-            const sInput = panel.querySelector("#dash-pl-sched-start");
-            const eInput = panel.querySelector("#dash-pl-sched-end");
-            if (!sInput || !eInput) return;
-            if (hours <= 0) {
-                sInput.value = "";
-                eInput.value = "";
-                currentPl.scheduleStart = "";
-                currentPl.scheduleEnd = "";
-            } else {
-                const now = new Date();
-                const end = new Date(now.getTime() + hours * 3600 * 1000);
-                sInput.value = toLocalDatetimeValue(now);
-                eInput.value = toLocalDatetimeValue(end);
-                currentPl.scheduleStart = now.toISOString();
-                currentPl.scheduleEnd = end.toISOString();
-            }
-            adminState.plSchedOpen = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
-            await persistShowcase(btn);
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Save playlist schedule
-    panel.querySelector("#dash-save-pl-sched-btn")?.addEventListener("click", async (e) => {
-        const btn = e.currentTarget;
-        btn.disabled = true;
-        currentPl.scheduleStart = parseInputToIso(panel.querySelector("#dash-pl-sched-start")?.value);
-        currentPl.scheduleEnd = parseInputToIso(panel.querySelector("#dash-pl-sched-end")?.value);
-        adminState.plSchedOpen = Boolean(currentPl.scheduleStart || currentPl.scheduleEnd);
-        await persistShowcase(btn);
-        btn.disabled = false;
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Direct code form submit
-    const quickAddForm = panel.querySelector("#dash-showcase-quick-add");
-    quickAddForm?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const rawInput = quickAddForm.quizCode.value.trim();
-        if (!rawInput) return;
-
-        let resolvedCode = rawInput.toUpperCase();
-        if (!quizById.has(resolvedCode)) {
-            const byTitle = adminState.allQuizzes.find(q => (q.title || "").toLowerCase() === rawInput.toLowerCase());
-            if (byTitle) {
-                resolvedCode = String(byTitle.id).toUpperCase();
-            } else {
-                const token = rawInput.split(/[\s—–-]+/)[0].trim().toUpperCase();
-                if (quizById.has(token)) resolvedCode = token;
-            }
-        }
-
-        const existingIdx = currentPl.items.findIndex(it => it.quizId === resolvedCode);
-        const newItem = {
-            quizId: resolvedCode,
-            customLabel: quickAddForm.customLabel.value.trim(),
-            scheduleStart: "",
-            scheduleEnd: "",
-            enabled: true,
-        };
-        if (existingIdx >= 0) {
-            currentPl.items[existingIdx] = newItem;
-        } else {
-            currentPl.items.push(newItem);
-        }
-
-        await persistShowcase();
-        renderAdminShowcaseTab(panel);
-    });
-
-    // Per-item enable toggle
-    panel.querySelectorAll("[data-item-toggle]").forEach(chk => {
-        chk.addEventListener("change", async () => {
-            const idx = Number(chk.dataset.itemToggle);
-            if (!currentPl.items[idx]) return;
-            currentPl.items[idx].enabled = chk.checked;
-            await persistShowcase();
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Per-item inline customLabel auto-save on change
-    panel.querySelectorAll("[data-item-label]").forEach(inp => {
-        inp.addEventListener("change", async () => {
-            const idx = Number(inp.dataset.itemLabel);
-            if (!currentPl.items[idx]) return;
-            currentPl.items[idx].customLabel = inp.value.trim();
-            await persistShowcase();
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Toggle per-item schedule drawer
-    panel.querySelectorAll("[data-toggle-item-sched]").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const idx = Number(btn.dataset.toggleItemSched);
-            const drawer = panel.querySelector(`[data-item-sched-drawer="${idx}"]`);
-            if (!drawer) return;
-            drawer.hidden = !drawer.hidden;
-            adminState.openItemSchedIdx = drawer.hidden ? null : idx;
-        });
-    });
-
-    // Per-item schedule presets
-    panel.querySelectorAll("[data-item-preset]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const idx = Number(btn.dataset.idx);
-            const hours = Number(btn.dataset.itemPreset);
-            const sInput = panel.querySelector(`[data-item-start="${idx}"]`);
-            const eInput = panel.querySelector(`[data-item-end="${idx}"]`);
-            const item = currentPl.items[idx];
-            if (!sInput || !eInput || !item) return;
-            if (hours <= 0) {
-                sInput.value = "";
-                eInput.value = "";
-                item.scheduleStart = "";
-                item.scheduleEnd = "";
-            } else {
-                const now = new Date();
-                const end = new Date(now.getTime() + hours * 3600 * 1000);
-                sInput.value = toLocalDatetimeValue(now);
-                eInput.value = toLocalDatetimeValue(end);
-                item.scheduleStart = now.toISOString();
-                item.scheduleEnd = end.toISOString();
-            }
-            adminState.openItemSchedIdx = (item.scheduleStart || item.scheduleEnd) ? idx : null;
-            await persistShowcase(btn);
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Per-item schedule save
-    panel.querySelectorAll("[data-save-item]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const idx = Number(btn.dataset.saveItem);
-            const item = currentPl.items[idx];
-            if (!item) return;
-            btn.disabled = true;
-            const lblInput = panel.querySelector(`[data-item-label="${idx}"]`);
-            const startInput = panel.querySelector(`[data-item-start="${idx}"]`);
-            const endInput = panel.querySelector(`[data-item-end="${idx}"]`);
-            item.customLabel = lblInput ? lblInput.value.trim() : "";
-            item.scheduleStart = parseInputToIso(startInput ? startInput.value : "");
-            item.scheduleEnd = parseInputToIso(endInput ? endInput.value : "");
-            adminState.openItemSchedIdx = (item.scheduleStart || item.scheduleEnd) ? idx : null;
-            await persistShowcase(btn);
-            btn.disabled = false;
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Reorder items
-    panel.querySelectorAll("[data-move-dir]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const idx = Number(btn.dataset.idx);
-            const dir = Number(btn.dataset.moveDir);
-            const swapIdx = idx + dir;
-            if (swapIdx < 0 || swapIdx >= currentPl.items.length) return;
-            const temp = currentPl.items[idx];
-            currentPl.items[idx] = currentPl.items[swapIdx];
-            currentPl.items[swapIdx] = temp;
-            await persistShowcase();
-            renderAdminShowcaseTab(panel);
-        });
-    });
-
-    // Remove item from playlist
-    panel.querySelectorAll("[data-remove-idx]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const idx = Number(btn.dataset.removeIdx);
-            currentPl.items.splice(idx, 1);
-            await persistShowcase();
-            renderAdminShowcaseTab(panel);
-        });
-    });
 }
 
 // --- Registration codes (admins) ---
@@ -2116,7 +1195,7 @@ function buildInvites(section) {
         </form>
         <div class="dash-invite-new" hidden></div>
         <p class="dash-invite-error" role="alert" hidden></p>
-        <div class="dash-invite-list"><p class="dash-muted">${t("profile.loading")}</p></div>
+        <div class="dash-invite-list">${skeletonHtml(3)}</div>
     `;
     const form = section.querySelector("form");
     const error = section.querySelector(".dash-invite-error");
@@ -2200,16 +1279,15 @@ async function loadInvites(section) {
 }
 
 // The dashboard's place and look go along, so the task bank can glide it into its own column
-function openEditor(quizId, bankQueue) {
-    if (showcasePreviewTimer) {
-        clearInterval(showcasePreviewTimer);
-        showcasePreviewTimer = null;
-    }
+function openEditor(quizId, bankQueue, fresh = false) {
+    stopShowcase();
     const win = dashboardModal.querySelector(".dash-window");
     const from = win ? { rect: win.getBoundingClientRect(), node: win.cloneNode(true) } : null;
     dashboardModal.style.display = "none";
-    document.dispatchEvent(new window.CustomEvent("open-editor", { detail: { quizId, bankQueue, from } }));
+    document.dispatchEvent(new window.CustomEvent("open-editor", { detail: { quizId, bankQueue, from, fresh } }));
 }
+
+const createQuiz = () => openEditor(null, null, true);
 
 function profileCard(user, limits, quizCount) {
     const isAdmin = user.role === "admin";
@@ -2234,6 +1312,7 @@ function profileCard(user, limits, quizCount) {
         ? `${quizCount} <span class="dash-muted">/ ${t("profile.unlimited").toLowerCase()}</span>`
         : `${quizCount} <span class="dash-muted">/ ${limits.max_quizzes}</span>`;
     const usagePct = limits.max_quizzes == null ? 0 : Math.min(100, Math.round((quizCount / limits.max_quizzes) * 100));
+    const atLimit = limits.max_quizzes != null && quizCount >= limits.max_quizzes;
     const privatePolicy = limits.private_expiry_days == null
         ? t("profile.privateKept")
         : t("profile.privateDeleted").replace("{days}", limits.private_expiry_days);
@@ -2267,7 +1346,7 @@ function profileCard(user, limits, quizCount) {
                     <div class="dash-stat-value">${escapeHtml(formatDate(user.created_at))}</div>
                 </div>
             </div>
-            ${premium ? "" : `<p class="dash-hint">${escapeHtml(t("profile.upgradeHint"))}</p>`}
+            ${premium ? "" : `<p class="dash-hint">${escapeHtml(atLimit ? t("profile.limitReached").replace("{n}", limits.max_quizzes) : t("profile.upgradeHint"))}</p>`}
         </section>
     `;
 }
@@ -2318,7 +1397,7 @@ function quizzesSection(quizzes) {
 
 async function renderAdminUsers(container) {
     if (!adminState.users) {
-        container.innerHTML = `<p class="dash-muted">${t("profile.loading")}</p>`;
+        container.innerHTML = skeletonHtml(5);
         try {
             adminState.users = await fetchAllUsers();
         } catch (e) {

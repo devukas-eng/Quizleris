@@ -2,14 +2,16 @@ import { getRequiredElement, escapeHtml } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
 import { fetchShowcase } from "./api.js";
+import { clearRoute } from "./url-state.js";
+import { startTicker } from "./code-ticker.js";
 import { } from "./legal.js";
+const SHOWCASE_CACHE_KEY = "quizleris_showcase";
 // DOM Elements
 let startMenu;
 let quizHeader;
 let quizMain;
 let isStudentMenuOpen = false;
-let showcaseTimer = null;
-let cachedShowcase = null;
+let heroTicker = null;
 
 /**
  * Bootstraps the main menu DOM references and top-level navigation buttons.
@@ -19,7 +21,6 @@ export function setupMenu(_callbacks) {
     quizHeader = document.querySelector(".quiz-header");
     quizMain = document.querySelector(".quiz-main");
     document.addEventListener("quizleris-showcase-changed", () => {
-        cachedShowcase = null;
         if (document.getElementById("hero-pin-hint")) initHeroShowcase();
     });
 }
@@ -37,11 +38,8 @@ export function renderStartMenu() {
         return;
     }
 
-    if (showcaseTimer) {
-        clearInterval(showcaseTimer);
-        showcaseTimer = null;
-    }
-    cachedShowcase = null;
+    // Whatever page led here, the home page's address carries no trace of it
+    clearRoute();
 
     // Show menu, hide game
     startMenu.style.display = "flex";
@@ -61,7 +59,7 @@ export function renderStartMenu() {
 
     // Inject hero layout
     startMenu.innerHTML = `
-        <div class="hero-section page-transition" style="animation: slideUpFade 0.5s cubic-bezier(0.16,1,0.3,1) both;">
+        <div class="hero-section">
             <h1 class="hero-headline">${t('menu.heroHeadline')}</h1>
 
             <!-- PIN / Quiz ID entry -->
@@ -98,71 +96,73 @@ export function renderStartMenu() {
     initHeroShowcase();
 }
 
-async function initHeroShowcase() {
-    if (showcaseTimer) {
-        clearInterval(showcaseTimer);
-        showcaseTimer = null;
+function hasCodes(data) {
+    return Boolean(data?.enabled) && Array.isArray(data.quizzes) && data.quizzes.length > 0;
+}
+
+function readCachedShowcase() {
+    try {
+        return JSON.parse(localStorage.getItem(SHOWCASE_CACHE_KEY));
+    } catch {
+        return null;
     }
-    cachedShowcase = null;
-    const data = cachedShowcase || await fetchShowcase();
-    cachedShowcase = data;
+}
+
+function drawShowcase(data) {
+    heroTicker?.stop();
+    heroTicker = null;
     const hint = document.getElementById("hero-pin-hint");
     if (!hint) return;
-    if (!data?.enabled || !Array.isArray(data.quizzes) || data.quizzes.length === 0) {
+    if (!hasCodes(data)) {
         hint.textContent = t("menu.pinHint");
         return;
     }
-    const list = data.quizzes;
-    let index = 0;
-    let paused = false;
-
-    const renderTicker = (item, animate = false) => {
-        const prefix = escapeHtml(t("menu.pinHintPrefix"));
-        const fmt = data.displayFormat || "both";
-        const anim = data.animStyle || "flip";
-        let subtitle = "";
-        if (fmt === "both") {
-            subtitle = item.customLabel && item.title
-                ? `${item.customLabel} · ${item.title}`
-                : item.customLabel || item.title || "";
-        } else if (fmt === "label") {
-            subtitle = item.customLabel || item.title || "";
-        }
-        const titleTip = subtitle ? `${subtitle} (${item.id})` : item.id;
-        const animCls = animate ? ` is-flipping anim-${escapeHtml(anim)}` : "";
-        hint.innerHTML = `${prefix} <button type="button" class="hero-code-ticker${animCls}" data-code="${escapeHtml(item.id)}" title="${escapeHtml(titleTip)}" aria-label="${escapeHtml(titleTip)}"><span class="hero-code-val">${escapeHtml(item.id)}</span>${subtitle ? `<span class="hero-code-title"> · ${escapeHtml(subtitle)}</span>` : ""}</button>.`;
-    };
-
-    renderTicker(list[0], true);
-
-    hint.onmouseenter = () => { paused = true; };
-    hint.onmouseleave = () => { paused = false; };
-    hint.onclick = (e) => {
-        const btn = e.target.closest(".hero-code-ticker");
-        if (!btn) return;
-        const code = btn.dataset.code;
+    hint.innerHTML = `
+        <span class="hero-hint-line">${escapeHtml(t("menu.pinHintPrefix"))}
+            <button type="button" class="ct-button"></button>
+        </span>`;
+    const button = hint.querySelector(".ct-button");
+    heroTicker = startTicker(button, {
+        items: data.quizzes,
+        effect: data.animStyle,
+        order: data.order,
+        intervalSeconds: data.intervalSeconds,
+        describe: code => `${t("menu.pinHintUse")}: ${code}`,
+    });
+    button.addEventListener("click", () => {
+        const code = heroTicker?.current()?.id;
         if (!code) return;
-        const pinInput = document.getElementById("hero-pin-input");
         if (data.action === "start") {
             isStudentMenuOpen = true;
             startStudentQuiz("", code);
-        } else if (pinInput) {
-            pinInput.value = code;
-            pinInput.focus();
-            pinInput.classList.remove("pin-filled-flash");
-            void pinInput.offsetWidth;
-            pinInput.classList.add("pin-filled-flash");
+            return;
         }
-    };
+        const pinInput = document.getElementById("hero-pin-input");
+        if (!pinInput) return;
+        pinInput.value = code;
+        pinInput.focus();
+        pinInput.classList.remove("pin-filled-flash");
+        void pinInput.offsetWidth;
+        pinInput.classList.add("pin-filled-flash");
+    });
+}
 
-    if (list.length > 1) {
-        const ms = Math.max(2000, (Number(data.intervalSeconds) || 4) * 1000);
-        showcaseTimer = setInterval(() => {
-            if (paused || !document.getElementById("hero-pin-hint")) return;
-            index = (index + 1) % list.length;
-            renderTicker(list[index], true);
-        }, ms);
+/**
+ * The codes from the last visit show at once, so the page doesn't change shape when the
+ * answer arrives. It is only drawn again if the codes or their settings changed.
+ */
+async function initHeroShowcase() {
+    const cached = readCachedShowcase();
+    drawShowcase(cached);
+    const data = await fetchShowcase();
+    if (!data || !document.getElementById("hero-pin-hint")) return;
+    if (JSON.stringify(data) === JSON.stringify(cached)) return;
+    try {
+        localStorage.setItem(SHOWCASE_CACHE_KEY, JSON.stringify(data));
+    } catch {
+        // Storage full or blocked: the codes just come a moment later next time
     }
+    drawShowcase(data);
 }
 
 /** "1 klausimas", "5 klausimai", "12 klausimų" — Lithuanian has three count forms, English two. */

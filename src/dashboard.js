@@ -1,29 +1,47 @@
-import { getRequiredElement, escapeHtml } from "./dom.js";
+import { getRequiredElement, escapeHtml, skeletonHtml } from "./dom.js";
 import { t, getLanguage } from "./lang.js";
 import { confirmDialog } from "./dialog.js";
 import { getToken, fetchAttempts, fetchAttempt, deleteAttempt } from "./api.js";
+import { clearRoute } from "./url-state.js";
 let dashboardView;
 let dashboardContent;
 let closeBtn;
+// Opened from the teacher/admin dashboard: leaving goes back there rather than to the home page
+let cameFromDashboard = false;
 export function setupDashboard(callbacks) {
     dashboardView = getRequiredElement("dashboard-view");
     dashboardContent = getRequiredElement("dashboard-content");
     closeBtn = getRequiredElement("dashboard-close-btn");
     closeBtn.addEventListener("click", () => {
-        dashboardView.style.display = "none";
-        shownQuizId = null;
+        const backToDashboard = cameFromDashboard;
+        closeResults();
         callbacks.onHome();
+        if (backToDashboard) document.dispatchEvent(new window.CustomEvent("open-dashboard"));
     });
 }
 let shownQuizId = null;
-export async function renderDashboard(quizId) {
+
+/** Leaves the results page, and takes it out of the address bar */
+export function closeResults() {
+    if (dashboardView) dashboardView.style.display = "none";
+    document.getElementById("dashboard-detail-view")?.style.setProperty("display", "none");
+    shownQuizId = null;
+    cameFromDashboard = false;
+    clearRoute();
+}
+
+export async function renderDashboard(quizId, { fromDashboard = cameFromDashboard } = {}) {
+    cameFromDashboard = fromDashboard;
+    closeBtn.textContent = t(fromDashboard ? "dashboard.backToDashboard" : "dashboard.backToMenu");
+    const startMenu = document.getElementById("start-menu");
+    if (startMenu) startMenu.style.display = "none";
     dashboardView.style.display = "block";
     shownQuizId = quizId || null;
     // Results are only for the quiz's owner (or an admin), checked by the server. Nobody else gets a
     // fallback: this device's history could hold other students' results on a shared classroom PC.
     if (!quizId) return renderLocked("noAccess");
     if (!getToken()) return renderLocked("signIn");
-    dashboardContent.innerHTML = `<p class="no-results">${t("profile.loading")}</p>`;
+    dashboardContent.innerHTML = skeletonHtml(6);
     const res = await fetchAttempts(quizId);
     if (shownQuizId !== quizId) return; // another dashboard opened meanwhile
     if (res.ok) return renderServerAttempts(res.data);

@@ -1,7 +1,7 @@
 import { quiz } from "./state.js";
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, loadQuizFromStorage } from "./storage.js";
-import { isAdminAccessAllowed, promptAdminPassword } from "./auth.js";
+import { isAdminAccessAllowed, promptAdminPassword, getStoredUser } from "./auth.js";
 import { t, updatePageLanguage } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
 import { openImportDialog } from "./import-dialog.js";
@@ -259,15 +259,34 @@ function questionAt(index) {
   const question = adminQuiz.questions[index];
   return question ? JSON.parse(JSON.stringify(question)) : null;
 }
-// Opens the editor (if closed) and optionally loads one of the user's saved quizzes into it.
-async function openEditor(quizId) {
+// Opens the editor (if closed) on the working draft, on one of the user's saved quizzes (quizId), or
+// on a new quiz (fresh). A new quiz must start blank: resuming the draft here would put the quiz
+// saved last under the "new" one, and saving would overwrite it.
+async function openEditor(quizId, { fresh = false } = {}) {
   const draft = readDraft();
   // Same quiz with unsaved edits in the draft: keep the edits instead of reloading the saved copy
   if (quizId && draft?.dirty && draft.quiz.id === quizId) quizId = null;
   if (quizId && !(await confirmReplaceDraft(quizId))) quizId = null;
+  const blank = fresh && (await confirmReplaceDraft(null));
   if (!adminMode) toggleAdminMode();
-  if (!adminMode || !quizId) return;
-  await loadIntoEditor(quizId);
+  if (!adminMode) return;
+  if (blank) showBlankQuiz();
+  else if (quizId) await loadIntoEditor(quizId);
+}
+
+function showBlankQuiz() {
+  adminQuiz = blankQuiz();
+  undoStack = [];
+  redoStack = [];
+  updateUndoRedoButtons();
+  adminShareCode.style.display = "none";
+  writeDraft(false, false);
+  updateDraftStatusBadge("saved");
+  renderAdminForm();
+  if (adminLocalSelector) {
+    adminLocalSelector.value = "";
+    toggleLocalDeleteButtonVisibility();
+  }
 }
 
 // Replaces the working draft with a saved quiz from the cloud
@@ -292,7 +311,8 @@ async function loadIntoEditor(quizId) {
 }
 
 // --- Working draft ---
-// One draft per device, saved on every change and resumed whenever the editor opens.
+// One draft per device, saved on every change and resumed whenever the editor opens, but only by
+// the account that wrote it: the next teacher on a shared computer starts clean.
 // "dirty" means it has changes that are not saved to the cloud yet.
 const DRAFT_KEY = "quiz_editor_draft";
 
@@ -300,6 +320,7 @@ function readDraft() {
   try {
     const parsed = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
     if (!parsed) return null;
+    if (parsed.owner != null && parsed.owner !== getStoredUser()?.id) return null;
     if (parsed.quiz && Array.isArray(parsed.quiz.questions)) return parsed;
     // Older format stored the bare quiz object
     return Array.isArray(parsed.questions) ? { quiz: parsed, dirty: true } : null;
@@ -316,7 +337,7 @@ function writeDraft(dirty, inCloud) {
     inCloud = !!prev?.inCloud && prev.quiz.id === adminQuiz.id;
   }
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({ quiz: adminQuiz, dirty, inCloud }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ quiz: adminQuiz, dirty, inCloud, owner: getStoredUser()?.id ?? null }));
   } catch (e) {
     console.error("Error saving draft:", e);
   }
@@ -1485,18 +1506,7 @@ function setupAdminEventsInternal() {
   adminNewQuizBtn.addEventListener("click", async () => {
     updateQuizFromDOM();
     if (!(await confirmReplaceDraft(null))) return;
-    adminQuiz = blankQuiz();
-    undoStack = [];
-    redoStack = [];
-    updateUndoRedoButtons();
-    adminShareCode.style.display = "none";
-    writeDraft(false, false);
-    updateDraftStatusBadge("saved");
-    renderAdminForm();
-    if (adminLocalSelector) {
-      adminLocalSelector.value = "";
-      toggleLocalDeleteButtonVisibility();
-    }
+    showBlankQuiz();
     adminQuizTitle.focus();
     adminQuizTitle.select();
   });

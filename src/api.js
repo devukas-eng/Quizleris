@@ -1,4 +1,5 @@
 // 2026 Senior Concept: Local-First / Optimistic Syncing API Client
+import { t } from "./lang.js";
 
 const API_BASE = '/api';
 
@@ -65,12 +66,35 @@ export async function fetchAdminOverview() {
     if (!res.ok) throw new Error(res.data?.error || 'Failed to load overview');
     return res.data;
 }
-/** Admin all-quizzes list */
-export async function fetchAdminQuizzes() {
-    const res = await adminRequest('quizzes');
+/**
+ * One folder of the admin's quiz browser, or a search across all of them. `params`: folder, q,
+ * filter (featured, public, private, mine), offset. Gives { path, folders, quizzes, total, counts, tree }.
+ */
+export async function browseAdminQuizzes(params = {}) {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") search.set(key, value);
+    });
+    const res = await adminRequest(`quiz-browser?${search}`);
+    if (!res.ok) throw new Error(res.data?.error || 'Failed to load quizzes');
+    return res.data;
+}
+/** The quizzes with these codes, for lists that keep codes rather than quizzes */
+export async function lookupAdminQuizzes(ids) {
+    if (!ids.length) return [];
+    const res = await adminRequest('quiz-lookup', { method: 'POST', body: JSON.stringify({ ids }) });
     if (!res.ok) throw new Error(res.data?.error || 'Failed to load quizzes');
     return res.data?.quizzes || [];
 }
+export const createQuizFolder = (parentId, name) =>
+    adminRequest('quiz-folders', { method: 'POST', body: JSON.stringify({ parentId, name }) });
+export const updateQuizFolder = (folderId, payload) =>
+    adminRequest(`quiz-folders/${encodeURIComponent(folderId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+export const deleteQuizFolder = (folderId) =>
+    adminRequest(`quiz-folders/${encodeURIComponent(folderId)}`, { method: 'DELETE' });
+/** Files quizzes in a folder; a null folder puts them back in their automatic place */
+export const moveQuizzesToFolder = (quizIds, folderId) =>
+    adminRequest('quiz-folders/items', { method: 'PUT', body: JSON.stringify({ quizIds, folderId }) });
 /** Admin update quiz visibility / featured / featured_order */
 export const updateAdminQuiz = (quizId, payload) =>
     adminRequest(`quizzes/${encodeURIComponent(quizId)}`, { method: 'PATCH', body: JSON.stringify(payload) });
@@ -84,14 +108,13 @@ export const deleteAdminUser = (userId) =>
 export const updateShowcaseSettings = (payload) =>
     adminRequest('showcase', { method: 'PUT', body: JSON.stringify(payload) });
 
-/** Public landing-page featured showcase: { enabled, intervalSeconds, action, quizzes: [{ id, title, author }] } */
+/** Public landing-page showcase: { enabled, intervalSeconds, action, quizzes: [{ id, title, customLabel }] }, or null if it can't be reached */
 export async function fetchShowcase() {
     try {
         const res = await fetch(`${API_BASE}/showcase`);
-        if (!res.ok) return { enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] };
-        return await res.json();
+        return res.ok ? await res.json() : null;
     } catch {
-        return { enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] };
+        return null;
     }
 }
 
@@ -238,6 +261,13 @@ export async function fetchQuizDetails(quizId) {
     return await res.json();
 }
 
+/** The refusal in the teacher's language; the server's own wording is English */
+export function quizSaveError({ code, limit, error } = {}) {
+    if (code === "quiz_limit") return t("admin.quizLimit").replace("{n}", limit);
+    if (code === "quiz_id_taken") return t("admin.quizIdTaken");
+    return error || "Failed to save";
+}
+
 export async function saveQuizToCloud(quizData) {
     const token = getToken();
     if (!token) return { success: false, error: "Not logged in" };
@@ -255,7 +285,7 @@ export async function saveQuizToCloud(quizData) {
         if (res.ok) {
             return { success: true, ...data };
         } else {
-            return { success: false, status: res.status, error: data.error || "Failed to save" };
+            return { success: false, status: res.status, error: quizSaveError(data) };
         }
     } catch (e) {
         console.error("Cloud sync failed", e);

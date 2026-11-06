@@ -1,8 +1,9 @@
 // Main entry point - imports and initializes all modules
 import { setupAdmin, toggleAdminMode, refreshAdminUI, openEditor } from "./quiz-editor.js";
-import { confirmDialog } from "./dialog.js";
+import { confirmDialog, alertDialog } from "./dialog.js";
 import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
-import { setupDashboard, renderDashboard } from "./dashboard.js";
+import { setupDashboard, renderDashboard, closeResults } from "./dashboard.js";
+import { pushResultsRoute } from "./url-state.js";
 import { loadQuiz } from "./storage.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage, t } from "./lang.js";
 import { initAuthUI } from "./auth-ui.js";
@@ -33,6 +34,17 @@ function confirmLeaveQuiz() {
         confirmText: t("dialog.leave"),
         danger: true
     });
+}
+
+/** The join page of the quiz in the address, or the home page if that quiz is gone (expired, deleted) */
+async function openLinkedQuiz() {
+    const quizData = await loadQuiz();
+    if (quizData) {
+        renderStudentJoin(quizData);
+        return;
+    }
+    renderStartMenu();
+    alertDialog(t("menu.quizNotFoundTitle"), t("menu.quizNotFound"));
 }
 
 /**
@@ -66,7 +78,15 @@ async function initApp() {
         setupDashboard({ onHome });
         loadBankWorkspace();
         document.addEventListener("quizleris-auth-changed", loadBankWorkspace);
-        document.addEventListener("open-editor", (e) => { openEditor(e.detail?.quizId); });
+        document.addEventListener("open-editor", (e) => {
+            closeResults();
+            openEditor(e.detail?.quizId, { fresh: e.detail?.fresh });
+        });
+        // A quiz's results, opened from the dashboard without leaving the page
+        document.addEventListener("open-results", (e) => {
+            pushResultsRoute(e.detail.quizId);
+            renderDashboard(e.detail.quizId, { fromDashboard: true });
+        });
         // 2. Setup Menu (needs onAdmin only)
         setupMenu({ onAdmin });
         // 3. Setup Admin (needs onHome)
@@ -148,8 +168,7 @@ async function initApp() {
             renderDashboard(dashParam);
         }
         else if (quizParam) {
-            const quizData = await loadQuiz();
-            renderStudentJoin(quizData);
+            await openLinkedQuiz();
         }
         else {
             // The premade-topics page is hidden (quizzes are played by ID); old /topics links land here
@@ -158,9 +177,13 @@ async function initApp() {
         }
         // 5. Update page language
         updatePageLanguage();
+        document.documentElement.classList.remove("booting");
+        // The copyright runs to the current year without anyone having to remember it
+        document.querySelectorAll(".legal-year").forEach(el => { el.textContent = new Date().getFullYear(); });
         // ── Language Flag Pills ──────────────────────────────────────
         const langLtBtn = document.getElementById('lang-lt-btn');
         const langEnBtn = document.getElementById('lang-en-btn');
+        let activeLegalModalType = null;
 
         // Looked up on each call: the theme button calls this, possibly before this point has run
         function closeLangMenu() {
@@ -178,6 +201,11 @@ async function initApp() {
             setLanguage(newLang);
             updateLangPillUI(newLang);
             updatePageLanguage();
+            if (activeLegalModalType && legalModal?.classList.contains('open')) {
+                const content = getLegalContent(activeLegalModalType, newLang);
+                if (legalModalTitle) legalModalTitle.textContent = content.title;
+                if (legalModalBody) legalModalBody.innerHTML = content.body;
+            }
             logEvent('language', 'change', { lang: newLang });
             const currentParams = new URLSearchParams(window.location.search);
             const currentDash = currentParams.get('dashboard');
@@ -185,7 +213,7 @@ async function initApp() {
             if (currentDash) {
                 renderDashboard(currentDash);
             } else if (currentQuiz) {
-                renderStudentJoin(await loadQuiz());
+                await openLinkedQuiz();
             } else {
                 renderStartMenu();
             }
@@ -254,6 +282,7 @@ async function initApp() {
 
         function openLegalModal(type) {
             if (!legalModal) return;
+            activeLegalModalType = type;
             const content = getLegalContent(type, getLanguage());
             if (legalModalTitle) legalModalTitle.textContent = content.title;
             if (legalModalBody) legalModalBody.innerHTML = content.body;
@@ -264,35 +293,56 @@ async function initApp() {
         if (legalModalClose) {
             legalModalClose.addEventListener('click', () => {
                 if (legalModal) legalModal.classList.remove('open');
+                activeLegalModalType = null;
             });
         }
         if (legalModal) {
             legalModal.addEventListener('click', (e) => {
-                if (e.target === legalModal) legalModal.classList.remove('open');
+                if (e.target === legalModal) {
+                    legalModal.classList.remove('open');
+                    activeLegalModalType = null;
+                }
             });
         }
 
         // ── Legal Footer ─────────────────────────────────────────────
-        const appRoot = document.getElementById('app-root');
-        if (appRoot) {
-            const footer = document.createElement('div');
-            footer.id = 'legal-footer';
-            footer.innerHTML = `
-                <button class="legal-link" id="lf-terms">Naudojimo s\u0105lygos</button>
-                <span class="legal-link-sep">|</span>
-                <button class="legal-link" id="lf-privacy">Privatumo politika</button>
-                <span class="legal-link-sep">|</span>
-                <button class="legal-link" id="lf-cookies">Slapukai</button>
-                <span class="legal-link-sep">|</span>
-                <span class="legal-link" style="cursor:default;opacity:0.4;">&copy; 2025 Quizleris</span>
-            `;
-            appRoot.appendChild(footer);
+        let footer = document.getElementById('legal-footer');
+        if (!footer) {
+            const appRoot = document.getElementById('app-root');
+            if (appRoot) {
+                footer = document.createElement('footer');
+                footer.id = 'legal-footer';
+                footer.innerHTML = `
+                    <button class="legal-link" id="lf-terms" data-i18n="legal.terms">${t('legal.terms')}</button>
+                    <span class="legal-link-sep">|</span>
+                    <button class="legal-link" id="lf-privacy" data-i18n="legal.privacy">${t('legal.privacy')}</button>
+                    <span class="legal-link-sep">|</span>
+                    <button class="legal-link" id="lf-cookies" data-i18n="legal.cookies">${t('legal.cookies')}</button>
+                    <span class="legal-link-sep">|</span>
+                    <span class="legal-link" style="cursor:default;opacity:0.4;">&copy; 2024&ndash;<span class="legal-year">2026</span> UAB Judelta</span>
+                `;
+                appRoot.appendChild(footer);
+            }
+        }
+        if (footer) {
+            // The links sit at the bottom of the main window; during a quiz, at the bottom of the page
+            const appRoot = document.getElementById('app-root');
+            const quizMain = document.querySelector('.quiz-main');
+            const placeFooter = () => {
+                const inQuiz = quizMain.style.display !== 'none';
+                document.body.classList.toggle('quiz-page', inQuiz);
+                const home = inQuiz ? document.body : appRoot;
+                if (footer.parentElement !== home) home.appendChild(footer);
+            };
+            new MutationObserver(placeFooter).observe(quizMain, { attributes: true, attributeFilter: ['style'] });
+            placeFooter();
             footer.querySelector('#lf-terms')?.addEventListener('click', () => openLegalModal('terms'));
             footer.querySelector('#lf-privacy')?.addEventListener('click', () => openLegalModal('privacy'));
             footer.querySelector('#lf-cookies')?.addEventListener('click', () => openLegalModal('cookies'));
         }
     }
     catch (e) {
+        document.documentElement.classList.remove("booting");
         alert("Application Init Error: " + e);
         console.error(e);
     }
@@ -307,31 +357,31 @@ function getLegalContent(type, lang) {
             title: isLt ? 'Naudojimo sąlygos' : 'Terms of Service',
             body: isLt ? `
                 <p><strong>1. Bendrosios nuostatos</strong></p>
-                <p>Naudodamiesi <strong>Quizleris</strong> platforma, Jūs patvirtinate, kad sutinkate su šiomis išsamiomis naudojimo sąlygomis. Šios sąlygos taikomos visiems vartotojams, neatsižvelgiant į tai, ar esate registruotas vartotojas, ar svečias.</p>
+                <p>Naudodamiesi <strong>UAB Judelta</strong> platforma, Jūs patvirtinate, kad sutinkate su šiomis išsamiomis naudojimo sąlygomis. Šios sąlygos taikomos visiems vartotojams, neatsižvelgiant į tai, ar esate registruotas vartotojas, ar svečias.</p>
                 
                 <p><strong>2. Paslaugos teikimas ir prieinamumas</strong></p>
-                <p>Quizleris yra mokymo, testavimo ir interaktyvaus mokymosi platforma. Mes dedame visas pastangas, kad užtikrintume nenutrūkstamą paslaugos veikimą, tačiau platforma teikiama "tokia, kokia yra" (angl. "as is"). Mes negarantuojame, kad paslauga veiks be klaidų ar pertraukimų.</p>
+                <p>UAB Judelta platforma yra mokymo, testavimo ir interaktyvaus mokymosi priemonė. Mes dedame visas pastangas, kad užtikrintume nenutrūkstamą paslaugos veikimą, tačiau platforma teikiama "tokia, kokia yra" (angl. "as is"). Mes negarantuojame, kad paslauga veiks be klaidų ar pertraukimų.</p>
                 
                 <p><strong>3. Naudotojų atsakomybė ir turinys</strong></p>
-                <p>Jūs esate visiškai atsakingas už visą turinį (klausimus, atsakymus, testus), kurį sukuriate ar įkeliate į Quizleris. Griežtai draudžiama įkelti neteisėtą, autorių teises pažeidžiantį, įžeidžiantį, diskriminuojantį ar kitaip žalingą turinį. Mes pasiliekame teisę be išankstinio įspėjimo pašalinti bet kokį turinį, pažeidžiantį šias taisykles.</p>
+                <p>Jūs esate visiškai atsakingas už visą turinį (klausimus, atsakymus, testus), kurį sukuriate ar įkeliate į UAB Judelta platformą. Griežtai draudžiama įkelti neteisėtą, autorių teises pažeidžiantį, įžeidžiantį, diskriminuojantį ar kitaip žalingą turinį. Mes pasiliekame teisę be išankstinio įspėjimo pašalinti bet kokį turinį, pažeidžiantį šias taisykles.</p>
                 
                 <p><strong>4. Intelektinė nuosavybė</strong></p>
-                <p>Visi platformos dizaino elementai, kodas, grafika ir prekės ženklai yra išskirtinė Quizleris nuosavybė. Jūs negalite kopijuoti, platinti ar modifikuoti mūsų platformos kodo ar dizaino elementų be išankstinio rašytinio sutikimo.</p>
+                <p>Visi platformos dizaino elementai, kodas, grafika ir prekės ženklai yra išskirtinė UAB Judelta nuosavybė. Jūs negalite kopijuoti, platinti ar modifikuoti mūsų platformos kodo ar dizaino elementų be išankstinio rašytinio sutikimo.</p>
                 
                 <p><strong>5. Susisiekite su mumis</strong></p>
                 <p>Jei turite klausimų dėl šių sąlygų, pažeidimų ar norite pranešti apie netinkamą turinį, prašome susisiekti su mumis el. paštu: <strong>${email}</strong>.</p>
             ` : `
                 <p><strong>1. General Provisions</strong></p>
-                <p>By accessing and using the <strong>Quizleris</strong> platform, you acknowledge and agree to be bound by these comprehensive Terms of Service. These terms apply to all users, whether registered or visiting as guests.</p>
+                <p>By accessing and using the <strong>UAB Judelta</strong> platform, you acknowledge and agree to be bound by these comprehensive Terms of Service. These terms apply to all users, whether registered or visiting as guests.</p>
                 
                 <p><strong>2. Service Provision and Availability</strong></p>
-                <p>Quizleris is an educational, testing, and interactive learning platform. While we strive for maximum uptime and reliability, the service is provided on an "as is" and "as available" basis without any warranties. We do not guarantee uninterrupted or error-free operation.</p>
+                <p>The UAB Judelta platform is an educational, testing, and interactive learning platform. While we strive for maximum uptime and reliability, the service is provided on an "as is" and "as available" basis without any warranties. We do not guarantee uninterrupted or error-free operation.</p>
                 
                 <p><strong>3. User Responsibility and Content</strong></p>
-                <p>You are solely responsible for any content (quizzes, questions, answers) you create, upload, or share on Quizleris. It is strictly prohibited to upload content that is illegal, infringes on intellectual property rights, or is offensive, discriminatory, or malicious. We reserve the right to remove any violating content without prior notice.</p>
+                <p>You are solely responsible for any content (quizzes, questions, answers) you create, upload, or share on the UAB Judelta platform. It is strictly prohibited to upload content that is illegal, infringes on intellectual property rights, or is offensive, discriminatory, or malicious. We reserve the right to remove any violating content without prior notice.</p>
                 
                 <p><strong>4. Intellectual Property</strong></p>
-                <p>All platform design elements, source code, graphics, and trademarks are the exclusive property of Quizleris. You may not copy, distribute, or modify any part of our platform without explicit prior written consent.</p>
+                <p>All platform design elements, source code, graphics, and trademarks are the exclusive property of UAB Judelta. You may not copy, distribute, or modify any part of our platform without explicit prior written consent.</p>
                 
                 <p><strong>5. Contact Information</strong></p>
                 <p>For questions regarding these Terms, reporting violations, or general inquiries, please contact us at: <strong>${email}</strong>.</p>
@@ -341,7 +391,7 @@ function getLegalContent(type, lang) {
             title: isLt ? 'Privatumo politika' : 'Privacy Policy',
             body: isLt ? `
                 <p><strong>1. Įvadas</strong></p>
-                <p>Jūsų privatumas mums yra nepaprastai svarbus. Šioje Privatumo politikoje išsamiai paaiškinama, kokią informaciją <strong>Quizleris</strong> renka, kaip ją naudoja, saugo ir atskleidžia.</p>
+                <p>Jūsų privatumas mums yra nepaprastai svarbus. Šioje Privatumo politikoje išsamiai paaiškinama, kokią informaciją <strong>UAB Judelta</strong> renka, kaip ją naudoja, saugo ir atskleidžia.</p>
                 
                 <p><strong>2. Kokie duomenys renkami?</strong></p>
                 <ul>
@@ -360,7 +410,7 @@ function getLegalContent(type, lang) {
                 <p>Jūs turite teisę žinoti, kokius duomenis mes tvarkome, reikalauti juos ištaisyti arba ištrinti. Dėl paskyros, duomenų ištrynimo ar bet kokių kitų privatumo klausimų kreipkitės: <strong>${email}</strong>.</p>
             ` : `
                 <p><strong>1. Introduction</strong></p>
-                <p>Your privacy is of utmost importance to us. This Privacy Policy outlines in detail how <strong>Quizleris</strong> collects, uses, stores, and protects your information.</p>
+                <p>Your privacy is of utmost importance to us. This Privacy Policy outlines in detail how <strong>UAB Judelta</strong> collects, uses, stores, and protects your information.</p>
                 
                 <p><strong>2. What Data We Collect</strong></p>
                 <ul>
@@ -383,7 +433,7 @@ function getLegalContent(type, lang) {
             title: isLt ? 'Slapukų politika' : 'Cookie Policy',
             body: isLt ? `
                 <p><strong>1. Kas yra slapukai?</strong></p>
-                <p>Slapukai (angl. cookies) yra nedideli tekstiniai failai ar informacijos fragmentai (pvz., Local Storage), kurie išsaugomi jūsų naršyklėje ar įrenginyje, kai lankotės <strong>Quizleris</strong> svetainėje.</p>
+                <p>Slapukai (angl. cookies) yra nedideli tekstiniai failai ar informacijos fragmentai (pvz., Local Storage), kurie išsaugomi jūsų naršyklėje ar įrenginyje, kai lankotės <strong>UAB Judelta</strong> svetainėje.</p>
                 
                 <p><strong>2. Būtini (Funkciniai) slapukai</strong></p>
                 <p>Šie failai yra absoliučiai būtini tam, kad svetainė veiktų tinkamai. Jų išjungti mūsų sistemose negalima:</p>
@@ -404,7 +454,7 @@ function getLegalContent(type, lang) {
                 <p>Jūs galite bet kada pakeisti savo sutikimo nustatymus arba išvalyti naršyklės Local Storage. Jei turite klausimų dėl mūsų slapukų naudojimo, susisiekite su mumis el. paštu: <strong>${email}</strong>.</p>
             ` : `
                 <p><strong>1. What are Cookies?</strong></p>
-                <p>Cookies and similar storage technologies (like Local Storage) are small pieces of data saved on your browser or device when you visit the <strong>Quizleris</strong> website.</p>
+                <p>Cookies and similar storage technologies (like Local Storage) are small pieces of data saved on your browser or device when you visit the <strong>UAB Judelta</strong> website.</p>
                 
                 <p><strong>2. Essential (Functional) Cookies</strong></p>
                 <p>These are strictly necessary for the website to function correctly and cannot be disabled in our systems:</p>

@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- "booting" keeps the page box hidden until app.js has filled it, so its empty shell never shows -->
+<html lang="en" class="booting">
 
 <head>
   <!-- Basic page metadata -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quizleris</title>
-  <meta name="description" content="Quizleris - A fast, modern, and engaging quiz application." />
+  <title>UAB Judelta</title>
+  <meta name="description" content="UAB Judelta - A fast, modern, and engaging quiz application." />
   <meta name="theme-color" content="#6366f1" />
 
   <!-- DOMPurify for HTML sanitization (CodeQL fixes) -->
@@ -228,10 +229,17 @@
           </div>
           <div id="admin-share-code" class="admin-share" style="display: none;"></div>
         </div>
-
-
-      </div>
     </section>
+    <!-- Legal Footer -->
+    <footer id="legal-footer">
+      <button class="legal-link" id="lf-terms" data-i18n="legal.terms">Naudojimo sąlygos</button>
+      <span class="legal-link-sep">|</span>
+      <button class="legal-link" id="lf-privacy" data-i18n="legal.privacy">Privatumo politika</button>
+      <span class="legal-link-sep">|</span>
+      <button class="legal-link" id="lf-cookies" data-i18n="legal.cookies">Slapukai</button>
+      <span class="legal-link-sep">|</span>
+      <span class="legal-link" style="cursor:default;opacity:0.4;">&copy; 2024&ndash;<span class="legal-year">2026</span> UAB Judelta</span>
+    </footer>
   </div>
   <svg id="app-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 269" width="152" height="40" fill="url(#app-logo-grad)" role="img" aria-label="spresk.lt">
     <defs>
@@ -358,13 +366,12 @@
   <div id="cookie-banner" style="display: none;">
     <div class="cookie-icon">🍪</div>
     <div class="cookie-text">
-      <strong>Slapukai ir Privatumas</strong>
-      Naudojame anoniminius analizės slapukus, kad geriau suprastume, kaip vartotojai naudoja Quizleris.
-      Skaitykite mūsų <a id="cookie-privacy-link">Privatumo politiką</a>.
+      <strong data-i18n="cookie.title">Slapukai ir Privatumas</strong>
+      <span data-i18n="cookie.desc">Naudojame anoniminius analizės slapukus, kad geriau suprastume, kaip vartotojai naudojasi UAB Judelta platforma. Skaitykite mūsų</span> <a id="cookie-privacy-link" data-i18n="cookie.privacyLink">Privatumo politiką</a>.
     </div>
     <div class="cookie-actions">
-      <button class="cookie-btn-accept" id="cookie-accept-btn">✓ Sutinku</button>
-      <button class="cookie-btn-decline" id="cookie-decline-btn">Atmesti</button>
+      <button class="cookie-btn-accept" id="cookie-accept-btn" data-i18n="cookie.accept">✓ Sutinku</button>
+      <button class="cookie-btn-decline" id="cookie-decline-btn" data-i18n="cookie.decline">Atmesti</button>
     </div>
   </div>
 
@@ -379,7 +386,6 @@
     </div>
   </div>
 
-  <!-- Legal Footer (rendered inside #app-root bottom by JS, but declared here) -->
   <!-- MathLive Shortcuts Panel -->
   <div id="math-shortcuts-panel" class="glass-card" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 10000; padding: 15px; width: 250px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
     <h4 style="margin: 0 0 10px 0; font-size: 0.85rem; font-weight: bold; color: var(--accent);" data-i18n="admin.shortcutsTitle">Greitieji klavišai</h4>

@@ -6,7 +6,7 @@
 // a theme deleted on one device goes on the others too.
 import { getToken } from "./api.js";
 import { getCurrentUser } from "./auth-ui.js";
-import { THEME_KEY, MAX_CUSTOM_THEMES, loadCustomThemes, saveCustomThemes, sanitizeTheme, savedThemeId } from "./themes.js";
+import { THEMES, THEME_KEY, MAX_CUSTOM_THEMES, loadCustomThemes, saveCustomThemes, sanitizeTheme, savedThemeId } from "./themes.js";
 import { reloadSavedTheme } from "./theme-picker.js";
 
 // Which account this browser last synced with (so a first sync merges and later ones don't)
@@ -53,7 +53,11 @@ async function push() {
     pushTimer = null;
     if (status !== "synced") return;
     const body = snapshot();
-    if (body === lastSent) return;
+    if (body === lastSent) {
+        // Changed and changed back: the account already holds this, so nothing is waiting to be sent
+        localStorage.removeItem(PENDING_KEY);
+        return;
+    }
     const res = await request("PUT", body);
     if (res.ok) {
         lastSent = body;
@@ -98,7 +102,11 @@ async function pull() {
     applying = true;
     try {
         saveCustomThemes(custom);
-        if (res.data.selected) localStorage.setItem(THEME_KEY, res.data.selected);
+        // A choice the account hasn't received is newer than what it holds: picked moments ago,
+        // while this request ran, or just before a reload cut its save short. Keep it, or the
+        // page jumps back to the old theme. A theme this browser doesn't have is skipped too.
+        const known = custom.some(theme => theme.id === res.data.selected) || THEMES.some(theme => theme.id === res.data.selected);
+        if (res.data.selected && known && !unsent) localStorage.setItem(THEME_KEY, res.data.selected);
         reloadSavedTheme();
     } finally {
         applying = false;

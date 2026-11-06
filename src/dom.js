@@ -13,6 +13,11 @@ export const questionContainer = getRequiredElement("question-container");
 export const answersContainer = getRequiredElement("answers-container");
 export const statusContainer = getRequiredElement("status-container");
 
+/** Placeholder rows for a list that is on its way: they hold the space its content will take */
+export function skeletonHtml(rows = 4) {
+    return `<div class="dash-skeleton" aria-hidden="true">${"<span></span>".repeat(rows)}</div>`;
+}
+
 export function escapeHtml(unsafe) {
     if (!unsafe) return '';
     return String(unsafe)

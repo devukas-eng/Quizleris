@@ -81,6 +81,74 @@ describe('theme sync', () => {
         expect(localStorage.getItem('quizleris_theme_sync_pending')).toBeNull();
     });
 
+    it('a theme picked just before a reload is not overwritten by the older one on the account', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        localStorage.setItem('selected_theme', 'paper');
+        // Picked, then the page reloaded before the save went out
+        localStorage.setItem('quizleris_theme_sync_pending', '7');
+        account = { selected: 'emerald', custom: [], updated_at: 'then' };
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        expect(localStorage.getItem('selected_theme')).toBe('paper');
+        expect(puts.at(-1).selected).toBe('paper');
+    });
+
+    it('a theme picked while the account is still loading stays picked', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        localStorage.setItem('selected_theme', 'emerald');
+        account = { selected: 'emerald', custom: [], updated_at: 'then' };
+        mockServer();
+        const answer = global.fetch;
+        let release;
+        global.fetch = vi.fn(async (...args) => {
+            if (!args[1]?.method || args[1].method === 'GET') await new Promise(r => { release = r; });
+            return answer(...args);
+        });
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await new Promise(r => setTimeout(r, 10));
+        localStorage.setItem('selected_theme', 'paper');
+        document.dispatchEvent(new window.CustomEvent('quizleris-themes-changed'));
+        release();
+        await settle();
+        expect(localStorage.getItem('selected_theme')).toBe('paper');
+        expect(puts.at(-1).selected).toBe('paper');
+    });
+
+    it('a theme this browser does not have leaves the current one in place', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        localStorage.setItem('selected_theme', 'paper');
+        account = { selected: 'c-unknown1', custom: [], updated_at: 'then' };
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        expect(localStorage.getItem('selected_theme')).toBe('paper');
+    });
+
+    it('later syncs follow a theme chosen on another device', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        localStorage.setItem('selected_theme', 'emerald');
+        account = { selected: 'paper', custom: [], updated_at: 'then' };
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        expect(localStorage.getItem('selected_theme')).toBe('paper');
+    });
+
+    it('a theme changed and changed back leaves nothing waiting to be sent', async () => {
+        localStorage.setItem('quizleris_theme_sync_user', '7');
+        localStorage.setItem('selected_theme', 'paper');
+        account = { selected: 'paper', custom: [], updated_at: 'then' };
+        mockServer();
+        document.dispatchEvent(new window.CustomEvent('quizleris-auth-changed'));
+        await settle();
+        document.dispatchEvent(new window.CustomEvent('quizleris-themes-changed'));
+        expect(localStorage.getItem('quizleris_theme_sync_pending')).toBe('7');
+        await settle();
+        expect(localStorage.getItem('quizleris_theme_sync_pending')).toBeNull();
+        expect(puts).toHaveLength(0);
+    });
+
     it('free accounts keep themes in the browser only', async () => {
         upsertCustomTheme(theme('c-local01', 'Vietinė'));
         mockServer(403);

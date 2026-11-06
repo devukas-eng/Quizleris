@@ -31,6 +31,7 @@ const { seedPremadeQuizzes } = require('./src/backend/premade.js');
 const { ensureBankSchema, createBankRouter, cleanupBank } = require('./src/backend/bank.js');
 const { FREE_QUIZ_LIMIT, PRIVATE_EXPIRY_DAYS, hasActivePremium, isPremium, planCapabilities } = require('./src/backend/plans.js');
 const { cleanThemePayload } = require('./src/backend/user-themes.js');
+const { ensureQuizFolderSchema, cleanupQuizFolders, createQuizFolderRouter } = require('./src/backend/quiz-folders.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -412,8 +413,9 @@ const USER_ROLES = new Set(['teacher', 'creator', 'admin']);
 const USER_TIERS = new Set(['free', 'premium']);
 let siteSettingsReady = false;
 
-const ANIM_STYLES = new Set(['flip', 'slide', 'typewriter', 'fade']);
-const DISPLAY_FORMATS = new Set(['both', 'code', 'label']);
+const ANIM_STYLES = new Set(['flip', 'slide', 'scramble', 'typewriter', 'fade']);
+const DISPLAY_FORMATS = new Set(['both', 'code']);
+const SHOW_ORDERS = new Set(['list', 'shuffle']);
 
 function sanitizePlaylistItem(raw) {
     if (!raw || typeof raw !== 'object') return null;
@@ -500,6 +502,7 @@ async function readShowcaseSettings() {
         action: 'fill',
         animStyle: 'flip',
         displayFormat: 'both',
+        order: 'list',
         activePlaylistId: 'default',
         playlists: [{ id: 'default', name: 'Pagrindinis', scheduleStart: null, scheduleEnd: null, items: [] }]
     };
@@ -530,6 +533,7 @@ async function readShowcaseSettings() {
             action: raw?.action === 'start' ? 'start' : 'fill',
             animStyle: ANIM_STYLES.has(raw?.animStyle) ? raw.animStyle : 'flip',
             displayFormat: DISPLAY_FORMATS.has(raw?.displayFormat) ? raw.displayFormat : 'both',
+            order: SHOW_ORDERS.has(raw?.order) ? raw.order : 'list',
             activePlaylistId,
             playlists
         };
@@ -538,11 +542,18 @@ async function readShowcaseSettings() {
     }
 }
 
+// Everyone can read this, so it holds only what the landing page shows: never the playlists, which
+// can name private quizzes that are scheduled for later
+function publicShowcase(settings, quizzes = []) {
+    const { enabled, intervalSeconds, action, animStyle, order } = settings;
+    return { enabled, intervalSeconds, action, animStyle, order, quizzes };
+}
+
 app.get('/api/showcase', async (req, res) => {
     try {
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         const settings = await readShowcaseSettings();
-        if (!settings.enabled) return res.json({ ...settings, quizzes: [] });
+        if (!settings.enabled) return res.json(publicShowcase(settings));
 
         const now = new Date();
         // Priority 1: a playlist with an explicit schedule window that is currently active
@@ -558,45 +569,25 @@ app.get('/api/showcase', async (req, res) => {
                 chosen = active;
             }
         }
-        if (!chosen) return res.json({ ...settings, quizzes: [] });
+        if (!chosen) return res.json(publicShowcase(settings));
 
         const activeItems = chosen.items.filter(it => it.enabled !== false && isWithinSchedule(it.scheduleStart, it.scheduleEnd, now));
-        if (!activeItems.length) return res.json({ ...settings, activePlaylistName: chosen.name, quizzes: [] });
+        if (!activeItems.length) return res.json(publicShowcase(settings));
 
         const ids = activeItems.map(it => it.quizId);
-        let dbMap = new Map();
-        try {
-            const [rows] = await pool.query(`
-                SELECT q.id, q.title, u.username AS author
-                FROM quizzes q
-                LEFT JOIN users u ON q.owner_id = u.id
-                WHERE q.id IN (?) AND (q.expires_at IS NULL OR q.expires_at > NOW())
-            `, [ids]);
-            dbMap = new Map(rows.map(r => [String(r.id).toUpperCase(), r]));
-        } catch {
-            // fallback
-        }
+        const [rows] = await pool.query(`
+            SELECT q.id
+            FROM quizzes q
+            WHERE q.id IN (?) AND (q.expires_at IS NULL OR q.expires_at > NOW())
+        `, [ids]);
+        const dbMap = new Map(rows.map(r => [String(r.id).toUpperCase(), r]));
 
-        const quizzes = activeItems.map(it => {
-            const dbQuiz = dbMap.get(String(it.quizId).toUpperCase());
-            return {
-                id: dbQuiz?.id || it.quizId,
-                title: dbQuiz?.title || '',
-                customLabel: it.customLabel || '',
-                author: dbQuiz?.author || ''
-            };
-        });
+        // A code whose quiz was deleted or has expired would lead students nowhere
+        const quizzes = activeItems
+            .filter(it => dbMap.has(String(it.quizId).toUpperCase()))
+            .map(it => ({ id: dbMap.get(String(it.quizId).toUpperCase()).id }));
 
-        res.json({
-            enabled: settings.enabled,
-            intervalSeconds: settings.intervalSeconds,
-            action: settings.action,
-            animStyle: settings.animStyle,
-            displayFormat: settings.displayFormat,
-            activePlaylistId: chosen.id,
-            activePlaylistName: chosen.name,
-            quizzes
-        });
+        res.json(publicShowcase(settings, quizzes));
     } catch (error) {
         console.error('[SHOWCASE]', error);
         res.json({ enabled: false, intervalSeconds: 4, action: 'fill', quizzes: [] });
@@ -619,6 +610,7 @@ app.put('/api/admin/showcase', authenticateToken, requireAdmin, async (req, res)
             action: body.action === 'start' ? 'start' : body.action === 'fill' ? 'fill' : current.action,
             animStyle: ANIM_STYLES.has(body.animStyle) ? body.animStyle : current.animStyle,
             displayFormat: DISPLAY_FORMATS.has(body.displayFormat) ? body.displayFormat : current.displayFormat,
+            order: SHOW_ORDERS.has(body.order) ? body.order : current.order,
             activePlaylistId,
             playlists
         };
@@ -912,45 +904,8 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
     }
 });
 
-app.get('/api/admin/quizzes', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-        let rows;
-        try {
-            [rows] = await pool.query(`
-                SELECT q.id, q.title, q.visibility, q.featured, q.featured_order, q.storage_bytes, q.expires_at, q.created_at, q.updated_at,
-                       q.owner_id, u.username AS author,
-                       JSON_LENGTH(JSON_EXTRACT(q.quiz_data, '$.questions')) AS question_count,
-                       JSON_UNQUOTE(JSON_EXTRACT(q.quiz_data, '$.category')) AS category,
-                       JSON_UNQUOTE(JSON_EXTRACT(q.quiz_data, '$.language')) AS language
-                FROM quizzes q
-                LEFT JOIN users u ON q.owner_id = u.id
-                ORDER BY q.featured DESC, q.featured_order ASC, q.updated_at DESC
-                LIMIT 500
-            `);
-        } catch {
-            [rows] = await pool.query(`
-                SELECT q.id, q.title, q.visibility, 0 AS featured, 0 AS featured_order, q.storage_bytes, q.expires_at, q.created_at, q.updated_at,
-                       q.owner_id, u.username AS author
-                FROM quizzes q
-                LEFT JOIN users u ON q.owner_id = u.id
-                ORDER BY q.updated_at DESC
-                LIMIT 500
-            `);
-        }
-        if (attemptsReady && rows.length) {
-            const [counts] = await pool.query(
-                'SELECT quiz_id, COUNT(*) AS attempts FROM quiz_attempts WHERE quiz_id IN (?) GROUP BY quiz_id',
-                [rows.map(q => q.id)]
-            );
-            const byQuiz = new Map(counts.map(c => [c.quiz_id, Number(c.attempts)]));
-            rows.forEach(q => { q.attempts = byQuiz.get(q.id) || 0; });
-        }
-        res.json({ quizzes: rows.map(q => ({ ...q, featured: Boolean(q.featured), question_count: Number(q.question_count || 0) })) });
-    } catch (error) {
-        console.error('[ADMIN QUIZZES]', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+// Folders of quizzes, the quiz browser and its search (src/backend/quiz-folders.js)
+app.use('/api/admin', createQuizFolderRouter(pool, { attemptsReady: () => attemptsReady, guards: [authenticateToken, requireAdmin] }));
 
 app.patch('/api/admin/quizzes/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
@@ -1110,7 +1065,7 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
         if (!isOwner && !isAdmin && (isExpired || (!isListed && !isCode))) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
-        res.json(quiz.quiz_data);
+        res.json(typeof quiz.quiz_data === 'string' ? JSON.parse(quiz.quiz_data) : quiz.quiz_data);
     } catch (error) {
         console.error('[GET QUIZ]', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -1169,14 +1124,14 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             }
         }
         if (existing.length > 0 && req.user.role !== 'admin' && existing[0].owner_id !== req.user.id) {
-            return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.' });
+            return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.', code: 'quiz_id_taken' });
         }
 
         // Free tier: limited number of quizzes; private quizzes expire
         if (!isPremium(req.user) && existing.length === 0) {
             const [countRows] = await pool.query('SELECT COUNT(*) AS cnt FROM quizzes WHERE owner_id = ?', [req.user.id]);
             if (countRows[0].cnt >= FREE_QUIZ_LIMIT) {
-                return res.status(403).json({ error: `Free tier is limited to ${FREE_QUIZ_LIMIT} quizzes. Please upgrade to create more.` });
+                return res.status(403).json({ error: `Free tier is limited to ${FREE_QUIZ_LIMIT} quizzes. Please upgrade to create more.`, code: 'quiz_limit', limit: FREE_QUIZ_LIMIT });
             }
         }
         let expiresAt = null;
@@ -1563,6 +1518,11 @@ async function ensureSchema() {
         console.error('[SCHEMA] could not set up featured showcase schema:', error.code || error.message);
     }
     try {
+        await ensureQuizFolderSchema(pool);
+    } catch (error) {
+        console.error('[SCHEMA] could not set up quiz folders:', error.code || error.message);
+    }
+    try {
         await ensureBankSchema(pool);
     } catch (error) {
         // Non-fatal: quizzes and the editor work without the task bank
@@ -1572,6 +1532,7 @@ async function ensureSchema() {
 
 // Attempts whose quiz is gone (deleted or expired) are deleted with it
 async function deleteOrphanAttempts() {
+    await cleanupQuizFolders(pool).catch(error => console.error('[CLEANUP] quiz folders:', error.code || error.message));
     if (!attemptsReady) return;
     try {
         await pool.query('DELETE a FROM quiz_attempts a LEFT JOIN quizzes q ON q.id = a.quiz_id WHERE q.id IS NULL');

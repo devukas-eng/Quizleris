@@ -1,6 +1,7 @@
 // The theme gallery ("store") and the editor for themes of your own. Loaded on first open from
-// theme-picker.js. Every card previews its theme through CSS variables set on the card alone;
-// "try it on" shows a theme on the whole page with a bar to apply or go back.
+// theme-picker.js. Every card previews its theme through CSS variables set on the card alone, and
+// clicking a card switches to that theme. In the editor, "try it on" shows the draft on the whole
+// page with a bar to save or go back.
 import { t, getLanguage } from "./lang.js";
 import { escapeHtml } from "./dom.js";
 import { confirmDialog } from "./dialog.js";
@@ -9,7 +10,7 @@ import {
     deleteCustomTheme, copyTheme, sanitizeTheme, encodeShareCode, decodeShareCode, readability,
     fixReadability, themeName, previewStyle, withBase, randomTheme, savedFontSize, applyFontSize,
 } from "./themes.js";
-import { currentTheme, setTheme, previewTheme, restoreTheme, reloadSavedTheme, refreshThemePicker } from "./theme-picker.js";
+import { currentTheme, setTheme, beginTryOn, endTryOn as releaseTryOn, restoreTheme, reloadSavedTheme, refreshThemePicker } from "./theme-picker.js";
 import { themeSyncStatus } from "./theme-sync.js";
 
 const FILTERS = ["all", "light", "dark", "mine"];
@@ -23,7 +24,7 @@ const state = {
     draft: null,          // the theme being edited
     share: null,          // { name, code } shown above the grid
     message: "",
-    tryOn: null,          // { theme, fromEditor }
+    tryOn: null,          // { theme }, the editor's draft on the whole page
     lastFocus: null,
 };
 let overlay;
@@ -37,6 +38,7 @@ function fill(key, values) {
 
 export function openThemeStore() {
     if (!overlay) build();
+    endTryOn(false);
     state.lastFocus = document.activeElement;
     state.view = "gallery";
     state.share = null;
@@ -142,7 +144,7 @@ async function act(name, btn) {
         case "close": closeStore(); break;
         case "filter": state.filter = btn.dataset.value; state.share = null; render(); break;
         case "font-size": applyFontSize(btn.dataset.value, { persist: true }); refreshThemePicker(); renderKeepingFocus(btn); break;
-        case "try": startTryOn(themeOf(btn), false); break;
+        case "pick": pickTheme(themeOf(btn), btn); break;
         case "create": openEditor(copyTheme(currentTheme(), t("themes.namePlaceholder"))); break;
         case "copy": openEditor(copyTheme(themeOf(btn), themeName(themeOf(btn), getLanguage()))); break;
         case "edit": openEditor(sanitizeTheme(themeOf(btn))); break;
@@ -164,12 +166,24 @@ async function act(name, btn) {
         case "font": d.font = btn.dataset.value; renderKeepingFocus(btn); break;
         case "effect": d.effect.kind = btn.dataset.value; renderKeepingFocus(btn); break;
         case "fix": state.draft = fixReadability(d); renderKeepingFocus(overlay.querySelector("[data-act=save]")); break;
-        case "tryon-draft": startTryOn(sanitizeTheme({ ...d }), true); break;
+        case "tryon-draft": startTryOn(sanitizeTheme({ ...d })); break;
         case "save": saveDraft(); break;
         // Try-on bar
         case "tryon-back": endTryOn(true); break;
         case "tryon-apply": applyTryOn(); break;
     }
+}
+
+/** Switches to a theme right away; the gallery stays open so another can be tried just as fast */
+function pickTheme(theme, btn) {
+    if (!theme) return;
+    setTheme(theme);
+    const scroller = overlay.querySelector(".ts-body");
+    const top = scroller.scrollTop;
+    const id = btn.closest("[data-id]")?.dataset.id;
+    render();
+    scroller.scrollTop = top;
+    overlay.querySelector(`[data-id="${CSS.escape(id)}"] [data-act=pick]`)?.focus();
 }
 
 function showGallery() {
@@ -242,14 +256,14 @@ function saveDraft() {
 
 // ── Try on ──────────────────────────────────────────────────────────────────
 
-function startTryOn(theme, fromEditor) {
+function startTryOn(theme) {
     if (!theme) return;
-    state.tryOn = { theme, fromEditor };
-    previewTheme(theme);
+    state.tryOn = { theme };
+    beginTryOn(theme, () => endTryOn(true));
     overlay.classList.add("is-trying");
     tryOnBar.querySelector(".ts-tryon-label").textContent = fill("themes.previewing", { name: themeName(theme, getLanguage()) });
-    tryOnBar.querySelector("[data-act=tryon-back]").textContent = fromEditor ? t("themes.back") : t("themes.cancel");
-    tryOnBar.querySelector("[data-act=tryon-apply]").textContent = fromEditor ? t("themes.save") : t("themes.apply");
+    tryOnBar.querySelector("[data-act=tryon-back]").textContent = t("themes.back");
+    tryOnBar.querySelector("[data-act=tryon-apply]").textContent = t("themes.save");
     tryOnBar.hidden = false;
     tryOnBar.querySelector("[data-act=tryon-apply]").focus();
 }
@@ -259,16 +273,13 @@ function endTryOn(backToSheet) {
     state.tryOn = null;
     tryOnBar.hidden = true;
     overlay.classList.remove("is-trying");
-    restoreTheme();
+    releaseTryOn();
     if (backToSheet) overlay.querySelector(".ts-close")?.focus();
 }
 
 function applyTryOn() {
-    const { theme, fromEditor } = state.tryOn;
     endTryOn(false);
-    if (fromEditor) { saveDraft(); return; }
-    setTheme(theme);
-    closeStore();
+    saveDraft();
 }
 
 // ── Editor inputs ───────────────────────────────────────────────────────────
@@ -364,7 +375,7 @@ function cardHtml(theme, current, lang) {
     const isCurrent = theme.id === current.id;
     return `
         <article class="ts-card${isCurrent ? " is-current" : ""}" data-id="${escapeHtml(theme.id)}" style="${escapeHtml(previewStyle(theme))}">
-            <button type="button" class="ts-card-preview" data-act="try" aria-label="${escapeHtml(t("themes.tryOn"))}: ${name}">${mock()}</button>
+            <button type="button" class="ts-card-preview" data-act="pick" aria-pressed="${isCurrent}" aria-label="${escapeHtml(t("themes.apply"))}: ${name}">${mock()}</button>
             <div class="ts-card-foot">
                 <div class="ts-card-text">
                     <div class="ts-card-name">${name}${isCurrent ? ` <span class="ts-badge">${escapeHtml(t("themes.current"))}</span>` : ""}</div>

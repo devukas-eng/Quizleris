@@ -175,6 +175,16 @@ const translations = {
         'student.premadeEnglish': 'Anglų kalbos paruošti testai',
         'student.premadeLithuanianSoon': 'Lietuviški testai (Netrukus)',
         'student.premadeLithuanianHint': 'Lietuviški testai bus paruošti netrukus',
+        // Legal & Footer
+        'legal.terms': 'Naudojimo sąlygos',
+        'legal.privacy': 'Privatumo politika',
+        'legal.cookies': 'Slapukai',
+        // Cookie Consent Banner
+        'cookie.title': 'Slapukai ir Privatumas',
+        'cookie.desc': 'Naudojame anoniminius analizės slapukus, kad geriau suprastume, kaip vartotojai naudoja Quizleris. Skaitykite mūsų',
+        'cookie.privacyLink': 'Privatumo politiką',
+        'cookie.accept': '✓ Sutinku',
+        'cookie.decline': 'Atmesti',
     },
     en: {
         // Start Menu
@@ -351,6 +361,16 @@ const translations = {
         'student.premadeEnglish': 'English Premade Quizzes',
         'student.premadeLithuanianSoon': 'Lithuanian Quizzes (Coming Soon)',
         'student.premadeLithuanianHint': 'Lithuanian quizzes coming soon',
+        // Legal & Footer
+        'legal.terms': 'Terms of Service',
+        'legal.privacy': 'Privacy Policy',
+        'legal.cookies': 'Cookies',
+        // Cookie Consent Banner
+        'cookie.title': 'Cookies & Privacy',
+        'cookie.desc': 'We use anonymous analytics cookies to understand how Quizleris is used. Read our',
+        'cookie.privacyLink': 'Privacy Policy',
+        'cookie.accept': '✓ Accept',
+        'cookie.decline': 'Decline',
     }
 };
 let currentLanguage = 'lt'; // Default to Lithuanian

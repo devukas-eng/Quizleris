@@ -229,6 +229,13 @@ function visibleSubjects() {
     return meta.subjects.filter(subject => staff || subject.items > 0);
 }
 
+// A teacher with no bank of their own and an empty shared bank has nothing to do in these columns:
+// the editor then stands alone instead of beside two lists that can only say there is nothing
+const hasBankToShow = () => limits.writeMine || isStaff() || visibleSubjects().length > 0;
+
+// A teacher without a bank of their own has no folders: their column is the tasks they starred
+const homeFolder = () => (limits.writeMine ? "all" : "favorites");
+
 // --- Showing and hiding beside the editor ---
 
 async function onEditorOpen() {
@@ -237,7 +244,9 @@ async function onEditorOpen() {
     dashOrigin = null;
     if (shown || !isAdminAccessAllowed()) return;
     if (!meta && !(await requestMeta())) return;
-    if (shown || !isEditorOpen()) return;
+    // The bank may have filled up since this page loaded
+    if (!hasBankToShow() && Date.now() - metaAt > META_TTL) await refreshMeta();
+    if (shown || !isEditorOpen() || !hasBankToShow()) return;
     show(origin && performance.now() - origin.at < DASH_FRESH_MS ? origin : null);
     if (Date.now() - metaAt > META_TTL) refreshMeta();
 }
@@ -322,8 +331,8 @@ function animateIn(origin) {
     else slideIn(landing, mode === "wide" && !collapsed ? -1 : 1, 40);
     if (mode === "wide" && !collapsed) slideIn(els.panel, 1, origin ? 200 : 90);
     document.getElementById("app-root")?.animate(
-        [{ opacity: 0, transform: "translateY(18px) scale(0.985)" }, { opacity: 1, transform: "none" }],
-        { duration: 560, delay: origin ? 140 : 0, easing: EASE, fill: "backwards" });
+        [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+        { duration: 320, delay: origin ? 140 : 0, easing: EASE, fill: "backwards" });
 }
 
 // A column slides in from its side, its parts following one after another
@@ -1140,7 +1149,10 @@ function folderLabel(folderId) {
 function startMine() {
     mine.started = true;
     const saved = prefs.mineFolder;
-    mine.folderId = typeof saved === "number" || SPECIAL_FOLDERS.includes(saved) || isTagView(saved) ? saved : "all";
+    const allowed = limits.writeMine
+        ? typeof saved === "number" || SPECIAL_FOLDERS.includes(saved) || isTagView(saved)
+        : saved === "favorites" || isTagView(saved);
+    mine.folderId = allowed ? saved : homeFolder();
     reloadFolders();
     reloadMine();
 }
@@ -1151,8 +1163,8 @@ async function reloadTags() {
     if (!res.ok) return;
     mine.tags = res.data.tags || [];
     if (isTagView(mine.folderId) && !mine.tags.some(row => row.tag === tagOfView(mine.folderId))) {
-        mine.folderId = "all";
-        prefs.mineFolder = "all";
+        mine.folderId = homeFolder();
+        prefs.mineFolder = mine.folderId;
         savePrefs();
         reloadMine();
     }
@@ -1251,7 +1263,7 @@ async function reloadFolders() {
         mine.unfiled = res.data.unfiled ?? 0;
     }
     if (typeof mine.folderId === "number" && !folderById(mine.folderId)) {
-        mine.folderId = "all";
+        mine.folderId = homeFolder();
         reloadMine();
     }
     renderFolders();
@@ -1272,11 +1284,12 @@ async function reloadMine() {
 function renderFolders() {
     const expanded = new Set(prefs.mineExpanded || []);
     const kids = parentId => mine.folders.filter(folder => (folder.parentId ?? null) === parentId);
-    const rows = [
+    const starred = folderHtml({ id: "favorites", name: t("bank.favorites") }, 0, favorites.size, null, "star");
+    const rows = limits.writeMine ? [
         folderHtml({ id: "all", name: t("bank.folderAll") }, 0, mine.total, null, "stack"),
-        folderHtml({ id: "favorites", name: t("bank.favorites") }, 0, favorites.size, null, "star"),
+        starred,
         folderHtml({ id: "none", name: t("bank.folderNone") }, 0, mine.unfiled, null, "inbox")
-    ];
+    ] : [starred];
     const walk = (folder, depth) => {
         const children = kids(folder.id);
         const open = children.length ? expanded.has(folder.id) : null;
@@ -2637,7 +2650,7 @@ function emptyHtml(res, scope) {
     if (!res?.ok) return emptyState("alert", "bank.loadFailed");
     if (scope !== "mine") return emptyState("search", "bank.empty", "bank.emptyHint");
     if (mine.q.trim()) return emptyState("search", "bank.empty", "bank.mineSearchHint");
-    if (mine.folderId === "favorites") return emptyState("star", "bank.favoritesEmpty", "bank.favoritesHint");
+    if (mine.folderId === "favorites") return emptyState("star", "bank.favoritesEmpty", limits.writeMine ? "bank.favoritesHint" : "bank.favoritesHintRead");
     if (isTagView(mine.folderId)) return emptyState("hash", "bank.tagEmpty", "bank.tagHint");
     if (mine.folderId === "all") return emptyState("folder", "bank.mineEmpty", "bank.mineHint");
     if (mine.folderId === "none") return emptyState("inbox", "bank.unfiledEmpty", "bank.unfiledHint");

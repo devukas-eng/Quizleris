@@ -9,7 +9,7 @@ describe('lang.js', () => {
 
     it('t should translate keys correctly', () => {
         setLanguage('en');
-        expect(t('app.title')).toBe('Quizleris');
+        expect(t('app.title')).toBe('UAB Judelta');
         expect(t('nonexistent.key')).toBe('nonexistent.key');
     });
 
@@ -27,7 +27,29 @@ describe('lang.js', () => {
         updatePageLanguage();
         const div = document.querySelector('div');
         const input = document.querySelector('input');
-        expect(div.textContent).toBe('Quizleris');
+        expect(div.textContent).toBe('UAB Judelta');
         expect(input.placeholder).toBe('Enter name to track results');
+    });
+
+    it('should update legal footer elements when language changes', () => {
+        document.body.innerHTML = `
+            <footer id="legal-footer">
+                <button id="lf-terms" data-i18n="legal.terms">Naudojimo sąlygos</button>
+                <button id="lf-privacy" data-i18n="legal.privacy">Privatumo politika</button>
+                <button id="lf-cookies" data-i18n="legal.cookies">Slapukai</button>
+            </footer>
+        `;
+
+        setLanguage('en');
+        updatePageLanguage();
+        expect(document.getElementById('lf-terms').textContent).toBe('Terms of Service');
+        expect(document.getElementById('lf-privacy').textContent).toBe('Privacy Policy');
+        expect(document.getElementById('lf-cookies').textContent).toBe('Cookies');
+
+        setLanguage('lt');
+        updatePageLanguage();
+        expect(document.getElementById('lf-terms').textContent).toBe('Naudojimo sąlygos');
+        expect(document.getElementById('lf-privacy').textContent).toBe('Privatumo politika');
+        expect(document.getElementById('lf-cookies').textContent).toBe('Slapukai');
     });
 });

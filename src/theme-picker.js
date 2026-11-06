@@ -4,8 +4,8 @@ import { getLanguage, t } from "./lang.js";
 import { logEvent } from "./analytics.js";
 import { escapeHtml } from "./dom.js";
 import {
-    THEMES, DEFAULT_THEME_ID, FONT_SIZES, applyTheme, findTheme, savedThemeId, recentThemeIds, themeName, swatch,
-    savedFontSize, applyFontSize,
+    THEMES, DEFAULT_THEME_ID, FONT_SIZES, THEME_KEY, CUSTOM_THEMES_KEY, applyTheme, findTheme, savedThemeId,
+    recentThemeIds, themeName, swatch, savedFontSize, applyFontSize,
 } from "./themes.js";
 
 const SHORT_LIST = 5;
@@ -15,6 +15,10 @@ const phoneHeader = window.matchMedia("(max-width: 600px)");
 let current = null;
 let popupOpen = false;
 let beforeOpen = () => {};
+// The theme being tried on in the editor. It stays on the page, whatever else repaints, until
+// the try-on ends. `exitTryOn` is how the header button leaves it.
+let tryingOn = null;
+let exitTryOn = null;
 
 export function currentTheme() {
     return current;
@@ -24,25 +28,48 @@ export function currentTheme() {
 export function setTheme(theme) {
     current = theme;
     applyTheme(theme, { persist: true });
+    if (tryingOn) applyTheme(tryingOn);
     refreshThemePicker();
     logEvent("theme", "change", { theme: theme.custom ? "custom" : theme.id });
 }
 
-/** Shows a theme without saving it (hover, gallery preview) */
+/** Shows a theme without saving it (hover in the popup) */
 export function previewTheme(theme) {
-    applyTheme(theme);
+    if (!tryingOn) applyTheme(theme);
 }
 
 /** Back to the saved theme after a preview */
 export function restoreTheme() {
-    if (current) applyTheme(current);
+    const theme = tryingOn || current;
+    if (theme) applyTheme(theme);
+}
+
+/** Holds `theme` on the page until endTryOn; `onExit` runs if the header button is used meanwhile */
+export function beginTryOn(theme, onExit) {
+    tryingOn = theme;
+    exitTryOn = onExit;
+    applyTheme(theme);
+}
+
+export function endTryOn() {
+    tryingOn = null;
+    exitTryOn = null;
+    restoreTheme();
 }
 
 /** The saved theme again, or the default when the saved one was deleted */
 export function reloadSavedTheme() {
     const theme = findTheme(savedThemeId()) || findTheme(DEFAULT_THEME_ID);
     if (theme.id !== current?.id) setTheme(theme);
-    else { current = theme; applyTheme(theme, { persist: true }); refreshThemePicker(); }
+    else { current = theme; applyTheme(theme, { persist: true }); restoreTheme(); refreshThemePicker(); }
+}
+
+/** Another tab changed the saved theme: follow it here, leaving the saving to that tab */
+function followOtherTab() {
+    const theme = findTheme(savedThemeId()) || findTheme(DEFAULT_THEME_ID);
+    current = theme;
+    restoreTheme();
+    refreshThemePicker();
 }
 
 function shortList() {
@@ -70,13 +97,18 @@ function measureLabel() {
 
 export function refreshThemePicker() {
     if (!current) return;
-    const lang = getLanguage();
     const label = document.getElementById("theme-btn-label");
-    if (label) label.textContent = themeName(current, lang);
+    if (label) label.textContent = themeName(current, getLanguage());
     const btn = document.getElementById("theme-btn");
     if (btn) btn.title = t("themes.button");
     measureLabel();
+    // Rebuilding an open list would swap the item out from under a click in progress, and the
+    // click would then be lost. It is rebuilt when it opens.
+    if (!popupOpen) renderLists();
+}
 
+function renderLists() {
+    const lang = getLanguage();
     const list = shortList();
     const fontSize = savedFontSize();
     const fontScaleLabels = { small: "themes.fontSizeSmall", normal: "themes.fontSizeNormal", large: "themes.fontSizeLarge" };
@@ -123,6 +155,7 @@ function openPopup() {
     const row = document.getElementById("theme-row");
     if (!btn || !popup) return;
     beforeOpen();
+    renderLists();
     if (phoneHeader.matches && row) {
         row.classList.add("open");
     } else {
@@ -149,7 +182,12 @@ export function openThemeStore() {
     closeThemePicker();
     import("./theme-store.js")
         .then(m => m.openThemeStore())
-        .catch(error => console.error("The theme gallery could not be loaded", error));
+        .catch(async (error) => {
+            console.error("The theme gallery could not be loaded", error);
+            // Usually a tab left open across a deploy: a reload fetches the new files
+            const { alertDialog } = await import("./dialog.js");
+            alertDialog(t("themes.storeFailedTitle"), t("themes.storeFailed"));
+        });
 }
 
 function choose(item) {
@@ -177,7 +215,8 @@ export function initThemePicker({ onOpen } = {}) {
     const themeBtn = document.getElementById("theme-btn");
     themeBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (popupOpen) closeThemePicker();
+        if (exitTryOn) exitTryOn();
+        else if (popupOpen) closeThemePicker();
         else openPopup();
     });
     // Measured again before it opens: the web font may have arrived since the first measure
@@ -192,7 +231,7 @@ export function initThemePicker({ onOpen } = {}) {
             if (fsBtn && box.contains(fsBtn)) {
                 e.stopPropagation();
                 applyFontSize(fsBtn.dataset.fontSize, { persist: true });
-                refreshThemePicker();
+                renderLists();
                 return;
             }
             const item = e.target.closest(".theme-picker-item, .theme-row-item");
@@ -210,6 +249,8 @@ export function initThemePicker({ onOpen } = {}) {
     // Pointing at a theme in the popup shows it until the pointer leaves
     const popup = document.getElementById("theme-picker-popup");
     popup?.addEventListener("mouseover", (e) => {
+        // The list is still under the pointer while it fades out: a preview then would stick
+        if (!popupOpen) return;
         const item = e.target.closest(".theme-picker-item[data-theme]");
         const theme = item && findTheme(item.dataset.theme);
         if (theme) previewTheme(theme);
@@ -218,4 +259,7 @@ export function initThemePicker({ onOpen } = {}) {
 
     window.addEventListener("click", () => { if (popupOpen) closeThemePicker(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && popupOpen) closeThemePicker(); });
+    window.addEventListener("storage", (e) => {
+        if (e.key === THEME_KEY || e.key === CUSTOM_THEMES_KEY) followOtherTab();
+    });
 }
