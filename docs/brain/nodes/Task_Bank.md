@@ -30,8 +30,9 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 
 ## Gotchas & Constraints
 
-- `bankLimits`: every teacher may read the shared bank, only staff (admin, creator) may write it, and an own bank needs staff or `BANK_OPEN=1`.
-- A teacher without an own bank sees only Starred on the left (`homeFolder` returns `favorites`). The columns stay away while `hasBankToShow` is false.
+- `bankLimits`: every teacher may read the shared bank and keep an own bank, and only staff (admin, creator) may write the shared one. Students get neither.
+- The bank has no dashboard entry. It appears only beside the quiz editor.
+- `homeFolder` and `hasBankToShow` still handle a user with no own bank, but no role reaches those paths now.
 - The live shared bank is empty while the local one has tasks, which hides teacher bugs. Test with an empty bank, see [[Local_Testing]].
 - List totals and tree counts come from the in-memory `sharedGroups`. A row changed directly in the database appears in lists, but counts update only after the next API write or a restart.
 - New tables go into `SCHEMA`. Changing an existing table needs a `MIGRATIONS` step.

@@ -56,7 +56,7 @@ Educators and power users can build complex assessments effortlessly:
 *   **100% Local Storage**: All quiz data, user states, and settings are saved securely in the browser's `localStorage`.
 *   **No Databases Needed**: Quizleris runs entirely from static files. There are no databases to configure, no authentication servers to secure, and zero latency.
 *   **Portable JSON**: Quizzes can be instantly exported to `.json` files and shared with students via email or messaging apps, then imported with a single click.
-*   **Compliant Legal Modals**: Includes elegantly rendered, natively integrated overlays for Terms of Service, Privacy Policy, and Cookie Policy, with built-in data deletion workflows (contact `eblogsmod@gmail.com`).
+*   **Compliant Legal Modals**: Includes elegantly rendered, natively integrated overlays for Terms of Service, Privacy Policy, and Cookie Policy, with built-in data deletion workflows (contact `info@spresk.lt`).
 
 ---
 

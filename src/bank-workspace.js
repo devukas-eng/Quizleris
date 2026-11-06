@@ -215,8 +215,8 @@ function prepareMeta(data) {
     };
 }
 
-// What this user may do, as the server answered (/bank/access): teachers browse the shared bank;
-// staff (admins and creators) fill it; a bank of one's own needs writeMine. Only admins change the
+// What this user may do, as the server answered (/bank/access): teachers browse the shared bank and
+// keep a bank of their own; staff (admins and creators) fill the shared one. Only admins change the
 // classifier lists (the topic tree's edit mode).
 const NO_ACCESS = { read: false, writeShared: false, writeMine: false, staff: false };
 let limits = NO_ACCESS;

@@ -12,8 +12,6 @@ const { QTYPES, KINDS, STATUSES, toId, idList } = core;
 // question. The tables are created on startup like quiz_attempts; nothing existing is altered.
 
 const SEED_FILE = path.join(__dirname, '..', '..', 'data', 'bank-seed.json');
-// Until the bank has content only admins see it; BANK_OPEN=1 opens it to every teacher
-const BANK_OPEN = process.env.BANK_OPEN === '1';
 const META_TTL_MS = 5 * 60 * 1000; // another server process picks up classifier edits within this
 const MAX_BATCH = 500;
 const MAX_BULK = 100000;
@@ -586,12 +584,13 @@ function contextFor(ownerId, status = 'published', { teacher = false } = {}) {
 // may do everything with tasks an admin may, but not change the classifier lists or user accounts)
 const isStaff = user => user.role === 'admin' || user.role === 'creator';
 
-// What a user may do with the bank. Every teacher may browse the shared bank and take tasks from
-// it; only staff change it. A private bank of one's own stays behind BANK_OPEN. Premium limits
+// What a user may do with the bank. Every teacher may browse the shared bank, take tasks from it
+// and keep a private bank of their own; only staff change the shared one. Premium limits
 // (template variants, whole-topic picks, the size of a private bank) belong here.
 function bankLimits(user) {
     const staff = isStaff(user);
-    return { read: staff || user.role === 'teacher', writeShared: staff, writeMine: staff || BANK_OPEN, staff };
+    const member = staff || user.role === 'teacher';
+    return { read: member, writeShared: staff, writeMine: member, staff };
 }
 
 function listContext(user, params) {

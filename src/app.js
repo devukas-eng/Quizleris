@@ -351,7 +351,7 @@ async function initApp() {
 // ── Legal content helper ──────────────────────────────────────────────────────
 function getLegalContent(type, lang) {
     const isLt = lang === 'lt';
-    const email = 'eblogsmod@gmail.com';
+    const email = 'info@spresk.lt';
     const content = {
         terms: {
             title: isLt ? 'Naudojimo sąlygos' : 'Terms of Service',

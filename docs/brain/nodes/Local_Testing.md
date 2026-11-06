@@ -10,7 +10,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 
 ## Canonical File Map
 
-- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999.
+- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999, and `quizleris-nobank` runs it with an empty shared bank on port 3998.
 - `.env.example`: the variables the app expects.
 - `vitest.config.js`: unit test config, run with `npm.cmd test`.
 - `tests/setup.js`: shared test setup.
@@ -31,7 +31,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 ## Gotchas & Constraints
 
 - **Never start the app with the repository `.env`.** It points at the live database. Use the environment in `.claude/launch.json`.
-- Local database: XAMPP's `C:\xampp\mysql\bin\mysqld.exe` with its own `my.ini` on port 3399, using `quizleris_dev`, `quizleris_nobank` and `quizleris_bench`. Earlier setups lived in session scratch folders, so it may need recreating.
+- Local database: XAMPP's `C:\xampp\mysql\bin\mysqld.exe` with its own `my.ini` on port 3399, using `quizleris_dev`, `quizleris_nobank` and `quizleris_bench`. Earlier setups lived in session scratch folders, so it may need recreating. Run it with the shell tool's background mode, because a process from `Start-Process` dies when the command ends.
 - Copying a database fails on generated columns, so list the columns.
 - Local sign-in: sign a JWT with the `JWT_SECRET` from `.claude/launch.json`, then set `quizleris_jwt` and `quizleris_user` in the browser.
 - **Test teacher work as a real teacher:** free plan, signed in through the form, with an empty shared bank like live. Run the live commit beside the working copy to compare.

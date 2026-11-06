@@ -39,7 +39,7 @@ Kai paskyra gauna premium ribas (tampa premium, kūrėju ar admin), kas valandą
 | Bendro banko skaitymas, užduočių ėmimas į testą | ✓ | ✓ | ✓ | ✓ | `bankLimits().read` |
 | Žvaigždutės (iki 2000) | ✓ | ✓ | ✓ | ✓ | `MAX_FAVORITES` |
 | Pranešimai apie klaidas (iki 30 laukiančių) | ✓ | ✓ | ✓ | ✓ | `MAX_OPEN_REPORTS` |
-| Savas privatus bankas | tik su `BANK_OPEN=1` | tik su `BANK_OPEN=1` | ✓ | ✓ | `bankLimits().writeMine` |
+| Savas privatus bankas | ✓ | ✓ | ✓ | ✓ | `bankLimits().writeMine` |
 | Privataus banko dydis | 10 000 užd., 1000 aplankų | tas pats | be ribos | be ribos | `MAX_PRIVATE_ITEMS`, `MAX_FOLDERS` |
 | Bendro banko pildymas ir taisymas | ✗ | ✗ | ✓ | ✓ | `bankLimits().writeShared` |
 | Pranešimų apie klaidas peržiūra | ✗ | ✗ | ✓ | ✓ | `requireStaff` |

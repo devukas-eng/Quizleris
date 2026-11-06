@@ -14,7 +14,7 @@ All data, including quiz scores and custom created quizzes, are stored entirely 
 <h4>4. Data Deletion & Contact</h4>
 <p>Because your data is stored locally on your device, you can delete it at any time by clearing your browser cache/storage.<br>
 For any specific requests, legal inquiries, or formal data deletion requests, please contact our support team at:<br>
-<strong>Email: <a href="mailto:eblogsmod@gmail.com">eblogsmod@gmail.com</a></strong></p>
+<strong>Email: <a href="mailto:info@spresk.lt">info@spresk.lt</a></strong></p>
 `;
 
 const TERMS_TEXT = `
@@ -29,7 +29,7 @@ const TERMS_TEXT = `
 <p>The Quizleris platform, its original content, features, and functionality are owned by its creators and are protected by international copyright, trademark, patent, trade secret, and other intellectual property laws.</p>
 <h4>4. Contact Us</h4>
 <p>If you have any questions about these Terms, please contact us at:<br>
-<strong>Email: <a href="mailto:eblogsmod@gmail.com">eblogsmod@gmail.com</a></strong></p>
+<strong>Email: <a href="mailto:info@spresk.lt">info@spresk.lt</a></strong></p>
 `;
 
 const COOKIES_TEXT = `
@@ -47,7 +47,7 @@ const COOKIES_TEXT = `
 <p>without ever sending this data to a remote server.</p>
 <h4>Managing your data</h4>
 <p>If you wish to remove all data Quizleris has saved, you can simply clear your browser's site data. If you need assistance with data policies, contact us at:<br>
-<strong>Email: <a href="mailto:eblogsmod@gmail.com">eblogsmod@gmail.com</a></strong></p>
+<strong>Email: <a href="mailto:info@spresk.lt">info@spresk.lt</a></strong></p>
 `;
 
 export function showLegalModal() {
@@ -87,7 +87,7 @@ export function showLegalModal() {
                 </div>
                 
                 <div class="legal-footer">
-                    <p>Questions? Contact <strong>eblogsmod@gmail.com</strong></p>
+                    <p>Questions? Contact <strong>info@spresk.lt</strong></p>
                 </div>
             </div>
         </div>

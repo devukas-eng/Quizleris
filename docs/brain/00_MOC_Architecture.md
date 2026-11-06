@@ -68,7 +68,7 @@ Find the row that matches the task and read that node before touching code.
 | Showcase, the landing code board, ticker effects, playlists | `src/code-ticker.js`, `src/admin-showcase.js` | [[Showcase]] | active |
 | Creating or saving a quiz, drafts, the quiz limit, lost quizzes | `src/quiz-editor.js` | [[Quiz_Editor]] | active |
 | Students joining, playing, grading, quit tracking | `src/render.js`, `src/state.js` | [[Quiz_Runtime]] | active |
-| Task bank, topics, stars, nicknames, tags, approvals, `BANK_OPEN` | `src/bank-workspace.js`, `src/backend/bank.js` | [[Task_Bank]] | wip |
+| Task bank, teacher access, topics, stars, nicknames, tags, approvals | `src/bank-workspace.js`, `src/backend/bank.js` | [[Task_Bank]] | wip |
 | API routes, schema at start, rate limits, cleanup jobs | `server.js`, `src/api.js` | [[Backend_API]] | needs-refactor |
 | Login, roles, invite codes, free and premium limits | `src/auth.js`, `src/backend/plans.js` | [[Auth_Roles_Plans]] | active |
 | Business name, copyright, legal pages, cookie text | `src/index.html`, `src/app.js`, `tests/branding.test.js` | [[Branding_Legal]] | wip |

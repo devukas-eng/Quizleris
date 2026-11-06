@@ -12,6 +12,10 @@ describe('who may do what with the task bank', () => {
         expect(limits.staff).toBe(false);
     });
 
+    it('gives every teacher a bank of their own', () => {
+        expect(bankLimits({ id: 5, role: 'teacher' }).writeMine).toBe(true);
+    });
+
     it('lets creators fill the shared bank like admins', () => {
         for (const role of ['creator', 'admin']) {
             const limits = bankLimits({ id: 6, role });
@@ -20,6 +24,6 @@ describe('who may do what with the task bank', () => {
     });
 
     it('keeps students out', () => {
-        expect(bankLimits({ id: 7, role: 'student' }).read).toBe(false);
+        expect(bankLimits({ id: 7, role: 'student' })).toMatchObject({ read: false, writeShared: false, writeMine: false });
     });
 });

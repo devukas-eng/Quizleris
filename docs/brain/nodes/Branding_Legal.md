@@ -25,6 +25,7 @@ Owns the public name, copyright and legal texts. The business is UAB Judelta, th
 ## Gotchas & Constraints
 
 - Legal text is inline HTML in `src/app.js`, not in `src/lang.js`. Edit `getLegalContent`.
+- Every legal page takes its contact address from the `email` constant in `getLegalContent`. `tests/branding.test.js` fails if a personal Gmail address returns.
 - The company was founded about 2024-05-15, from the age the owner gave on 2026-11-06. The footer reads 2024 to the current year.
 - `.legal-year` is set once at boot, so the year in the HTML is only a fallback.
 - The copyright text also exists in a fallback footer in `src/app.js`, used only if `#legal-footer` is missing. That fallback is built after `.legal-year` runs, so it would keep the written year.
