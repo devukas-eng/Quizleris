@@ -32,6 +32,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 
 - **Never start the app with the repository `.env`.** It points at the live database. Use the environment in `.claude/launch.json`.
 - Local database: XAMPP's `C:\xampp\mysql\bin\mysqld.exe` with its own `my.ini` on port 3399, using `quizleris_dev`, `quizleris_nobank` and `quizleris_bench`. Earlier setups lived in session scratch folders, so it may need recreating. Run it with the shell tool's background mode, because a process from `Start-Process` dies when the command ends.
+- On 2026-11-06 the real data was in the scratch folder whose `my.ini` says port 3399 and that holds a `quizleris_dev` folder. Another scratch `my.ini` starts an empty server on 3398, so check the port before starting one.
 - Copying a database fails on generated columns, so list the columns.
 - Local sign-in: sign a JWT with the `JWT_SECRET` from `.claude/launch.json`, then set `quizleris_jwt` and `quizleris_user` in the browser.
 - **Test teacher work as a real teacher:** free plan, signed in through the form, with an empty shared bank like live. Run the live commit beside the working copy to compare.

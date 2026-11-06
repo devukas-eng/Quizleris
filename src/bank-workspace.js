@@ -159,10 +159,10 @@ export function initBankWorkspace() {
 // --- Classifiers and access ---
 
 function requestMeta() {
-    metaRequest ??= loadMeta().then(result => {
-        meta = result.meta;
+    metaRequest ??= loadMeta().then(loaded => {
+        meta = loaded;
         if (meta) metaAt = Date.now();
-        else if (result.offline) metaRequest = null; // offline: ask again next time
+        else metaRequest = null; // refused, failed or offline: the next editor opening asks again
         return meta;
     });
     return metaRequest;
@@ -171,10 +171,10 @@ function requestMeta() {
 // Asks first whether this user may read the bank, so a teacher's page logs no refused request
 async function loadMeta() {
     const access = await api.fetchAccess();
-    if (!access.ok || !access.data.read) return { meta: null, offline: access.status <= 0 };
+    if (!access.ok || !access.data.read) return null;
     limits = { ...NO_ACCESS, ...access.data };
     const res = await api.fetchMeta();
-    return { meta: res.ok ? prepareMeta(res.data) : null, offline: res.status <= 0 };
+    return res.ok ? prepareMeta(res.data) : null;
 }
 
 async function refreshMeta() {

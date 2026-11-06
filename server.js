@@ -765,19 +765,25 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
         }
         let bankStats = { published: 0, pendingReview: 0, openReports: 0 };
         try {
+            // These count what the Bank, Approvals and Reports tabs list, so a badge matches its tab
             const [[bItems]] = await pool.query(`
-                SELECT SUM(owner_id = 0 AND status = 'published') AS published,
-                       SUM(owner_id = 0 AND status = 'draft' AND submitted_by IS NOT NULL) AS pending_review
-                FROM bank_items
+                SELECT SUM(status = 'published') AS published,
+                       SUM(status = 'draft' AND id IN (SELECT item_id FROM bank_submissions WHERE status = 'pending')) AS pending_review
+                FROM bank_items WHERE owner_id = 0
             `);
-            const [[bRep]] = await pool.query("SELECT COUNT(DISTINCT item_id) AS open_reports FROM bank_item_reports WHERE status = 'open'");
+            const [[bRep]] = await pool.query(`
+                SELECT COUNT(DISTINCT r.item_id) AS open_reports
+                FROM bank_item_reports r JOIN bank_items i ON i.id = r.item_id
+                WHERE r.status = 'open' AND i.owner_id = 0 AND i.status = 'published'
+            `);
             bankStats = {
                 published: Number(bItems?.published || 0),
                 pendingReview: Number(bItems?.pending_review || 0),
                 openReports: Number(bRep?.open_reports || 0)
             };
-        } catch {
-            // bank tables may not exist yet
+        } catch (error) {
+            // The rest of the overview still loads; a wrong query must not pass for an empty bank
+            console.error('[OVERVIEW] bank counts:', error.code || error.message);
         }
         const showcase = await readShowcaseSettings();
         res.json({

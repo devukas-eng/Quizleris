@@ -6,7 +6,7 @@ last_verified: 2026-11-06
 
 ## Purpose & Boundaries
 
-Owns the public name, copyright and legal texts. The business is UAB Judelta, the brand is spresk, and Quizleris remains only the codebase name. The legal pages still lack a company code and address.
+Owns the public name, copyright and legal texts. The business is UAB Judelta, the brand is spresk, and Quizleris remains only the codebase name. 
 
 ## Canonical File Map
 
@@ -34,7 +34,7 @@ Owns the public name, copyright and legal texts. The business is UAB Judelta, th
 - `.legal-year` is set once at boot, so the year in the HTML is only a fallback.
 - The copyright text also exists in a fallback footer in `src/app.js`, used only if `#legal-footer` is missing. That fallback is built after `.legal-year` runs, so it would keep the written year.
 - Keep the lowercase `quizleris_*` storage keys. The cookie policy names them, so renaming would make the policy wrong.
-- The icon's `s` is the first letter's outline from `src/spresk.svg`, not a font. It fills 87.5% of the tile so its edges land on whole pixels at 16, 32 and 48. The full word is unreadable at tab size, which is what was wrong with the old icon.
+- The icon's `s` is the first letter's outline from `src/spresk.svg`, not a font. It fills 68% of the tile's height, the owner's pick over a larger 87.5% version. The full word is unreadable at tab size, which is what was wrong with the old icon.
 - Browsers hold on to favicons, so raise the `?v=` on the icon links in `src/index.html` when an icon changes. `copy-files.js` stamps only the stylesheet and script.
 - `src/apple-touch-icon.png` has square corners and no transparency on purpose: iOS rounds it and turns transparent areas black.
 - `src/legal.js` and `src/i18n.js` still show the old name. Both are planned for removal, see [[01_STATE]].

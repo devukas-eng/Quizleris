@@ -32,3 +32,6 @@ Owns creating and editing a quiz: the blank start, draft recovery and saving to 
 - Refusals carry a `code`. `quizSaveError` turns `quiz_limit` and `quiz_id_taken` into the teacher's language, so add new codes there too.
 - A free teacher who reaches `FREE_QUIZ_LIMIT` gets 403. A taken id gets 409.
 - Do not confuse `openEditor` here with the local one in `src/dashboard-ui.js`, see [[Dashboard]].
+- Admins and teachers share one header, `.admin-panel-head` in `src/index.html`: status badge, then the saved quiz picker and delete button in one oval (`.admin-load-group`), then undo, redo and close at the right end.
+- The delete button is disabled, not hidden, when no quiz is picked. The picker list loads after the editor opens, so hiding it made the oval change shape on every open.
+- Below 520px of editor width the header becomes two rows, with the oval alone on the second. The editor is narrow beside the bank columns, so check the header with them open.

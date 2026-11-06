@@ -31,7 +31,10 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 ## Gotchas & Constraints
 
 - `bankLimits`: every teacher may read the shared bank and keep an own bank, and only staff (admin, creator) may write the shared one. Students get neither.
-- The bank has no dashboard entry. It appears only beside the quiz editor.
+- For teachers the bank appears only beside the quiz editor. Admins also have the Bank, Approvals and Reports tabs in [[Dashboard]].
+- Below 1100px the bank is only an orange button at the bottom right, and closing it on a wider screen is remembered in `quizleris_bank_prefs`. Either can read as "the bank is missing", so ask about the screen before suspecting the account.
+- Nothing on the server depends on an account's age: `bankLimits` reads only the role, fresh from the database.
+- `src/app.js` loads this code at boot, on sign-in and on every `editor-mode`, because a role changed in the database reaches the browser only with the profile. `requestMeta` also asks again after any failure, so one refused request does not hide the bank until a reload.
 - `homeFolder` and `hasBankToShow` still handle a user with no own bank, but no role reaches those paths now.
 - The live shared bank is empty while the local one has tasks, which hides teacher bugs. Test with an empty bank, see [[Local_Testing]].
 - List totals and tree counts come from the in-memory `sharedGroups`. A row changed directly in the database appears in lists, but counts update only after the next API write or a restart.

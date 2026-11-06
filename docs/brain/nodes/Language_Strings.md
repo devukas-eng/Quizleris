@@ -27,3 +27,4 @@ Owns every Lithuanian and English interface string and how the page switches lan
 - `src/i18n.js` holds the owner's earlier edits and still has the old name. Check it before deleting, as planned in [[01_STATE]].
 - Elements with `data-i18n` are refilled by `updatePageLanguage`. Text set any other way must be set again after a language switch.
 - New teacher-facing text needs both languages. Teachers once saw an English limit error.
+- `src/index.html` starts as `lang="lt"` with `translate="no"` and a `notranslate` meta, and `updatePageLanguage` keeps `lang` true. It once said `lang="en"` over Lithuanian text, so Chrome machine-translated the page: "testas" became "sėklidės" and "Temos" became "Temosas". Wrong words that are not in `src/lang.js` come from a browser translator, not from here.

@@ -285,7 +285,7 @@ function showBlankQuiz() {
   renderAdminForm();
   if (adminLocalSelector) {
     adminLocalSelector.value = "";
-    toggleLocalDeleteButtonVisibility();
+    syncLocalDeleteButton();
   }
 }
 
@@ -306,7 +306,7 @@ async function loadIntoEditor(quizId) {
   renderAdminForm();
   if (adminLocalSelector) {
     adminLocalSelector.value = quizId;
-    toggleLocalDeleteButtonVisibility();
+    syncLocalDeleteButton();
   }
 }
 
@@ -1972,23 +1972,19 @@ async function populateLocalSelector() {
   adminLocalSelector.value = adminQuiz?.id || "";
   if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
 
-  toggleLocalDeleteButtonVisibility();
+  syncLocalDeleteButton();
 }
 
-function toggleLocalDeleteButtonVisibility() {
+function syncLocalDeleteButton() {
   if (!adminLocalDeleteBtn || !adminLocalSelector) return;
-  if (adminLocalSelector.value) {
-    adminLocalDeleteBtn.style.display = "inline-flex";
-  } else {
-    adminLocalDeleteBtn.style.display = "none";
-  }
+  adminLocalDeleteBtn.disabled = !adminLocalSelector.value;
 }
 
 async function handleLocalSelectorChange() {
   if (!adminLocalSelector) return;
   const selectedId = adminLocalSelector.value;
   if (!selectedId) {
-    toggleLocalDeleteButtonVisibility();
+    syncLocalDeleteButton();
     return;
   }
   
@@ -1996,7 +1992,7 @@ async function handleLocalSelectorChange() {
   if (!(await confirmReplaceDraft(selectedId))) {
     adminLocalSelector.value = adminQuiz?.id || "";
     if (adminLocalSelector.selectedIndex === -1) adminLocalSelector.value = "";
-    toggleLocalDeleteButtonVisibility();
+    syncLocalDeleteButton();
     return;
   }
   await loadIntoEditor(selectedId);

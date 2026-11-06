@@ -1941,6 +1941,9 @@ export function t(key) {
 }
 // Update all translatable elements in the DOM
 export function updatePageLanguage() {
+    // Browsers read this to tell what language the page is in
+    document.documentElement.lang = currentLanguage;
+
     // Save current values of all select elements to prevent resets during option updates
     const selectStates = new Map();
     document.querySelectorAll('select').forEach(select => {

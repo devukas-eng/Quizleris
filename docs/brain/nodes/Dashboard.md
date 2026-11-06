@@ -31,3 +31,8 @@ Owns the dashboard window (teachers' My quizzes and the admin tabs) and the resu
 - `.dash-window` has a fixed height on purpose, see [[Page_Shell]].
 - The old showcase and quiz list code is gone (about 950 lines). The file is still large, so the next split should follow `src/admin-showcase.js`.
 - The owner tests only as admin, so teacher bugs here surface only when a teacher reports them. See [[Local_Testing]].
+- Tab badges come from `/api/admin/overview` in `server.js`. Its bank counts must match what the Bank, Approvals and Reports tabs list. They once read a column that does not exist, and an empty `catch` turned that into a 0 on every badge, so a failure is now logged as `[OVERVIEW]`.
+- Approvals must ask for `status: "draft"`. Without it the server lists published tasks, and waiting ones are drafts.
+- Task cards in those three tabs share `taskEditButtonsHtml` and `wireInlineTaskEditors`. While editing, the form replaces the preview and Save and Cancel replace Edit. Saving updates only that card, so the list keeps its place.
+- A bank list's `total` can lag about a second behind a write, see [[Task_Bank]]. The Bank tab uses the row count when everything fits on one page, and it must not copy `total` into the badge.
+- The Bank tab loads the newest 60 tasks with no way to load more, see [[01_STATE]].

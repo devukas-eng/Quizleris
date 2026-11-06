@@ -3603,10 +3603,77 @@ math-virtual-keyboard::part(action-toolbar) {
     cursor: default;
 }
 
+/* One oval holding the saved quiz picker and its delete button. Its width comes from the room in
+   the row, never from the quiz picked, and the delete button dims instead of disappearing, so the
+   oval keeps its shape. The small basis keeps it on the badge's row beside the bank columns. */
 .admin-load-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+    display: flex;
+    flex: 1 1 200px;
+    align-items: stretch;
+    min-width: 0;
+    max-width: 320px;
+    height: 38px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    background: var(--input-bg);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-load-group:hover {
+    border-color: var(--control-border-hover);
+}
+
+.admin-load-group:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+}
+
+.admin-load-group .admin-select-compact,
+.admin-load-group .admin-select-compact:hover,
+.admin-load-group .admin-select-compact:focus {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    height: 100%;
+    padding: 0 32px 0 12px;
+    border: none;
+    border-radius: 0;
+    background-color: transparent;
+    background-position: right 12px center;
+    box-shadow: none;
+}
+
+.admin-load-group .admin-delete-saved,
+.admin-load-group .admin-delete-saved:hover,
+.admin-load-group .admin-delete-saved:focus {
+    flex: 0 0 38px;
+    width: 38px;
+    min-width: 38px;
+    height: 100%;
+    padding: 0;
+    border: none;
+    border-left: 1px solid var(--control-border);
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* The oval's ring cannot say which of its two controls has the keyboard */
+.admin-load-group .admin-delete-saved:focus-visible {
+    outline: 2px solid var(--danger-strong);
+    outline-offset: -3px;
+}
+
+.admin-load-group .admin-delete-saved:disabled {
+    opacity: 1;
+    color: color-mix(in srgb, var(--danger-strong) 35%, transparent);
+    background: transparent;
 }
 
 .btn-compact {
@@ -4547,6 +4614,17 @@ math-virtual-keyboard::part(action-toolbar) {
     margin-left: auto;
 }
 
+/* Save and Cancel stay in reach while a long form scrolls by */
+.dash-bank-card.is-editing .dash-bank-card-head {
+    position: sticky;
+    top: -16px; /* into .dash-body's padding, or the form shows above the buttons */
+    z-index: 2;
+    margin: -8px -8px 0;
+    padding: 8px;
+    border-radius: var(--control-radius);
+    background: var(--surface-solid, var(--card-bg));
+}
+
 .dash-bank-classify {
     display: flex;
     flex-wrap: wrap;
@@ -4668,11 +4746,6 @@ math-virtual-keyboard::part(action-toolbar) {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-}
-
-.dash-task-edit-actions {
-    display: flex;
-    gap: 8px;
 }
 
 .dash-header {
@@ -5790,19 +5863,50 @@ body.admin-mode-active #app-root {
     font-size: clamp(1.15rem, 0.95rem + 1.2cqi, 1.6rem);
 }
 
+/* The editor header is one row: status badge, quiz picker oval, then undo / redo and close at the right end */
 .admin-panel-head {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: clamp(10px, 2cqi, 16px);
+    gap: clamp(8px, 1.8cqi, 15px);
     margin-bottom: clamp(14px, 2.6cqi, 22px);
 }
 
-/* The editor header is one row of tools; the close X never wraps away from it */
-.admin-panel-head {
-    flex-wrap: nowrap;
-    align-items: flex-start;
+#admin-draft-status {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.admin-panel-head-tools {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* No room for one row: badge and tools stay on top, and the oval takes the whole row below */
+@container editor (max-width: 520px) {
+    .admin-panel-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    /* !important: the badge's size is an inline style. On the narrowest phones it wraps, not slides under the tools. */
+    #admin-draft-status {
+        justify-self: start;
+        white-space: normal;
+        font-size: 0.74rem !important;
+    }
+
+    .admin-panel-head-tools {
+        gap: 6px;
+    }
+
+    .admin-load-group {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        max-width: none;
+    }
 }
 
 .admin-close-btn {
@@ -5823,15 +5927,6 @@ body.admin-mode-active #app-root {
 .admin-close-btn:hover {
     color: var(--danger);
     border-color: var(--danger);
-}
-
-.admin-panel-head-main {
-    display: flex;
-    flex: 1 1 auto;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: clamp(8px, 1.8cqi, 15px);
-    min-width: 0;
 }
 
 .admin-panel .admin-settings-card {

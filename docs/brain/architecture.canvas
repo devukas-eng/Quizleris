@@ -1,544 +1,64 @@
 {
-	"nodes": [
-		{
-			"id": "group-visitor",
-			"type": "group",
-			"label": "Every visitor",
-			"x": -50,
-			"y": 440,
-			"width": 1960,
-			"height": 1670
-		},
-		{
-			"id": "group-staff",
-			"type": "group",
-			"label": "Teachers and admins",
-			"x": 2170,
-			"y": 440,
-			"width": 1220,
-			"height": 1670
-		},
-		{
-			"id": "group-server",
-			"type": "group",
-			"label": "Server",
-			"x": 3850,
-			"y": 440,
-			"width": 480,
-			"height": 1670
-		},
-		{
-			"id": "group-ship",
-			"type": "group",
-			"label": "Ship and test",
-			"x": 4590,
-			"y": 440,
-			"width": 480,
-			"height": 1100
-		},
-		{
-			"id": "moc",
-			"type": "file",
-			"file": "00_MOC_Architecture.md",
-			"x": 1480,
-			"y": 0,
-			"width": 380,
-			"height": 300,
-			"color": "5"
-		},
-		{
-			"id": "state",
-			"type": "file",
-			"file": "01_STATE.md",
-			"x": 740,
-			"y": 0,
-			"width": 380,
-			"height": 300,
-			"color": "5"
-		},
-		{
-			"id": "branding",
-			"type": "file",
-			"file": "nodes/Branding_Legal.md",
-			"x": 0,
-			"y": 500,
-			"width": 380,
-			"height": 420,
-			"color": "3"
-		},
-		{
-			"id": "language",
-			"type": "file",
-			"file": "nodes/Language_Strings.md",
-			"x": 0,
-			"y": 1070,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "shell",
-			"type": "file",
-			"file": "nodes/Page_Shell.md",
-			"x": 740,
-			"y": 500,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "theme",
-			"type": "file",
-			"file": "nodes/Theme_System.md",
-			"x": 740,
-			"y": 1640,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "routing",
-			"type": "file",
-			"file": "nodes/URL_Routing.md",
-			"x": 1480,
-			"y": 500,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "runtime",
-			"type": "file",
-			"file": "nodes/Quiz_Runtime.md",
-			"x": 1480,
-			"y": 1640,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "dashboard",
-			"type": "file",
-			"file": "nodes/Dashboard.md",
-			"x": 2220,
-			"y": 500,
-			"width": 380,
-			"height": 420,
-			"color": "1"
-		},
-		{
-			"id": "editor",
-			"type": "file",
-			"file": "nodes/Quiz_Editor.md",
-			"x": 2220,
-			"y": 1640,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "folders",
-			"type": "file",
-			"file": "nodes/Quiz_Folders.md",
-			"x": 2960,
-			"y": 500,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "showcase",
-			"type": "file",
-			"file": "nodes/Showcase.md",
-			"x": 2960,
-			"y": 1070,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "bank",
-			"type": "file",
-			"file": "nodes/Task_Bank.md",
-			"x": 2960,
-			"y": 1640,
-			"width": 380,
-			"height": 420,
-			"color": "3"
-		},
-		{
-			"id": "auth",
-			"type": "file",
-			"file": "nodes/Auth_Roles_Plans.md",
-			"x": 3900,
-			"y": 500,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "backend",
-			"type": "file",
-			"file": "nodes/Backend_API.md",
-			"x": 3900,
-			"y": 1070,
-			"width": 380,
-			"height": 990,
-			"color": "1"
-		},
-		{
-			"id": "deploy",
-			"type": "file",
-			"file": "nodes/Build_Deploy.md",
-			"x": 4640,
-			"y": 500,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "testing",
-			"type": "file",
-			"file": "nodes/Local_Testing.md",
-			"x": 4640,
-			"y": 1070,
-			"width": 380,
-			"height": 420
-		},
-		{
-			"id": "next-legal",
-			"type": "text",
-			"text": "**Next task (owner)**\n\nGive the company code and address for the legal pages.",
-			"x": 0,
-			"y": 60,
-			"width": 380,
-			"height": 170,
-			"color": "2"
-		},
-		{
-			"id": "next-teacher",
-			"type": "text",
-			"text": "**Next task (owner)**\n\nAsk the reporting teacher what exactly failed, then reproduce it as a teacher.",
-			"x": 2220,
-			"y": 60,
-			"width": 380,
-			"height": 170,
-			"color": "2"
-		},
-		{
-			"id": "next-folders",
-			"type": "text",
-			"text": "**Next task (owner)**\n\nOpen All quizzes once on live. Teachers and System folders should appear.",
-			"x": 2960,
-			"y": 60,
-			"width": 380,
-			"height": 170,
-			"color": "2"
-		},
-		{
-			"id": "next-agents",
-			"type": "text",
-			"text": "**Next task (agent)**\n\nCorrect `AGENTS.md`: the app runs on spresk.eu, not spresk.lt.",
-			"x": 4640,
-			"y": 60,
-			"width": 380,
-			"height": 170,
-			"color": "2"
-		},
-		{
-			"id": "next-bank",
-			"type": "text",
-			"text": "**Next task (agent)**\n\nBuild task bank stage 4 (templates) inside the three-column layout.",
-			"x": 3430,
-			"y": 2320,
-			"width": 380,
-			"height": 170,
-			"color": "2"
-		},
-		{
-			"id": "legend",
-			"type": "text",
-			"x": 0,
-			"y": 2320,
-			"width": 760,
-			"height": 230,
-			"text": "**How to read this map**\n\nArrows point from the caller or sender to what it reaches. Two heads mean data flows both ways, and purple arrows are API calls.\n\nCards: cyan is the place to start, orange is a next task, yellow is work in progress, red needs a refactor.\n\nIf a card says its file is missing, open `docs/brain/` as the vault."
-		}
+	"nodes":[
+		{"id":"group-visitor","type":"group","label":"Every visitor","x":-50,"y":440,"width":1960,"height":1670},
+		{"id":"group-staff","type":"group","label":"Teachers and admins","x":2170,"y":440,"width":1220,"height":1670},
+		{"id":"group-server","type":"group","label":"Server","x":3850,"y":440,"width":480,"height":1670},
+		{"id":"group-ship","type":"group","label":"Ship and test","x":4590,"y":440,"width":480,"height":1100},
+		{"id":"moc","type":"file","file":"00_MOC_Architecture.md","x":1480,"y":0,"width":380,"height":300,"color":"5"},
+		{"id":"state","type":"file","file":"01_STATE.md","x":740,"y":0,"width":380,"height":300,"color":"5"},
+		{"id":"branding","type":"file","file":"nodes/Branding_Legal.md","x":0,"y":500,"width":380,"height":420,"color":"3"},
+		{"id":"language","type":"file","file":"nodes/Language_Strings.md","x":0,"y":1070,"width":380,"height":420},
+		{"id":"shell","type":"file","file":"nodes/Page_Shell.md","x":740,"y":500,"width":380,"height":420},
+		{"id":"theme","type":"file","file":"nodes/Theme_System.md","x":740,"y":1640,"width":380,"height":420},
+		{"id":"routing","type":"file","file":"nodes/URL_Routing.md","x":1480,"y":500,"width":380,"height":420},
+		{"id":"runtime","type":"file","file":"nodes/Quiz_Runtime.md","x":1480,"y":1640,"width":380,"height":420},
+		{"id":"dashboard","type":"file","file":"nodes/Dashboard.md","x":2220,"y":500,"width":380,"height":420,"color":"1"},
+		{"id":"editor","type":"file","file":"nodes/Quiz_Editor.md","x":2220,"y":1640,"width":380,"height":420},
+		{"id":"folders","type":"file","file":"nodes/Quiz_Folders.md","x":2960,"y":500,"width":380,"height":420},
+		{"id":"showcase","type":"file","file":"nodes/Showcase.md","x":2960,"y":1070,"width":380,"height":420},
+		{"id":"bank","type":"file","file":"nodes/Task_Bank.md","x":2960,"y":1640,"width":380,"height":420,"color":"3"},
+		{"id":"auth","type":"file","file":"nodes/Auth_Roles_Plans.md","x":3900,"y":500,"width":380,"height":420},
+		{"id":"backend","type":"file","file":"nodes/Backend_API.md","x":3900,"y":1070,"width":380,"height":990,"color":"1"},
+		{"id":"deploy","type":"file","file":"nodes/Build_Deploy.md","x":4640,"y":500,"width":380,"height":420},
+		{"id":"testing","type":"file","file":"nodes/Local_Testing.md","x":4640,"y":1070,"width":380,"height":420},
+		{"id":"next-legal","type":"text","text":"**Next task (owner)**\n\nGive the company code and address for the legal pages.","x":0,"y":60,"width":380,"height":170,"color":"2"},
+		{"id":"next-teacher","type":"text","text":"**Next task (owner)**\n\nAsk the reporting teacher what exactly failed, then reproduce it as a teacher.","x":2220,"y":60,"width":380,"height":170,"color":"2"},
+		{"id":"next-folders","type":"text","text":"**Next task (owner)**\n\nOpen All quizzes once on live. Teachers and System folders should appear.","x":2960,"y":60,"width":380,"height":170,"color":"2"},
+		{"id":"next-agents","type":"text","text":"**Next task (agent)**\n\nCorrect `AGENTS.md`: the app runs on spresk.eu, not spresk.lt.","x":4640,"y":60,"width":380,"height":170,"color":"2"},
+		{"id":"next-bank","type":"text","text":"**Next task (agent)**\n\nBuild task bank stage 4 (templates) inside the three-column layout.","x":3430,"y":2320,"width":380,"height":170,"color":"2"},
+		{"id":"legend","type":"text","x":0,"y":2320,"width":760,"height":230,"text":"**How to read this map**\n\nArrows point from the caller or sender to what it reaches. Two heads mean data flows both ways, and purple arrows are API calls.\n\nCards: cyan is the place to start, orange is a next task, yellow is work in progress, red needs a refactor.\n\nIf a card says its file is missing, open `docs/brain/` as the vault."}
 	],
-	"edges": [
-		{
-			"id": "edge-01",
-			"fromNode": "moc",
-			"fromSide": "left",
-			"toNode": "state",
-			"toSide": "right",
-			"toEnd": "arrow",
-			"label": "read both first"
-		},
-		{
-			"id": "edge-02",
-			"fromNode": "moc",
-			"fromSide": "bottom",
-			"toNode": "group-visitor",
-			"toSide": "top",
-			"toEnd": "arrow"
-		},
-		{
-			"id": "edge-03",
-			"fromNode": "moc",
-			"fromSide": "bottom",
-			"toNode": "group-staff",
-			"toSide": "top",
-			"toEnd": "arrow"
-		},
-		{
-			"id": "edge-04",
-			"fromNode": "moc",
-			"fromSide": "bottom",
-			"toNode": "group-server",
-			"toSide": "top",
-			"toEnd": "arrow"
-		},
-		{
-			"id": "edge-05",
-			"fromNode": "moc",
-			"fromSide": "bottom",
-			"toNode": "group-ship",
-			"toSide": "top",
-			"toEnd": "arrow"
-		},
-		{
-			"id": "edge-06",
-			"fromNode": "branding",
-			"fromSide": "right",
-			"toNode": "shell",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "name, legal text"
-		},
-		{
-			"id": "edge-07",
-			"fromNode": "language",
-			"fromSide": "right",
-			"toNode": "shell",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "strings"
-		},
-		{
-			"id": "edge-08",
-			"fromNode": "shell",
-			"fromSide": "right",
-			"toNode": "routing",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "reads the address"
-		},
-		{
-			"id": "edge-09",
-			"fromNode": "shell",
-			"fromSide": "bottom",
-			"toNode": "theme",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"label": "starts themes"
-		},
-		{
-			"id": "edge-10",
-			"fromNode": "routing",
-			"fromSide": "right",
-			"toNode": "dashboard",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "results route",
-			"fromEnd": "arrow"
-		},
-		{
-			"id": "edge-11",
-			"fromNode": "routing",
-			"fromSide": "bottom",
-			"toNode": "runtime",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"label": "?quiz="
-		},
-		{
-			"id": "edge-12",
-			"fromNode": "runtime",
-			"fromSide": "top",
-			"toNode": "shell",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "moves the footer"
-		},
-		{
-			"id": "edge-13",
-			"fromNode": "dashboard",
-			"fromSide": "bottom",
-			"toNode": "editor",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"label": "open-editor"
-		},
-		{
-			"id": "edge-14",
-			"fromNode": "dashboard",
-			"fromSide": "right",
-			"toNode": "folders",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "All quizzes tab"
-		},
-		{
-			"id": "edge-15",
-			"fromNode": "dashboard",
-			"fromSide": "right",
-			"toNode": "showcase",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "Showcase tab"
-		},
-		{
-			"id": "edge-16",
-			"fromNode": "showcase",
-			"fromSide": "top",
-			"toNode": "folders",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "search to add"
-		},
-		{
-			"id": "edge-17",
-			"fromNode": "editor",
-			"fromSide": "right",
-			"toNode": "bank",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "adds tasks",
-			"fromEnd": "arrow"
-		},
-		{
-			"id": "edge-18",
-			"fromNode": "folders",
-			"fromSide": "right",
-			"toNode": "backend",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "/api/admin/quiz-browser",
-			"color": "6"
-		},
-		{
-			"id": "edge-19",
-			"fromNode": "showcase",
-			"fromSide": "right",
-			"toNode": "backend",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "settings, public codes",
-			"color": "6",
-			"fromEnd": "arrow"
-		},
-		{
-			"id": "edge-20",
-			"fromNode": "bank",
-			"fromSide": "right",
-			"toNode": "backend",
-			"toSide": "left",
-			"toEnd": "arrow",
-			"label": "/api/bank",
-			"color": "6"
-		},
-		{
-			"id": "edge-21",
-			"fromNode": "editor",
-			"fromSide": "bottom",
-			"toNode": "backend",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "POST /api/quizzes",
-			"color": "6"
-		},
-		{
-			"id": "edge-22",
-			"fromNode": "runtime",
-			"fromSide": "bottom",
-			"toNode": "backend",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "quizzes, attempts",
-			"color": "6"
-		},
-		{
-			"id": "edge-23",
-			"fromNode": "theme",
-			"fromSide": "bottom",
-			"toNode": "backend",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "/api/me/themes",
-			"color": "6"
-		},
-		{
-			"id": "edge-24",
-			"fromNode": "auth",
-			"fromSide": "bottom",
-			"toNode": "backend",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"label": "guards and plan limits"
-		},
-		{
-			"id": "edge-25",
-			"fromNode": "deploy",
-			"fromSide": "left",
-			"toNode": "backend",
-			"toSide": "right",
-			"toEnd": "arrow",
-			"label": "ships the build"
-		},
-		{
-			"id": "edge-26",
-			"fromNode": "testing",
-			"fromSide": "top",
-			"toNode": "deploy",
-			"toSide": "bottom",
-			"toEnd": "arrow",
-			"label": "tests before push"
-		},
-		{
-			"id": "edge-27",
-			"fromNode": "next-legal",
-			"fromSide": "bottom",
-			"toNode": "branding",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"color": "2"
-		},
-		{
-			"id": "edge-28",
-			"fromNode": "next-teacher",
-			"fromSide": "bottom",
-			"toNode": "dashboard",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"color": "2"
-		},
-		{
-			"id": "edge-29",
-			"fromNode": "next-folders",
-			"fromSide": "bottom",
-			"toNode": "folders",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"color": "2"
-		},
-		{
-			"id": "edge-30",
-			"fromNode": "next-agents",
-			"fromSide": "bottom",
-			"toNode": "deploy",
-			"toSide": "top",
-			"toEnd": "arrow",
-			"color": "2"
-		},
-		{
-			"id": "edge-31",
-			"fromNode": "next-bank",
-			"fromSide": "top",
-			"toNode": "bank",
-			"toSide": "right",
-			"toEnd": "arrow",
-			"color": "2"
-		}
+	"edges":[
+		{"id":"edge-01","fromNode":"moc","fromSide":"left","toNode":"state","toSide":"right","toEnd":"arrow","label":"read both first"},
+		{"id":"edge-02","fromNode":"moc","fromSide":"bottom","toNode":"group-visitor","toSide":"top","toEnd":"arrow"},
+		{"id":"edge-03","fromNode":"moc","fromSide":"bottom","toNode":"group-staff","toSide":"top","toEnd":"arrow"},
+		{"id":"edge-04","fromNode":"moc","fromSide":"bottom","toNode":"group-server","toSide":"top","toEnd":"arrow"},
+		{"id":"edge-05","fromNode":"moc","fromSide":"bottom","toNode":"group-ship","toSide":"top","toEnd":"arrow"},
+		{"id":"edge-06","fromNode":"branding","fromSide":"right","toNode":"shell","toSide":"left","toEnd":"arrow","label":"name, legal text"},
+		{"id":"edge-07","fromNode":"language","fromSide":"right","toNode":"shell","toSide":"left","toEnd":"arrow","label":"strings"},
+		{"id":"edge-08","fromNode":"shell","fromSide":"right","toNode":"routing","toSide":"left","toEnd":"arrow","label":"reads the address"},
+		{"id":"edge-09","fromNode":"shell","fromSide":"bottom","toNode":"theme","toSide":"top","toEnd":"arrow","label":"starts themes"},
+		{"id":"edge-10","fromNode":"routing","fromSide":"right","toNode":"dashboard","toSide":"left","toEnd":"arrow","label":"results route","fromEnd":"arrow"},
+		{"id":"edge-11","fromNode":"routing","fromSide":"bottom","toNode":"runtime","toSide":"top","toEnd":"arrow","label":"?quiz="},
+		{"id":"edge-12","fromNode":"runtime","fromSide":"top","toNode":"shell","toSide":"bottom","toEnd":"arrow","label":"moves the footer"},
+		{"id":"edge-13","fromNode":"dashboard","fromSide":"bottom","toNode":"editor","toSide":"top","toEnd":"arrow","label":"open-editor"},
+		{"id":"edge-14","fromNode":"dashboard","fromSide":"right","toNode":"folders","toSide":"left","toEnd":"arrow","label":"All quizzes tab"},
+		{"id":"edge-15","fromNode":"dashboard","fromSide":"right","toNode":"showcase","toSide":"left","toEnd":"arrow","label":"Showcase tab"},
+		{"id":"edge-16","fromNode":"showcase","fromSide":"top","toNode":"folders","toSide":"bottom","toEnd":"arrow","label":"search to add"},
+		{"id":"edge-17","fromNode":"editor","fromSide":"right","toNode":"bank","toSide":"left","toEnd":"arrow","label":"adds tasks","fromEnd":"arrow"},
+		{"id":"edge-18","fromNode":"folders","fromSide":"right","toNode":"backend","toSide":"left","toEnd":"arrow","label":"/api/admin/quiz-browser","color":"6"},
+		{"id":"edge-19","fromNode":"showcase","fromSide":"right","toNode":"backend","toSide":"left","toEnd":"arrow","label":"settings, public codes","color":"6","fromEnd":"arrow"},
+		{"id":"edge-20","fromNode":"bank","fromSide":"right","toNode":"backend","toSide":"left","toEnd":"arrow","label":"/api/bank","color":"6"},
+		{"id":"edge-21","fromNode":"editor","fromSide":"bottom","toNode":"backend","toSide":"bottom","toEnd":"arrow","label":"POST /api/quizzes","color":"6"},
+		{"id":"edge-22","fromNode":"runtime","fromSide":"bottom","toNode":"backend","toSide":"bottom","toEnd":"arrow","label":"quizzes, attempts","color":"6"},
+		{"id":"edge-23","fromNode":"theme","fromSide":"bottom","toNode":"backend","toSide":"bottom","toEnd":"arrow","label":"/api/me/themes","color":"6"},
+		{"id":"edge-24","fromNode":"auth","fromSide":"bottom","toNode":"backend","toSide":"top","toEnd":"arrow","label":"guards and plan limits"},
+		{"id":"edge-25","fromNode":"deploy","fromSide":"left","toNode":"backend","toSide":"right","toEnd":"arrow","label":"ships the build"},
+		{"id":"edge-26","fromNode":"testing","fromSide":"top","toNode":"deploy","toSide":"bottom","toEnd":"arrow","label":"tests before push"},
+		{"id":"edge-27","fromNode":"next-legal","fromSide":"bottom","toNode":"branding","toSide":"top","toEnd":"arrow","color":"2"},
+		{"id":"edge-28","fromNode":"next-teacher","fromSide":"bottom","toNode":"dashboard","toSide":"top","toEnd":"arrow","color":"2"},
+		{"id":"edge-29","fromNode":"next-folders","fromSide":"bottom","toNode":"folders","toSide":"top","toEnd":"arrow","color":"2"},
+		{"id":"edge-30","fromNode":"next-agents","fromSide":"bottom","toNode":"deploy","toSide":"top","toEnd":"arrow","color":"2"},
+		{"id":"edge-31","fromNode":"next-bank","fromSide":"top","toNode":"bank","toSide":"right","toEnd":"arrow","color":"2"}
 	]
 }

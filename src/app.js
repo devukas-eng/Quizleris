@@ -82,6 +82,8 @@ async function initApp() {
             closeResults();
             openEditor(e.detail?.quizId, { fresh: e.detail?.fresh });
         });
+        // A role changed in the database reaches this browser with the profile, after the check at boot
+        document.addEventListener("editor-mode", loadBankWorkspace);
         // A quiz's results, opened from the dashboard without leaving the page
         document.addEventListener("open-results", (e) => {
             pushResultsRoute(e.detail.quizId);

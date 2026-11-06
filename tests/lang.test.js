@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { t, initLanguage, updatePageLanguage, setLanguage, getLanguage } from '../src/lang.js';
 
 describe('lang.js', () => {
@@ -29,6 +30,21 @@ describe('lang.js', () => {
         const input = document.querySelector('input');
         expect(div.textContent).toBe('UAB Judelta');
         expect(input.placeholder).toBe('Enter name to track results');
+    });
+
+    it('updatePageLanguage should tell the browser which language the page is in', () => {
+        setLanguage('lt');
+        updatePageLanguage();
+        expect(document.documentElement.lang).toBe('lt');
+        setLanguage('en');
+        updatePageLanguage();
+        expect(document.documentElement.lang).toBe('en');
+    });
+
+    it('the page should start as Lithuanian and refuse browser translation', () => {
+        const page = readFileSync('src/index.html', 'utf8');
+        expect(page).toContain('<html lang="lt" translate="no"');
+        expect(page).toContain('<meta name="google" content="notranslate" />');
     });
 
     it('should update legal footer elements when language changes', () => {

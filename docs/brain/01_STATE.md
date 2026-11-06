@@ -11,7 +11,7 @@ Start at [[00_MOC_Architecture]]. Check what is really live before trusting this
 | Check | State on 2026-11-06 |
 |---|---|
 | Live | `main` on spresk.eu, confirm it with the hash check in [[Build_Deploy]] |
-| Tests | 131 passing with `npm.cmd test` |
+| Tests | 133 passing with `npm.cmd test` |
 | Lint | 0 errors, 35 warnings with `npm.cmd run lint` |
 
 ## Completed in this session
@@ -38,6 +38,15 @@ Later commits added:
 - The real contact address on every legal page and in `README.md`, see [[Branding_Legal]].
 - The task bank for every teacher: the `BANK_OPEN` switch is gone and each teacher gets a bank of their own, see [[Task_Bank]].
 - A new site icon, the logo's `s` in white on green, with icon links in `src/index.html`, see [[Branding_Legal]].
+
+The latest push added:
+
+- Editor header: undo and redo moved beside close, and the quiz picker and delete button now share one oval, see [[Quiz_Editor]].
+- Admin badges: the bank counts on `/api/admin/overview` were always 0, and now match the tabs, see [[Dashboard]].
+- Approvals tab: it never listed waiting tasks because it asked for published ones, see [[Dashboard]].
+- Task cards in the admin tabs: Save and Cancel sit where Edit was, stay in reach while scrolling, and saving shrinks the card in place, see [[Dashboard]].
+- Bank loading: it now recovers from a role changed in the database and from one failed request, see [[Task_Bank]].
+- Browser translation: the page no longer says it is English and refuses machine translation, see [[Language_Strings]].
 
 ## Current Architecture State / Active Context
 
@@ -71,6 +80,7 @@ Later commits added:
 4. **Say which address teachers should use.** spresk.lt and spresk.eu are different sites. [[Build_Deploy]]: `AGENTS.md`
 5. **Decide whether to restore lost quizzes.** Quizzes overwritten by the old "Create new quiz" bug can only come from a database backup. [[Quiz_Editor]]
 6. **Decide whether the dashboard needs a bank button.** Teachers reach the bank only by opening the quiz editor. [[Task_Bank]], [[Dashboard]]: `src/dashboard-ui.js`, `src/bank-workspace.js`
+7. **Ask the old teacher what they see after the deploy.** Their exact cause is not confirmed. Ask for a reload, whether an orange "Užduočių bankas" button shows at the bottom right, and check their `role` in the database is exactly `teacher`. [[Task_Bank]]: `src/bank-workspace.js`
 
 ### Ready for an agent
 
@@ -84,12 +94,14 @@ Each of these still needs the owner's OK before it goes to production.
 6. **Clear the 35 lint warnings.** [[Local_Testing]]: `eslint.config.mjs`
 7. **Move routes out of `server.js`,** following the router in `src/backend/quiz-folders.js`. [[Backend_API]]
 8. **Split `src/dashboard-ui.js`,** following `src/admin-quiz-browser.js` and `src/admin-showcase.js`. [[Dashboard]]
+9. **Add "load more" to the admin Bank tab.** It shows only the newest 60 tasks, and `nextCursor` is already in the response. [[Dashboard]]: `renderAdminBankTab` in `src/dashboard-ui.js`
+10. **Add `/api/admin/overview` to the smoke test.** Its bank counts were silently wrong for a long time and no test covers them. [[Local_Testing]]: `scripts/smoke-test.js`
 
 ### Defaults the owner never confirmed
 
 These were picked without asking. Ask before treating any of them as settled.
 
 - [[Quiz_Folders]]: folders exist only in the admin tab, and teachers' My quizzes has none.
-- [[Theme_System]]: every theme is free, the editor covers colours and shape only, and clicking a gallery theme applies it at once.
+- [[Theme_System]]: every theme is free, the editor covers colours and shape only, and clicking a gallery theme applies it at once. (owner remarks: fuck if i understood this, the UI wasnt binding to a theme 2-3 pushed before- post this it got fixed)
 - [[Task_Bank]]: tags go on tasks and not quizzes, only staff can submit to the bank, and creators can import straight into the shared bank without approval.
 - [[Showcase]]: `customLabel` and `displayFormat` stay stored in case the titles idea returns. The owner said the idea may be good but was badly done.

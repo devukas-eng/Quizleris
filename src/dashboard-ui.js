@@ -620,7 +620,8 @@ function wireClassificationBars(container, meta, { autoSave = false } = {}) {
 
 async function saveBarClassification(barEl, id) {
     const set = readClassificationBar(barEl);
-    await updateBankItems([id], set, "shared");
+    const res = await updateBankItems([id], set, "shared");
+    if (!res.ok) await alertDialog(t("profile.loadError"), res.data?.error || "");
     forgetBankItems([id]);
 }
 
@@ -692,32 +693,46 @@ function renderInlineTaskEditFormHtml(full) {
         `;
     }
     return `
-        <form class="dash-task-edit-form" data-edit-form="${full.id}" hidden>
+        <form class="dash-task-edit-form" id="dash-task-form-${full.id}" data-edit-form="${full.id}" hidden>
             <label>${escapeHtml(t("admin.promptLabel"))}
                 <textarea class="input-field" name="prompt" rows="2">${escapeHtml(q.prompt || "")}</textarea>
             </label>
             ${answerFields}
-            <div class="dash-task-edit-actions">
-                <button type="submit" class="btn btn-primary btn-compact">${escapeHtml(t("adminGui.saveTaskChanges"))}</button>
-                <button type="button" class="btn btn-secondary btn-compact" data-cancel-edit="${full.id}">${escapeHtml(t("dialog.cancel"))}</button>
-            </div>
         </form>
     `;
 }
 
-function wireInlineTaskEditors(container, fullItemsMap, onSaved) {
+// One spot on the card: Edit, and while editing Save and Cancel in its place, so they are in reach
+// however long the form is. Both of those shrink the card back.
+function taskEditButtonsHtml(id) {
+    return `
+        <button type="button" class="btn btn-secondary btn-compact" data-toggle-edit="${id}">✎ ${escapeHtml(t("profile.edit"))}</button>
+        <button type="submit" form="dash-task-form-${id}" class="btn btn-primary btn-compact" data-save-edit="${id}" hidden>${escapeHtml(t("adminGui.saveTaskChanges"))}</button>
+        <button type="button" class="btn btn-secondary btn-compact" data-cancel-edit="${id}" hidden>${escapeHtml(t("dialog.cancel"))}</button>
+    `;
+}
+
+function wireInlineTaskEditors(container, fullItemsMap) {
+    // The form takes the preview's place, so an open card is not both of them stacked
+    const setEditing = (id, editing) => {
+        const card = container.querySelector(`[data-bank-card="${id}"]`);
+        if (!card) return;
+        card.classList.toggle("is-editing", editing);
+        card.querySelector(`[data-edit-form="${id}"]`).hidden = !editing;
+        card.querySelector(`[data-toggle-edit="${id}"]`).hidden = editing;
+        card.querySelector(`[data-save-edit="${id}"]`).hidden = !editing;
+        card.querySelector(`[data-cancel-edit="${id}"]`).hidden = !editing;
+        const preview = card.querySelector(".dash-bank-task-preview");
+        if (preview) preview.hidden = editing;
+    };
     container.querySelectorAll("[data-toggle-edit]").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const id = Number(btn.dataset.toggleEdit);
-            const form = container.querySelector(`[data-edit-form="${id}"]`);
-            if (form) form.hidden = !form.hidden;
-        });
+        btn.addEventListener("click", () => setEditing(Number(btn.dataset.toggleEdit), true));
     });
     container.querySelectorAll("[data-cancel-edit]").forEach(btn => {
         btn.addEventListener("click", () => {
             const id = Number(btn.dataset.cancelEdit);
-            const form = container.querySelector(`[data-edit-form="${id}"]`);
-            if (form) form.hidden = true;
+            container.querySelector(`[data-edit-form="${id}"]`)?.reset();
+            setEditing(id, false);
         });
     });
     container.querySelectorAll("[data-edit-form]").forEach(form => {
@@ -745,23 +760,27 @@ function wireInlineTaskEditors(container, fullItemsMap, onSaved) {
                 content.blankAnswers = String(form.blankAnswers?.value || "").split(";").map(s => s.trim()).filter(Boolean);
             }
             const card = form.closest(".dash-bank-card");
-            const cls = readClassificationBar(card?.querySelector(".dash-bank-classify"));
-            const submitBtn = form.querySelector("button[type=submit]");
-            submitBtn.disabled = true;
-            const res = await updateBankItem(id, {
-                content,
-                subjectId: cls.subjectId ?? full.subjectId,
-                gradeId: cls.gradeId ?? full.gradeId,
-                topicId: cls.topicId ?? full.topicId,
-                difficultyId: cls.difficultyId ?? full.difficultyId,
-            });
-            submitBtn.disabled = false;
+            // What the bar shows is what gets saved, an emptied field included
+            const classified = readClassificationBar(card.querySelector(".dash-bank-classify"));
+            const saveBtn = card.querySelector(`[data-save-edit="${id}"]`);
+            saveBtn.disabled = true;
+            const res = await updateBankItem(id, { content, ...classified });
+            saveBtn.disabled = false;
             if (!res.ok) {
                 await alertDialog(t("profile.loadError"), res.data?.error || "");
                 return;
             }
             forgetBankItems([id]);
-            onSaved();
+            // Only this card changes: the list keeps its place instead of reloading around it
+            Object.assign(full, classified, { content });
+            for (const field of form.elements) {
+                field.defaultValue = field.value;
+                field.defaultChecked = field.checked;
+            }
+            card.querySelector(".dash-bank-task-preview")?.remove();
+            form.insertAdjacentHTML("beforebegin", renderBankTaskPreviewHtml(content));
+            typesetMath(card.querySelector(".dash-bank-task-preview"));
+            setEditing(id, false);
         });
     });
 }
@@ -781,7 +800,7 @@ async function renderAdminApprovalsTab(panel) {
     panel.innerHTML = skeletonHtml(5);
     const [meta, listRes] = await Promise.all([
         ensureBankMeta(),
-        listBankItems({ review: 1, sort: "new", limit: 100, facets: "none" }),
+        listBankItems({ review: 1, status: "draft", sort: "new", limit: 100, facets: "none" }),
     ]);
     if (!listRes.ok) {
         panel.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
@@ -825,7 +844,7 @@ async function renderAdminApprovalsTab(panel) {
                             <div class="dash-bank-card-head">
                                 <span class="dash-chip public">⏳ ${escapeHtml(t("bank.reviewFrom").replace("{user}", sender).replace("{date}", dateStr))}</span>
                                 <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
-                                <button type="button" class="btn btn-secondary btn-compact" data-toggle-edit="${full.id}" style="margin-left:auto;">✎ ${escapeHtml(t("profile.edit"))}</button>
+                                <div class="dash-bank-head-actions">${taskEditButtonsHtml(full.id)}</div>
                             </div>
                             ${renderClassificationBarHtml(meta, full)}
                             ${renderBankTaskPreviewHtml(full.content)}
@@ -846,7 +865,7 @@ async function renderAdminApprovalsTab(panel) {
 
     typesetMath(panel);
     wireClassificationBars(panel, meta, { autoSave: false });
-    wireInlineTaskEditors(panel, fullMap, () => renderAdminApprovalsTab(panel));
+    wireInlineTaskEditors(panel, fullMap);
 
     panel.querySelectorAll("[data-decide-id]").forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -856,7 +875,12 @@ async function renderAdminApprovalsTab(panel) {
             card.querySelectorAll("[data-decide-id]").forEach(b => { b.disabled = true; });
             if (action === "approve") {
                 const cls = readClassificationBar(card.querySelector(".dash-bank-classify"));
-                await updateBankItems([id], cls, "shared");
+                const classified = await updateBankItems([id], cls, "shared");
+                if (!classified.ok) {
+                    card.querySelectorAll("[data-decide-id]").forEach(b => { b.disabled = false; });
+                    await alertDialog(t("profile.loadError"), classified.data?.error || "");
+                    return;
+                }
             }
             const note = card.querySelector(`[data-reject-note="${id}"]`)?.value || "";
             const res = await decideBankSubmission(id, action, note);
@@ -935,7 +959,7 @@ async function renderAdminReportsTab(panel) {
                             <div class="dash-bank-card-actions">
                                 <button type="button" class="btn btn-primary" data-report-act="resolve" data-task-id="${full.id}">✓ ${escapeHtml(t("bank.resolve"))}</button>
                                 <button type="button" class="btn btn-secondary" data-report-act="dismiss" data-task-id="${full.id}">${escapeHtml(t("bank.dismiss"))}</button>
-                                <button type="button" class="btn btn-secondary" data-toggle-edit="${full.id}">✎ ${escapeHtml(t("profile.edit"))}</button>
+                                ${taskEditButtonsHtml(full.id)}
                                 <button type="button" class="btn btn-secondary dash-delete" data-report-act="archive" data-task-id="${full.id}" style="margin-left:auto;">🗑 ${escapeHtml(t("bank.archiveTask"))}</button>
                             </div>
                         </div>
@@ -947,7 +971,7 @@ async function renderAdminReportsTab(panel) {
 
     typesetMath(panel);
     wireClassificationBars(panel, meta, { autoSave: true });
-    wireInlineTaskEditors(panel, fullMap, () => renderAdminReportsTab(panel));
+    wireInlineTaskEditors(panel, fullMap);
 
     panel.querySelectorAll("[data-report-act]").forEach(btn => {
         btn.addEventListener("click", async () => {
@@ -1039,7 +1063,9 @@ async function renderAdminBankTab(panel) {
             return;
         }
         const items = res.data.items || [];
-        const total = res.data.total ?? items.length;
+        // The server's total can lag about a second behind a change. A list that fits on one page
+        // needs no total: it is the rows themselves, so deleting a task never leaves the old count.
+        const total = res.data.nextCursor ? res.data.total ?? items.length : items.length;
         totalEl.textContent = `(${total})`;
 
         if (items.length === 0) {
@@ -1064,7 +1090,7 @@ async function renderAdminBankTab(panel) {
                         <span class="dash-chip private">#${full.id}</span>
                         <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
                         <div class="dash-bank-head-actions">
-                            <button type="button" class="btn btn-secondary btn-compact" data-toggle-edit="${full.id}">✎ ${escapeHtml(t("profile.edit"))}</button>
+                            ${taskEditButtonsHtml(full.id)}
                             <button type="button" class="btn btn-secondary btn-icon btn-compact dash-delete" data-archive-task="${full.id}" title="${escapeHtml(t("bank.archiveTask"))}" aria-label="${escapeHtml(t("bank.archiveTask"))}">🗑</button>
                         </div>
                     </div>
@@ -1077,7 +1103,7 @@ async function renderAdminBankTab(panel) {
 
         typesetMath(resultsEl);
         wireClassificationBars(resultsEl, meta, { autoSave: true });
-        wireInlineTaskEditors(resultsEl, fullMap, loadList);
+        wireInlineTaskEditors(resultsEl, fullMap);
 
         resultsEl.querySelectorAll("[data-archive-task]").forEach(btn => {
             btn.addEventListener("click", async () => {
