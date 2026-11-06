@@ -24,3 +24,10 @@ desktop.ini
 
 # Test coverage
 coverage/
+
+# Local Claude Code files (launch.json holds local database credentials); shared commands stay tracked
+.claude/*
+!.claude/commands/
+
+# Obsidian's own files, when docs/brain is opened as a vault
+docs/brain/.obsidian/
