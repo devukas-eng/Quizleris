@@ -1468,8 +1468,9 @@ function addMineDropZone() {
 }
 
 function folderTakes(payload, folderId) {
-    // Tasks dropped on Starred are starred, on a #tag tagged; questions of the quiz are not tasks yet
+    // Tasks dropped on Starred are starred, on a #tag tagged; a question of the quiz becomes a task first
     if (folderId === "favorites" || isTagView(folderId)) {
+        if (payload.kind === "question") return true;
         return payload.kind === "tasks" && payload.source !== "topic" && !(payload.source === "mine" && folderId === mine.folderId);
     }
     if (payload.kind === "folder") {
@@ -1479,19 +1480,63 @@ function folderTakes(payload, folderId) {
     return true;
 }
 
+// The task behind a question of the quiz: the bank task it came from while it is unchanged,
+// otherwise a new task of one's own. Null (with a notice) when it cannot be saved.
+async function taskOfQuestion(question) {
+    const item = await toBankItem(question);
+    if (!item) {
+        toast(t("bank.saveFailed"), "error");
+        return null;
+    }
+    const { prompt, image, choices } = item.content;
+    const hasText = value => String(value ?? "").replace(/<[^>]*>|&nbsp;/g, "").trim() !== "";
+    if (!hasText(prompt) && !image && !choices?.some(choice => choice.image || hasText(choice.text))) {
+        toast(t("bank.questionBlank"), "error");
+        return null;
+    }
+    const bankId = question.source?.bankId;
+    const [origin] = bankId ? await api.loadItems([bankId]) : [null];
+    if (origin && sameContent(origin.content, item.content)) return bankId;
+    const res = await api.createItems([item], { folderId: null });
+    if (!res.ok) {
+        toast(errorText(res), "error");
+        return null;
+    }
+    const saved = res.data.results?.[0];
+    if (!saved?.id) toast(`${t("bank.saveFailed")}: ${saved?.error || ""}`, "error");
+    return saved?.id ?? null;
+}
+
+// Equal whatever order the keys were written in
+function sameContent(a, b) {
+    const sorted = value => {
+        if (Array.isArray(value)) return value.map(sorted);
+        if (!value || typeof value !== "object") return value;
+        return Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted(value[key])]));
+    };
+    return JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
+}
+
 async function dropOnFolder(payload, folderId) {
+    if (payload.kind === "question" && (folderId === "favorites" || isTagView(folderId))) {
+        const id = await taskOfQuestion(questionAt(payload.index));
+        if (!id) return false;
+        payload = { kind: "tasks", ids: [id] };
+        await reloadFolders();
+    }
     if (folderId === "favorites") {
         const fresh = payload.ids.filter(id => !favorites.has(id));
         const results = await Promise.all(fresh.map(id => api.setFavorite(id, true)));
         const starred = fresh.filter((id, i) => results[i].ok);
         starred.forEach(id => favorites.add(id));
-        if (results.some(res => !res.ok)) toast(errorText(results.find(res => !res.ok)), "error");
-        toast(t("bank.starred").replace("{n}", payload.ids.length));
+        const refused = results.find(res => !res.ok);
+        if (refused) toast(errorText(refused), "error");
+        if (!refused || starred.length) toast(t("bank.starred").replace("{n}", payload.ids.length - (fresh.length - starred.length)));
         renderFolders();
         bankList.refresh();
         mineList.refresh();
         if (mine.folderId === "favorites") reloadMine();
-        return true;
+        return !refused || starred.length > 0;
     }
     if (isTagView(folderId)) {
         const tag = tagOfView(folderId);
@@ -1506,6 +1551,7 @@ async function dropOnFolder(payload, folderId) {
             if (item && !item.tags?.includes(tag)) mineList.patch(id, { tags: [...(item.tags || []), tag].sort() });
         }
         reloadTags();
+        if (mine.folderId === folderId) reloadMine();
         return true;
     }
     const target = typeof folderId === "number" ? folderId : null;

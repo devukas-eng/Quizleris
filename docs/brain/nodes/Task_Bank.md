@@ -40,6 +40,7 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 - List totals and tree counts come from the in-memory `sharedGroups`. A row changed directly in the database appears in lists, but counts update only after the next API write or a restart.
 - New tables go into `SCHEMA`. Changing an existing table needs a `MIGRATIONS` step.
 - Nicknames and tags are per-user overlays (`bank_nicknames`, `bank_tags`) and never change the task.
+- A quiz question dropped on Starred or a #tag becomes a task first (`taskOfQuestion`): an unchanged bank question uses its bank task, anything else is saved as an own task, and a blank question is refused with a notice.
 - Creators send tasks for approval through `bank_submissions`. An admin's own send publishes at once.
 - `src/bank-drag.js` also drives question reordering in the editor, so changes reach both.
 - Layout follows the owner's sketch: own tasks left, editor middle, bank right. Three columns from 1400px, tabs from 1100px, a drawer below that, and full screen on phones.

@@ -52,6 +52,10 @@ Then:
 
 - Admin Bank tab: slim rows that open and shrink in place, loaded as you scroll, so it no longer stops at 60 tasks, see [[Dashboard]].
 
+Not pushed yet:
+
+- Quiz questions can be dragged straight onto Starred or a #tag, see [[Task_Bank]].
+
 ## Current Architecture State / Active Context
 
 **How it is wired now**
