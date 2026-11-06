@@ -37,6 +37,7 @@ Later commits added:
 - This brain, with `/sync-brain` and `scripts/check-brain.js`, see [[Local_Testing]].
 - The real contact address on every legal page and in `README.md`, see [[Branding_Legal]].
 - The task bank for every teacher: the `BANK_OPEN` switch is gone and each teacher gets a bank of their own, see [[Task_Bank]].
+- A new site icon, the logo's `s` in white on green, with icon links in `src/index.html`, see [[Branding_Legal]].
 
 ## Current Architecture State / Active Context
 
