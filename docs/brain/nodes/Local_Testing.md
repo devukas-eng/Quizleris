@@ -10,7 +10,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 
 ## Canonical File Map
 
-- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999, and `quizleris-nobank` runs it with an empty shared bank on port 3998.
+- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999, `quizleris-nobank` runs it with an empty shared bank on port 3998, and `quizleris-bench` runs it on port 3997 against `quizleris_bench`, which holds about 162,000 shared tasks for checking lists at scale.
 - `.env.example`: the variables the app expects.
 - `vitest.config.js`: unit test config, run with `npm.cmd test`.
 - `tests/setup.js`: shared test setup.
@@ -39,7 +39,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 - The local bank has tasks and live has none. That difference hid the teacher bugs found on 2026-11-06.
 - MariaDB returns JSON columns as strings, unlike live MySQL.
 - The browser pane can report a 0x0 viewport until `resize_window` runs.
-- The pane can stall animations until a screenshot forces frames. A hidden pane gets no frames at all, so CSS transitions, `requestAnimationFrame` and `ResizeObserver` stop. Take a screenshot before calling anything a bug.
+- The pane can stall animations until a screenshot forces frames. A hidden pane gets no frames at all, so CSS transitions, `requestAnimationFrame`, `ResizeObserver` and `IntersectionObserver` stop, and `content-visibility` blocks stay skipped. Take a screenshot before calling anything a bug.
 - `scripts/check-brain.js` fails when a name in a file map leaves its file, so a rename in the code shows up there. Update the node, not the check.
 - To test these notes in real Obsidian without touching the owner's vaults, copy `docs/brain/` to a scratch folder, write an `obsidian.json` for it in a scratch profile, and start Obsidian with `--user-data-dir` and `--remote-debugging-port`. `app.metadataCache.unresolvedLinks` then lists broken links.
 - PowerShell 5.1 writes a BOM with `-Encoding utf8`, which breaks JSON files. A here-string piped to `git commit -F -` also failed, so write the message to a file first.

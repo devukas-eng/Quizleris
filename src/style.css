@@ -4590,6 +4590,121 @@ math-virtual-keyboard::part(action-toolbar) {
     gap: 12px;
 }
 
+/* The Bank tab: a slim row per task, opened in place. Each loaded page of rows is one block that
+   the browser skips while it is off screen, so opening a row costs the same at row 50 and row 10,000. */
+.dash-bank-rows,
+.dash-bank-page {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dash-bank-page {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 2600px; /* 50 slim rows */
+}
+
+.dash-bank-more {
+    margin-top: 6px;
+}
+
+.dash-bank-row {
+    border: 1px solid var(--border-color);
+    border-radius: var(--control-radius);
+    background: var(--card-bg);
+}
+
+.dash-bank-row.is-open {
+    border-color: var(--control-border-hover);
+}
+
+.dash-bank-row-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: inherit;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dash-bank-row-head:hover {
+    background: var(--accent-soft);
+}
+
+.dash-bank-row-head:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+/* The way to shrink the row stays in view however long the task is */
+.dash-bank-row.is-open .dash-bank-row-head {
+    position: sticky;
+    top: -16px;
+    z-index: 3;
+    background: var(--surface-solid, var(--card-bg));
+}
+
+.dash-bank-row-text {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-bank-row-labels {
+    display: flex;
+    flex: 0 1 auto;
+    gap: 10px;
+    min-width: 0;
+    max-width: 46%;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.dash-bank-row-labels span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dash-bank-row-chevron {
+    flex: 0 0 auto;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+}
+
+.dash-bank-row.is-open .dash-bank-row-chevron {
+    transform: rotate(180deg);
+}
+
+.dash-bank-card.dash-bank-row-body {
+    padding: 4px 12px 14px;
+    border: none;
+    background: none;
+}
+
+@media (max-width: 640px) {
+    .dash-bank-row-head {
+        flex-wrap: wrap;
+    }
+
+    .dash-bank-row-labels {
+        order: 3;
+        flex-basis: 100%;
+        max-width: 100%;
+    }
+}
+
 .dash-bank-card {
     display: flex;
     flex-direction: column;
@@ -4623,6 +4738,17 @@ math-virtual-keyboard::part(action-toolbar) {
     padding: 8px;
     border-radius: var(--control-radius);
     background: var(--surface-solid, var(--card-bg));
+}
+
+/* Under the row's own head, which is pinned too (taller on phones, where its labels wrap) */
+.dash-bank-row .dash-bank-card.is-editing .dash-bank-card-head {
+    top: 30px;
+}
+
+@media (max-width: 640px) {
+    .dash-bank-row .dash-bank-card.is-editing .dash-bank-card-head {
+        top: 44px;
+    }
 }
 
 .dash-bank-classify {

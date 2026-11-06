@@ -20,7 +20,8 @@ function rowTextHtml(item) {
     return `<b class="bank-row-nick">${escapeHtml(item.nickname)}</b><span class="bank-row-sub">${previewHtml(item)}</span>`;
 }
 
-function previewHtml(item) {
+/** A task's one-line text with its formulas typeset. */
+export function previewHtml(item) {
     const key = `${item.id}:${item.preview}`;
     if (typeset.has(key)) return typeset.get(key);
     const el = document.createElement("span");

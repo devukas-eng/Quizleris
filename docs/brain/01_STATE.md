@@ -48,6 +48,10 @@ The latest push added:
 - Bank loading: it now recovers from a role changed in the database and from one failed request, see [[Task_Bank]].
 - Browser translation: the page no longer says it is English and refuses machine translation, see [[Language_Strings]].
 
+Then:
+
+- Admin Bank tab: slim rows that open and shrink in place, loaded as you scroll, so it no longer stops at 60 tasks, see [[Dashboard]].
+
 ## Current Architecture State / Active Context
 
 **How it is wired now**
@@ -94,8 +98,7 @@ Each of these still needs the owner's OK before it goes to production.
 6. **Clear the 35 lint warnings.** [[Local_Testing]]: `eslint.config.mjs`
 7. **Move routes out of `server.js`,** following the router in `src/backend/quiz-folders.js`. [[Backend_API]]
 8. **Split `src/dashboard-ui.js`,** following `src/admin-quiz-browser.js` and `src/admin-showcase.js`. [[Dashboard]]
-9. **Add "load more" to the admin Bank tab.** It shows only the newest 60 tasks, and `nextCursor` is already in the response. [[Dashboard]]: `renderAdminBankTab` in `src/dashboard-ui.js`
-10. **Add `/api/admin/overview` to the smoke test.** Its bank counts were silently wrong for a long time and no test covers them. [[Local_Testing]]: `scripts/smoke-test.js`
+9. **Add `/api/admin/overview` to the smoke test.** Its bank counts were silently wrong for a long time and no test covers them. [[Local_Testing]]: `scripts/smoke-test.js`
 
 ### Defaults the owner never confirmed
 

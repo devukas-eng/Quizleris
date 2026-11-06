@@ -28,6 +28,9 @@ import { initGlide } from "./glide.js";
 import { skeletonHtml } from "./dom.js";
 import { renderQuizBrowser } from "./admin-quiz-browser.js";
 import { renderShowcase, stopShowcase } from "./admin-showcase.js";
+import { previewHtml } from "./bank-list.js";
+
+const BANK_TAB_PAGE = 50; // rows the Bank tab asks for at a time
 
 let dashboardModal = null;
 let activeAdminTab = "overview";
@@ -712,7 +715,7 @@ function taskEditButtonsHtml(id) {
     `;
 }
 
-function wireInlineTaskEditors(container, fullItemsMap) {
+function wireInlineTaskEditors(container, fullItemsMap, { onSaved } = {}) {
     // The form takes the preview's place, so an open card is not both of them stacked
     const setEditing = (id, editing) => {
         const card = container.querySelector(`[data-bank-card="${id}"]`);
@@ -781,6 +784,7 @@ function wireInlineTaskEditors(container, fullItemsMap) {
             form.insertAdjacentHTML("beforebegin", renderBankTaskPreviewHtml(content));
             typesetMath(card.querySelector(".dash-bank-task-preview"));
             setEditing(id, false);
+            onSaved?.(full);
         });
     });
 }
@@ -1039,15 +1043,150 @@ async function renderAdminBankTab(panel) {
                     <option value="level" ${bf.sort === "level" ? "selected" : ""}>${escapeHtml(t("bank.sort.level"))}</option>
                 </select>
             </div>
-            <div id="dash-bank-results" class="dash-bank-list">${skeletonHtml(5)}</div>
+            <div id="dash-bank-results" class="dash-bank-rows">${skeletonHtml(5)}</div>
+            <div id="dash-bank-more" class="dash-bank-more"></div>
         </section>
     `;
 
     const resultsEl = panel.querySelector("#dash-bank-results");
+    const moreEl = panel.querySelector("#dash-bank-more");
     const totalEl = panel.querySelector("#dash-bank-total");
+    const topicNames = new Map(meta.topics.map(tp => [Number(tp.id), tp.name]));
+    const levelNames = new Map(meta.difficulties.map(d => [Number(d.id), d.name]));
 
-    const loadList = async () => {
-        resultsEl.innerHTML = skeletonHtml(5);
+    // The bank can hold tens of thousands of tasks: a slim row each, a page at a time as the end of
+    // the list comes near, and the full task fetched only when its row is opened
+    const listed = new Map(); // id → the task as listed
+    let total = 0;
+    let nextCursor = null;
+    let request = null;       // the page being loaded
+
+    const showTotal = (count) => {
+        total = count;
+        totalEl.textContent = `(${count})`;
+    };
+
+    const labelsHtml = (item) => [
+        item.gradeId ? t("bank.gradeShort").replace("{n}", item.gradeId) : "",
+        topicNames.get(Number(item.topicId)) || t("bank.noTopic"),
+        levelNames.get(Number(item.difficultyId)) || "",
+    ].filter(Boolean).map(label => `<span>${escapeHtml(label)}</span>`).join("");
+
+    const rowHtml = (item) => `
+        <div class="dash-bank-row" data-row="${item.id}">
+            <button type="button" class="dash-bank-row-head" aria-expanded="false" title="${escapeHtml(t("adminGui.toggleTask"))}">
+                <span class="dash-chip private">#${item.id}</span>
+                <span class="dash-bank-row-text">${previewHtml(item)}</span>
+                <span class="dash-bank-row-labels">${labelsHtml(item)}</span>
+                <svg class="dash-bank-row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="dash-bank-card dash-bank-row-body" data-bank-card="${item.id}" hidden></div>
+        </div>
+    `;
+
+    const showEmpty = () => {
+        resultsEl.innerHTML = `
+            <div class="dash-empty">
+                <div class="dash-empty-icon" aria-hidden="true">📚</div>
+                <h4>${escapeHtml(t("bank.empty"))}</h4>
+                <p class="dash-muted">${escapeHtml(t("bank.emptyHint"))}</p>
+            </div>
+        `;
+    };
+
+    const setRowOpen = (row, open) => {
+        row.classList.toggle("is-open", open);
+        row.querySelector(".dash-bank-row-head").setAttribute("aria-expanded", String(open));
+        row.querySelector(".dash-bank-row-body").hidden = !open;
+    };
+
+    const refreshRow = (row, item) => {
+        row.querySelector(".dash-bank-row-text").innerHTML = previewHtml(item);
+        row.querySelector(".dash-bank-row-labels").innerHTML = labelsHtml(item);
+    };
+
+    const archiveRow = async (row, item, btn) => {
+        const ok = await confirmDialog({
+            title: t("bank.archiveTitle"),
+            message: t("bank.archiveBody"),
+            confirmText: t("bank.archiveTask"),
+            danger: true,
+        });
+        if (!ok) return;
+        btn.disabled = true;
+        const res = await archiveBankItems([item.id], "shared");
+        if (!res.ok) {
+            btn.disabled = false;
+            await alertDialog(t("profile.loadError"), res.data?.error || "");
+            return;
+        }
+        forgetBankItems([item.id]);
+        listed.delete(item.id);
+        row.remove();
+        showTotal(Math.max(0, total - 1));
+        if (adminState.overview?.bank) {
+            adminState.overview.bank.published = Math.max(0, (adminState.overview.bank.published || 1) - 1);
+        }
+        updateAdminTabBadges();
+        if (!listed.size && !nextCursor) showEmpty();
+    };
+
+    const fillRow = async (row, item) => {
+        const body = row.querySelector(".dash-bank-row-body");
+        row.dataset.filled = "true";
+        body.innerHTML = skeletonHtml(1);
+        forgetBankItems([item.id]);
+        const [full] = await loadBankItems([item.id]);
+        if (!full) {
+            delete row.dataset.filled; // opening it again tries again
+            body.innerHTML = `<p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p>`;
+            return;
+        }
+        const qtype = full.content?.type || "multiple-choice";
+        body.innerHTML = `
+            <div class="dash-bank-card-head">
+                <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
+                <div class="dash-bank-head-actions">
+                    ${taskEditButtonsHtml(full.id)}
+                    <button type="button" class="btn btn-secondary btn-icon btn-compact dash-delete" data-archive-task="${full.id}" title="${escapeHtml(t("bank.archiveTask"))}" aria-label="${escapeHtml(t("bank.archiveTask"))}">🗑</button>
+                </div>
+            </div>
+            ${renderClassificationBarHtml(meta, full)}
+            ${renderBankTaskPreviewHtml(full.content)}
+            ${renderInlineTaskEditFormHtml(full)}
+        `;
+        typesetMath(body);
+        wireClassificationBars(body, meta, { autoSave: true });
+        wireInlineTaskEditors(row, new Map([[full.id, full]]), {
+            // Saving is the end of the job: the row shrinks back, showing what was saved
+            onSaved(saved) {
+                Object.assign(item, { preview: saved.content.prompt });
+                refreshRow(row, item);
+                setRowOpen(row, false);
+            },
+        });
+        const bar = body.querySelector(".dash-bank-classify");
+        bar.addEventListener("change", () => {
+            Object.assign(item, readClassificationBar(bar));
+            refreshRow(row, item);
+        });
+        const archiveBtn = body.querySelector("[data-archive-task]");
+        archiveBtn.addEventListener("click", () => archiveRow(row, item, archiveBtn));
+    };
+
+    // A row shrinks back with one click on its head; an edit in progress waits inside it
+    resultsEl.addEventListener("click", (e) => {
+        const head = e.target.closest(".dash-bank-row-head");
+        if (!head) return;
+        const row = head.closest(".dash-bank-row");
+        const open = !row.classList.contains("is-open");
+        setRowOpen(row, open);
+        if (open && !row.dataset.filled) fillRow(row, listed.get(Number(row.dataset.row)));
+    });
+
+    const loadPage = async (cursor) => {
+        request?.abort();
+        const current = request = new window.AbortController();
         const res = await listBankItems({
             q: bf.q.trim() || undefined,
             subject: bf.subject || undefined,
@@ -1055,81 +1194,55 @@ async function renderAdminBankTab(panel) {
             topic: bf.topic || undefined,
             difficulty: bf.difficulty || undefined,
             sort: bf.sort,
-            limit: 60,
+            cursor: cursor || undefined,
+            limit: BANK_TAB_PAGE,
             facets: "none",
-        });
+        }, current.signal);
+        if (current !== request || !resultsEl.isConnected) return; // a newer list, or another tab
+        request = null;
         if (!res.ok) {
-            resultsEl.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
+            if (!cursor) {
+                resultsEl.innerHTML = `<div class="dash-empty"><p class="dash-muted">${escapeHtml(t("bank.loadFailed"))}</p></div>`;
+                return;
+            }
+            moreEl.innerHTML = `<button type="button" class="btn btn-secondary btn-compact">${escapeHtml(t("adminGui.retryLoad"))}</button>`;
+            moreEl.querySelector("button").addEventListener("click", () => {
+                moreEl.innerHTML = skeletonHtml(1);
+                loadPage(cursor);
+            });
             return;
         }
         const items = res.data.items || [];
-        // The server's total can lag about a second behind a change. A list that fits on one page
-        // needs no total: it is the rows themselves, so deleting a task never leaves the old count.
-        const total = res.data.nextCursor ? res.data.total ?? items.length : items.length;
-        totalEl.textContent = `(${total})`;
+        nextCursor = res.data.nextCursor || null;
+        if (!cursor) {
+            // The server's total can lag about a second behind a change. A list that fits on one
+            // page needs no total: it is the rows themselves.
+            showTotal(nextCursor ? res.data.total ?? items.length : items.length);
+            resultsEl.innerHTML = "";
+            if (!items.length) showEmpty();
+        }
+        items.forEach(item => listed.set(item.id, item));
+        if (items.length) resultsEl.insertAdjacentHTML("beforeend", `<div class="dash-bank-page">${items.map(rowHtml).join("")}</div>`);
+        moreEl.innerHTML = nextCursor ? skeletonHtml(1) : "";
+        // Still near the end after a short page: observing anew asks for the next one
+        observer.unobserve(moreEl);
+        observer.observe(moreEl);
+    };
 
-        if (items.length === 0) {
-            resultsEl.innerHTML = `
-                <div class="dash-empty">
-                    <div class="dash-empty-icon" aria-hidden="true">📚</div>
-                    <h4>${escapeHtml(t("bank.empty"))}</h4>
-                    <p class="dash-muted">${escapeHtml(t("bank.emptyHint"))}</p>
-                </div>
-            `;
+    const observer = new window.IntersectionObserver((entries) => {
+        if (!resultsEl.isConnected) {
+            observer.disconnect();
             return;
         }
+        if (entries.some(entry => entry.isIntersecting) && nextCursor && !request && !moreEl.querySelector("button")) loadPage(nextCursor);
+    }, { root: document.getElementById("dashboard-body"), rootMargin: "800px 0px" });
 
-        const fullList = (await loadBankItems(items.map(i => i.id))).filter(Boolean);
-        const fullMap = new Map(fullList.map(f => [f.id, f]));
-
-        resultsEl.innerHTML = fullList.map(full => {
-            const qtype = full.content?.type || "multiple-choice";
-            return `
-                <div class="dash-bank-card" data-bank-card="${full.id}">
-                    <div class="dash-bank-card-head">
-                        <span class="dash-chip private">#${full.id}</span>
-                        <span class="dash-muted">${escapeHtml(t(`bank.qtype.${qtype}`))}</span>
-                        <div class="dash-bank-head-actions">
-                            ${taskEditButtonsHtml(full.id)}
-                            <button type="button" class="btn btn-secondary btn-icon btn-compact dash-delete" data-archive-task="${full.id}" title="${escapeHtml(t("bank.archiveTask"))}" aria-label="${escapeHtml(t("bank.archiveTask"))}">🗑</button>
-                        </div>
-                    </div>
-                    ${renderClassificationBarHtml(meta, full)}
-                    ${renderBankTaskPreviewHtml(full.content)}
-                    ${renderInlineTaskEditFormHtml(full)}
-                </div>
-            `;
-        }).join("");
-
-        typesetMath(resultsEl);
-        wireClassificationBars(resultsEl, meta, { autoSave: true });
-        wireInlineTaskEditors(resultsEl, fullMap);
-
-        resultsEl.querySelectorAll("[data-archive-task]").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                const id = Number(btn.dataset.archiveTask);
-                const ok = await confirmDialog({
-                    title: t("bank.archiveTitle"),
-                    message: t("bank.archiveBody"),
-                    confirmText: t("bank.archiveTask"),
-                    danger: true,
-                });
-                if (!ok) return;
-                btn.disabled = true;
-                const archRes = await archiveBankItems([id], "shared");
-                if (!archRes.ok) {
-                    btn.disabled = false;
-                    await alertDialog(t("profile.loadError"), archRes.data?.error || "");
-                    return;
-                }
-                forgetBankItems([id]);
-                if (adminState.overview?.bank) {
-                    adminState.overview.bank.published = Math.max(0, (adminState.overview.bank.published || 1) - 1);
-                }
-                updateAdminTabBadges();
-                loadList();
-            });
-        });
+    const loadList = () => {
+        nextCursor = null;
+        listed.clear();
+        resultsEl.innerHTML = skeletonHtml(5);
+        moreEl.innerHTML = "";
+        loadPage(null);
     };
 
     let qTimer = null;
