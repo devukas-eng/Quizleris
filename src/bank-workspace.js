@@ -13,6 +13,7 @@ import { armDrag, addDropZone, allowTouchDrag, justDragged } from "./bank-drag.j
 import { createTaskList } from "./bank-list.js";
 import { classifyFields, topicFields, topicOptions } from "./bank-forms.js";
 import { openImportDialog } from "./import-dialog.js";
+import { openSendDialog } from "./bank-send.js";
 import { insertQuestions, questionAt, isEditorOpen, bankIdsInQuiz, importHelpers, quizQuestions } from "./quiz-editor.js";
 import { isAdminAccessAllowed, getStoredUser } from "./auth.js";
 import { confirmDialog } from "./dialog.js";
@@ -415,7 +416,10 @@ function build() {
             </header>
             <label class="bank-search">${icon("search", 16)}<input type="search" data-search="mine" autocomplete="off" placeholder="${t("bank.searchMine")}" data-i18n-placeholder="bank.searchMine"></label>
             <nav class="mine-folders" role="tree" data-label="bank.folders" aria-label="${t("bank.folders")}"></nav>
-            <div class="bank-list-head"><span class="bank-total"></span></div>
+            <div class="bank-list-head">
+                <span class="bank-total"></span>
+                <button type="button" class="bank-send-tag" data-act="send-tag" hidden>${icon("send", 14)}<span></span></button>
+            </div>
             <div class="mine-list"></div>
             ${selbarHtml(true)}
         </aside>
@@ -505,7 +509,7 @@ function build() {
         renamePlaceholder: t("bank.nicknamePlaceholder"),
         metaHtml: item => rowMetaHtml(item, item.own, true),
         emptyHtml: res => emptyHtml(res, "mine"),
-        starOf: item => favorites.has(item.id),
+        starOf: item => (item.status === "published" ? favorites.has(item.id) : null), // tasks not in the bank yet are collected with tags
         onOpen: (item, index) => openSheet(els.mine, mineList, index),
         onAdd: (item, row) => addTasks([item.id], row),
         onStar: item => toggleFavorite(item.id),
@@ -558,6 +562,7 @@ function wireCommon() {
             if (e.target.closest('[data-act="close-drawer"]')) setDrawer(false);
             if (e.target.closest('[data-act="import"]')) openBankImport({ scope: "shared" });
             if (e.target.closest('[data-act="import-mine"]')) openBankImport({ scope: "mine" });
+            if (e.target.closest('[data-act="send-tag"]')) sendToBank({ tag: tagOfView(mine.folderId) });
         });
         // Typing in the panels is not an editor shortcut (Ctrl+Z, Alt+N…)
         aside.addEventListener("keydown", e => {
@@ -572,9 +577,9 @@ function wireCommon() {
         aside.querySelector(".bank-selbar-clear").addEventListener("click", () => list.clearSelection());
         aside.querySelector(".bank-selbar-submit")?.addEventListener("click", () => {
             const chosen = new Set(list.selected);
-            const own = list.items.filter(item => item.own && chosen.has(item.id)).map(item => item.id);
+            const sendable = list.items.filter(item => (item.own || item.status === "pool") && chosen.has(item.id)).map(item => item.id);
             list.clearSelection();
-            submitToBank(own);
+            sendToBank({ ids: sendable });
         });
         aside.querySelector(".bank-selbar-edit").addEventListener("click", () => openBulkEdit(aside, list));
     }
@@ -1195,32 +1200,29 @@ async function sendLabels(item, labels) {
     return true;
 }
 
-// Own tasks into the shared bank: a creator's wait for an admin, an admin's go in at once
-async function submitToBank(ids) {
-    if (!ids.length) {
+// Tasks into the shared bank, through the window where they get their classification: a creator's
+// wait for an admin, an admin's go in at once. A whole #tag goes the same way as a single task.
+function sendToBank({ ids = null, tag = null }) {
+    if (ids && !ids.length) {
         toast(t("bank.submitOwnOnly"), "error");
         return;
     }
-    const res = await api.submitItems(ids);
-    if (!res.ok) {
-        toast(errorText(res), "error");
-        return;
-    }
-    const { submitted = 0, published = 0, pending = 0, exists = 0 } = res.data;
-    const parts = [];
-    if (submitted) parts.push(t("bank.submitted").replace("{n}", submitted));
-    if (published) parts.push(t("bank.published").replace("{n}", published));
-    if (pending) parts.push(t("bank.alreadyPending").replace("{n}", pending));
-    if (exists) parts.push(t("bank.alreadyShared").replace("{n}", exists));
-    toast(parts.join(" · ") || t("bank.saveFailed"), submitted || published ? "ok" : "error");
-    for (const result of res.data.results || []) {
-        const status = result.submitted || result.pending ? "pending" : result.published ? "approved" : null;
-        if (status) mineList.patch(result.id, { submission: { status, note: null } });
-    }
-    // The open preview shows the new state (its badge, buttons and the rejection note go)
-    if (sheet?.list === mineList && sheet.list.items[sheet.index]) showSheetItem();
-    if (published) reloadBank();
-    refreshReview();
+    openSendDialog({
+        ids,
+        tag,
+        onDone(result) {
+            for (const entry of result.results || []) {
+                const status = entry.submitted || entry.pending ? "pending" : entry.published ? "approved" : null;
+                if (status) mineList.patch(entry.id, { submission: { status, note: null } });
+            }
+            // The open preview shows the new state (its badge, buttons and the rejection note go)
+            if (sheet?.list === mineList && sheet.list.items[sheet.index]) showSheetItem();
+            reloadFolders();
+            reloadMine();
+            if (result.published) setTimeout(reloadBank, 1200);
+            refreshReview();
+        }
+    });
 }
 
 async function loadFavorites() {
@@ -1279,6 +1281,10 @@ async function reloadMine() {
     if (!res) return;
     mine.listed = res.data.total ?? 0;
     els.mineTotal.textContent = res.ok ? countLabel(mine.listed) : "";
+    // Staff send a whole #tag at once
+    const send = els.mine.querySelector(".bank-send-tag");
+    send.hidden = !tag || !isStaff() || !mine.listed;
+    send.querySelector("span").textContent = t(isAdmin() ? "bank.publish" : "bank.submit");
 }
 
 function renderFolders() {
@@ -1605,14 +1611,8 @@ function copyOf(item) {
 // task's classification
 async function toBankItem(question) {
     if (!question) return null;
-    const content = JSON.parse(JSON.stringify(question));
-    const bankId = content.source?.bankId;
-    delete content.id;
-    delete content.source;
-    content.type ||= "multiple-choice";
-    const asDataUrl = image => (/^(data:|\/api\/media\/|https?:)/.test(image) ? image : `data:image/jpeg;base64,${image}`);
-    if (content.image) content.image = asDataUrl(content.image);
-    for (const choice of content.choices || []) if (choice.image) choice.image = asDataUrl(choice.image);
+    const content = api.questionContent(question);
+    const bankId = question.source?.bankId;
     const [origin] = bankId ? await api.loadItems([bankId]) : [null];
     return origin ? { ...copyOf(origin), content } : { content };
 }
@@ -1946,14 +1946,16 @@ function afterChange(mineScope) {
 // questions (preset). Staff choose the shared bank or their own; everyone else fills their own.
 // The classification starts where the bank is open (subject, grade, topic, folder).
 function openBankImport({ scope, preset = null }) {
-    const admin = limits.writeShared;
+    // Only an admin fills the shared bank directly: a creator's tasks go there through the send, and
+    // tasks nobody has sorted yet go to the unsorted ones
+    const scopes = isAdmin() ? ["shared", "pool", "mine"] : isStaff() ? ["pool", "mine"] : null;
     const fields = classifyFields(meta, {
         subjects: meta.subjects.filter(subject => !subject.archived),
         subjectId: bank.subjectId,
         gradeId: bank.gradeId,
         topicId: typeof bank.topicId === "number" ? bank.topicId : null,
-        scopes: admin ? ["shared", "mine"] : null,
-        scope: admin ? scope : "mine",
+        scopes,
+        scope: !scopes ? "mine" : scopes.includes(scope) ? scope : "pool",
         folders: mine.folders,
         folderId: typeof mine.folderId === "number" ? mine.folderId : null
     });
@@ -1971,39 +1973,13 @@ function openBankImport({ scope, preset = null }) {
 // says what was added, what was there already and what failed
 async function saveToBank(questions, { scope, defaults }) {
     const items = (await Promise.all(questions.map(toBankItem))).filter(Boolean);
-    const parts = [];
-    let part = [];
-    let size = 0;
-    for (const item of items) {
-        const bytes = JSON.stringify(item).length;
-        if (part.length && (part.length >= 500 || size + bytes > 8e6)) {
-            parts.push(part);
-            part = [];
-            size = 0;
-        }
-        part.push(item);
-        size += bytes;
-    }
-    if (part.length) parts.push(part);
     toast(t("bank.saving").replace("{n}", items.length));
-    const sum = { created: 0, duplicates: 0, failed: 0, error: "" };
-    for (const chunk of parts) {
-        const res = await api.createItems(chunk, defaults, scope);
-        if (!res.ok) {
-            sum.failed += chunk.length;
-            sum.error ||= errorText(res);
-            continue;
-        }
-        sum.created += res.data.created || 0;
-        sum.duplicates += res.data.duplicates || 0;
-        sum.failed += res.data.failed || 0;
-        sum.error ||= res.data.results?.find(result => result?.error)?.error || "";
-    }
-    const where = scope === "mine" ? folderLabel(defaults.folderId) : t("bank.sharedBank");
+    const sum = await api.createItemsInParts(items, defaults, scope);
+    const where = scope === "mine" ? folderLabel(defaults.folderId) : t(scope === "pool" ? "bank.poolName" : "bank.sharedBank");
     const note = t("bank.savedMany").replace("{n}", sum.created).replace("{where}", where)
         + (sum.duplicates ? ` · ${t("bank.duplicates").replace("{n}", sum.duplicates)}` : "");
     toast(note, sum.created || sum.duplicates ? "ok" : "error");
-    if (sum.failed) toast(`${t("bank.saveFailed")} (${sum.failed}): ${sum.error}`, "error");
+    if (sum.failed) toast(`${t("bank.saveFailed")} (${sum.failed}): ${sum.refusal ? errorText(sum.refusal) : sum.message}`, "error");
     afterChange(scope === "mine");
 }
 
@@ -2284,9 +2260,10 @@ async function showSheetItem() {
     current.el.querySelector(".bank-sheet-meta").innerHTML = rowMetaHtml(item, item.own, current.left);
     current.el.querySelector('[data-act="prev"]').disabled = current.index <= 0;
     current.el.querySelector('[data-act="next"]').disabled = current.index >= current.list.items.length - 1;
-    // A draft waiting for approval is neither starred nor reported; one's own task is not reported
-    current.el.querySelector('[data-act="star"]').hidden = item.status === "draft";
-    current.el.querySelector('[data-act="report"]').hidden = item.own || item.status === "draft";
+    // A task not in the bank yet is neither starred nor reported; one's own task is not reported
+    const inBank = item.status === "published";
+    current.el.querySelector('[data-act="star"]').hidden = !inBank;
+    current.el.querySelector('[data-act="report"]').hidden = item.own || !inBank;
     closeReportForm();
     sheetStar();
     renderSheetLabels();
@@ -2316,7 +2293,8 @@ function renderSheetActions() {
             ${iconOnly ? `title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` : ""}>${icon(ico, 16)}${iconOnly ? "" : `<span>${escapeHtml(label)}</span>`}</button>`;
     const parts = [button("add", "plus", t("bank.add"), { primary: true })];
     if (!item.own) {
-        if (limits.writeMine && item.status !== "draft") parts.push(button("save", "folder", t("bank.saveMine")));
+        if (item.status === "pool" && isStaff()) parts.push(button("submit", "send", t(isAdmin() ? "bank.publish" : "bank.submit")));
+        else if (limits.writeMine && item.status !== "draft") parts.push(button("save", "folder", t("bank.saveMine")));
     } else {
         // Staff send their own tasks to the shared bank: once waiting or in, the button says so
         if (isStaff()) {
@@ -2593,7 +2571,7 @@ function onSheetClick(e) {
     } else if (act === "add") addTasks([item.id], sheet.list.rowOf(item.id));
     else if (act === "save") saveToMine([item.id]);
     else if (act === "remove") removeMine(item);
-    else if (act === "submit") submitToBank([item.id]);
+    else if (act === "submit") sendToBank({ ids: [item.id] });
     else if (act === "approve" || act === "reject") decide(act);
     else if (act === "star") toggleFavorite(item.id);
     else if (act === "report") openReportForm();
@@ -2674,6 +2652,9 @@ function rowMetaHtml(item, mineScope, left = false) {
     if (bank.flagged && !mineScope && !left) parts.push(`<span class="bank-flag" title="${t("bank.flaggedTitle")}">${icon("flag", 12)}</span>`);
     const pill = left && item.own && SUBMISSION_PILLS[item.submission?.status];
     if (pill) parts.push(`<span class="bank-sent is-${item.submission.status}">${icon(pill[0], 12)}${escapeHtml(t(pill[1]))}</span>`);
+    // In a staff member's #tag: tasks that are not in the bank yet say so
+    if (left && !item.own && item.status === "pool") parts.push(`<span class="bank-sent is-unsorted">${escapeHtml(t("bank.poolShort"))}</span>`);
+    if (left && !item.own && item.status === "draft") parts.push(`<span class="bank-sent is-pending">${icon("clock", 12)}${escapeHtml(t("bank.pendingShort"))}</span>`);
     if (inQuiz.has(item.id)) parts.push(`<span class="bank-in-quiz">${icon("check", 12)}${escapeHtml(t("bank.inQuiz"))}</span>`);
     if (left && item.tags?.length) parts.push(`<span class="bank-row-tags">${item.tags.map(tag => `<span>#${escapeHtml(tag)}</span>`).join("")}</span>`);
     const level = meta?.levelsById.get(item.difficultyId);

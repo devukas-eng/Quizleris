@@ -763,13 +763,17 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
                 createdAt: r.created_at
             }));
         }
-        let bankStats = { published: 0, pendingReview: 0, openReports: 0 };
+        let bankStats = { published: 0, pendingReview: 0, openReports: 0, unsorted: 0, suggested: 0 };
         try {
             // These count what the Bank, Approvals and Reports tabs list, so a badge matches its tab
             const [[bItems]] = await pool.query(`
-                SELECT SUM(status = 'published') AS published,
+                SELECT SUM(status = 'published') AS published, SUM(status = 'pool') AS unsorted,
                        SUM(status = 'draft' AND id IN (SELECT item_id FROM bank_submissions WHERE status = 'pending')) AS pending_review
                 FROM bank_items WHERE owner_id = 0
+            `);
+            const [[bPool]] = await pool.query(`
+                SELECT COUNT(*) AS suggested FROM bank_pool p JOIN bank_items i ON i.id = p.item_id
+                WHERE i.status = 'pool' AND p.suggested_at IS NOT NULL AND p.dismissed_at IS NULL
             `);
             const [[bRep]] = await pool.query(`
                 SELECT COUNT(DISTINCT r.item_id) AS open_reports
@@ -779,7 +783,9 @@ app.get('/api/admin/overview', authenticateToken, requireAdmin, async (req, res)
             bankStats = {
                 published: Number(bItems?.published || 0),
                 pendingReview: Number(bItems?.pending_review || 0),
-                openReports: Number(bRep?.open_reports || 0)
+                openReports: Number(bRep?.open_reports || 0),
+                unsorted: Number(bItems?.unsorted || 0),
+                suggested: Number(bPool?.suggested || 0)
             };
         } catch (error) {
             // The rest of the overview still loads; a wrong query must not pass for an empty bank

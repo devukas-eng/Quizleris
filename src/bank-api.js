@@ -57,9 +57,31 @@ export const listTags = () => request("/tags");
 export const setLabels = (id, labels) => request(`/labels/${id}`, { method: "PUT", body: labels });
 export const tagItems = (ids, { add = [], remove = [] }) => request("/labels/tags", { method: "POST", body: { ids, add, remove } });
 
-// Staff's own tasks into the shared bank; admins approve or reject a creator's
-export const submitItems = ids => request("/submissions", { method: "POST", body: { ids } });
+// Tasks into the shared bank, each with its classification; admins approve or reject a creator's,
+// one by one or a whole send at a time
+export const submitItems = (items, { tag = null, note = "" } = {}) => request("/submissions", { method: "POST", body: { items, tag, note } });
 export const decideSubmission = (id, action, note = "") => request(`/submissions/${id}`, { method: "PATCH", body: { action, note } });
+export const listBatches = () => request("/batches");
+export const pendingBatches = () => request("/batches/pending");
+export const batchItems = (id, userId = null) => request(`/batches/${id ?? "none"}/items?${query({ user: userId })}`);
+export const decideBatch = (id, action, note = "", userId = null) => request(`/batches/${id ?? "none"}`, { method: "PATCH", body: { action, note, userId } });
+
+// The shared bank's log
+export const taskHistory = id => request(`/items/${id}/history`);
+export const listHistory = (params, signal) => request(`/history?${query(params)}`, { signal });
+export const historyUsers = () => request("/history/users");
+export const revertChange = id => request(`/history/${id}/revert`, { method: "POST" });
+export const restoreItem = id => request(`/items/${id}/restore`, { method: "POST" });
+
+// Unsorted tasks: the feed, votes, and what an admin decides
+export const poolStats = () => request("/pool/stats");
+export const poolFeed = (cursor, limit) => request(`/pool/feed?${query({ cursor, limit })}`);
+export const poolVote = (id, vote) => request(`/pool/${id}/vote`, { method: "POST", body: { vote } });
+export const savePoolLimits = limits => request("/pool/settings", { method: "PUT", body: limits });
+export const poolSuggested = () => request("/pool/suggested");
+export const poolPublish = (id, body) => request(`/pool/${id}/publish`, { method: "POST", body });
+export const poolDismiss = id => request(`/pool/${id}/dismiss`, { method: "POST" });
+export const poolRemove = id => request(`/pool/${id}`, { method: "DELETE" });
 
 // The topic tree (admins)
 export const createTopic = body => request("/topics", { method: "POST", body });
@@ -72,6 +94,53 @@ export const listFolders = () => request("/folders");
 export const createFolder = (name, parentId = null) => request("/folders", { method: "POST", body: { name, parentId } });
 export const updateFolder = (id, fields) => request(`/folders/${id}`, { method: "PATCH", body: fields });
 export const deleteFolder = id => request(`/folders/${id}`, { method: "DELETE" });
+
+/** A question as the bank stores it: no quiz-specific ID or reference, pictures as data the server can keep. */
+export function questionContent(question) {
+    const content = JSON.parse(JSON.stringify(question));
+    delete content.id;
+    delete content.source;
+    content.type ||= "multiple-choice";
+    const asDataUrl = image => (/^(data:|\/api\/media\/|https?:)/.test(image) ? image : `data:image/jpeg;base64,${image}`);
+    if (content.image) content.image = asDataUrl(content.image);
+    for (const choice of content.choices || []) if (choice.image) choice.image = asDataUrl(choice.image);
+    return content;
+}
+
+/**
+ * Saves tasks in parts the server takes (at most 500 tasks and about 8 MB of pictures each). Gives how
+ * many were added, were there already and failed, with the first refusal.
+ */
+export async function createItemsInParts(items, defaults, scope) {
+    const parts = [];
+    let part = [];
+    let size = 0;
+    for (const item of items) {
+        const bytes = JSON.stringify(item).length;
+        if (part.length && (part.length >= 500 || size + bytes > 8e6)) {
+            parts.push(part);
+            part = [];
+            size = 0;
+        }
+        part.push(item);
+        size += bytes;
+    }
+    if (part.length) parts.push(part);
+    const sum = { created: 0, duplicates: 0, failed: 0, refusal: null, message: "" };
+    for (const chunk of parts) {
+        const res = await createItems(chunk, defaults, scope);
+        if (!res.ok) {
+            sum.failed += chunk.length;
+            sum.refusal ||= res;
+            continue;
+        }
+        sum.created += res.data.created || 0;
+        sum.duplicates += res.data.duplicates || 0;
+        sum.failed += res.data.failed || 0;
+        sum.message ||= res.data.results?.find(result => result?.error)?.error || "";
+    }
+    return sum;
+}
 
 // Full tasks (question content and classification), fetched once and shared by the preview, drops
 // and copies. A task that could not be loaded is not remembered, so the next call tries again.

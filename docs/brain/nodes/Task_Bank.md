@@ -6,7 +6,7 @@ last_verified: 2026-11-06
 
 ## Purpose & Boundaries
 
-Owns the shared and private task banks shown beside the quiz editor: browsing, classifying, stars, nicknames, tags, mistake reports and creator submissions. Stages 1 to 3 are live, and stage 4 (templates) is next.
+Owns the shared and private task banks shown beside the quiz editor: browsing, classifying, stars, nicknames, tags and mistake reports. How tasks get into the shared bank belongs to [[Creator_Workflow]]. Stages 1 to 3 are live, and stage 4 (templates) is next.
 
 ## Canonical File Map
 
@@ -30,7 +30,7 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 
 ## Gotchas & Constraints
 
-- `bankLimits`: every teacher may read the shared bank and keep an own bank, and only staff (admin, creator) may write the shared one. Students get neither.
+- `bankLimits`: every teacher may read the shared bank and keep an own bank, and only staff (admin, creator) may write the shared one. Students get neither. Creators edit and classify shared tasks but do not add them directly, see [[Creator_Workflow]].
 - For teachers the bank appears only beside the quiz editor. Admins also have the Bank, Approvals and Reports tabs in [[Dashboard]].
 - Below 1100px the bank is only an orange button at the bottom right, and closing it on a wider screen is remembered in `quizleris_bank_prefs`. Either can read as "the bank is missing", so ask about the screen before suspecting the account.
 - Nothing on the server depends on an account's age: `bankLimits` reads only the role, fresh from the database.
@@ -41,7 +41,6 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 - New tables go into `SCHEMA`. Changing an existing table needs a `MIGRATIONS` step.
 - Nicknames and tags are per-user overlays (`bank_nicknames`, `bank_tags`) and never change the task.
 - A quiz question dropped on Starred or a #tag becomes a task first (`taskOfQuestion`): an unchanged bank question uses its bank task, anything else is saved as an own task, and a blank question is refused with a notice.
-- Creators send tasks for approval through `bank_submissions`. An admin's own send publishes at once.
 - `src/bank-drag.js` also drives question reordering in the editor, so changes reach both.
 - Layout follows the owner's sketch: own tasks left, editor middle, bank right. Three columns from 1400px, tabs from 1100px, a drawer below that, and full screen on phones.
 - Large screens must use the room, with 1920x1080 as the owner's standard. Later stages stay inside this layout.

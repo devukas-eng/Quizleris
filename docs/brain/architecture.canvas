@@ -1,7 +1,7 @@
 {
 	"nodes":[
 		{"id":"group-visitor","type":"group","label":"Every visitor","x":-50,"y":440,"width":1960,"height":1670},
-		{"id":"group-staff","type":"group","label":"Teachers and admins","x":2170,"y":440,"width":1220,"height":1670},
+		{"id":"group-staff","type":"group","label":"Teachers and admins","x":2170,"y":440,"width":1220,"height":2240},
 		{"id":"group-server","type":"group","label":"Server","x":3850,"y":440,"width":480,"height":1670},
 		{"id":"group-ship","type":"group","label":"Ship and test","x":4590,"y":440,"width":480,"height":1100},
 		{"id":"moc","type":"file","file":"00_MOC_Architecture.md","x":1480,"y":0,"width":380,"height":300,"color":"5"},
@@ -17,6 +17,7 @@
 		{"id":"folders","type":"file","file":"nodes/Quiz_Folders.md","x":2960,"y":500,"width":380,"height":420},
 		{"id":"showcase","type":"file","file":"nodes/Showcase.md","x":2960,"y":1070,"width":380,"height":420},
 		{"id":"bank","type":"file","file":"nodes/Task_Bank.md","x":2960,"y":1640,"width":380,"height":420,"color":"3"},
+		{"id":"workflow","type":"file","file":"nodes/Creator_Workflow.md","x":2960,"y":2210,"width":380,"height":420,"color":"3"},
 		{"id":"auth","type":"file","file":"nodes/Auth_Roles_Plans.md","x":3900,"y":500,"width":380,"height":420},
 		{"id":"backend","type":"file","file":"nodes/Backend_API.md","x":3900,"y":1070,"width":380,"height":990,"color":"1"},
 		{"id":"deploy","type":"file","file":"nodes/Build_Deploy.md","x":4640,"y":500,"width":380,"height":420},
@@ -59,6 +60,9 @@
 		{"id":"edge-28","fromNode":"next-teacher","fromSide":"bottom","toNode":"dashboard","toSide":"top","toEnd":"arrow","color":"2"},
 		{"id":"edge-29","fromNode":"next-folders","fromSide":"bottom","toNode":"folders","toSide":"top","toEnd":"arrow","color":"2"},
 		{"id":"edge-30","fromNode":"next-agents","fromSide":"bottom","toNode":"deploy","toSide":"top","toEnd":"arrow","color":"2"},
-		{"id":"edge-31","fromNode":"next-bank","fromSide":"top","toNode":"bank","toSide":"right","toEnd":"arrow","color":"2"}
+		{"id":"edge-31","fromNode":"next-bank","fromSide":"top","toNode":"bank","toSide":"right","toEnd":"arrow","color":"2"},
+		{"id":"edge-32","fromNode":"workflow","fromSide":"top","toNode":"bank","toSide":"bottom","toEnd":"arrow","label":"sends tasks"},
+		{"id":"edge-33","fromNode":"dashboard","fromSide":"bottom","toNode":"workflow","toSide":"left","toEnd":"arrow","label":"creator's desk, tabs"},
+		{"id":"edge-34","fromNode":"workflow","fromSide":"right","toNode":"backend","toSide":"bottom","toEnd":"arrow","label":"/api/bank","color":"6"}
 	]
 }

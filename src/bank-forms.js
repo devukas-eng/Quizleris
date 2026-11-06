@@ -5,6 +5,7 @@ import { escapeHtml } from "./dom.js";
 import { t } from "./lang.js";
 
 const KEEP = "keep"; // a bulk change leaves this field as it is
+const SCOPE_LABELS = { shared: "bank.sharedBank", pool: "bank.poolName", mine: "bank.mine" };
 
 const option = (value, label, selected = false) =>
     `<option value="${escapeHtml(String(value))}"${selected ? " selected" : ""}>${escapeHtml(label)}</option>`;
@@ -53,7 +54,7 @@ export function classifyFields(meta, {
     const emptyOption = (selected, label = "—") => option("", keep ? t("bank.clear") : label, !keep && selected);
     el.innerHTML = `
         ${scopes ? `<div class="bank-classify-scope" role="radiogroup" aria-label="${t("bank.whereTo")}">
-            ${scopes.map(s => `<button type="button" class="bank-chip${s === scope ? " is-on" : ""}" role="radio" aria-checked="${s === scope}" data-scope="${s}">${t(s === "shared" ? "bank.sharedBank" : "bank.mine")}</button>`).join("")}
+            ${scopes.map(s => `<button type="button" class="bank-chip${s === scope ? " is-on" : ""}" role="radio" aria-checked="${s === scope}" data-scope="${s}">${t(SCOPE_LABELS[s])}</button>`).join("")}
         </div>` : ""}
         <label class="bank-field">${t("bank.subject")}
             <select data-field="subject">${keepOption}${subjects.map(s => option(s.id, `${s.icon || ""} ${s.name}`.trim(), !keep && s.id === subjectId)).join("")}</select></label>

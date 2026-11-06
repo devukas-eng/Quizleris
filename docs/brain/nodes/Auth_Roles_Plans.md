@@ -28,7 +28,7 @@ Owns who a user is and what they may do: login, the JWT session, the roles teach
 ## Gotchas & Constraints
 
 - Registration needs a single-use invite code from table `invite_codes`, for the role teacher or creator. Admins make codes from the dashboard header.
-- `creator` means bank staff: shared bank writes and reports, but not classifier lists, purging or invites.
+- `creator` means bank staff: they edit and archive shared tasks, handle reports, add unsorted tasks and send tasks for approval. They do not publish, restore, purge, or touch classifier lists and invites: those stay with the admin.
 - `isPremium` covers admins, creators and active premium accounts. Hourly cleanup clears `expires_at` on private quizzes whose owner now has premium's limits.
 - The session lives in `quizleris_jwt` and `quizleris_user`. Keep the `quizleris_` names, because the cookie policy names them, see [[Branding_Legal]].
 - Hide staff-only controls with `hidden`, and rely on the `[hidden]` rule in [[Page_Shell]].

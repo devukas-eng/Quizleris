@@ -10,7 +10,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 
 ## Canonical File Map
 
-- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999, `quizleris-nobank` runs it with an empty shared bank on port 3998, and `quizleris-bench` runs it on port 3997 against `quizleris_bench`, which holds about 162,000 shared tasks for checking lists at scale.
+- `.claude/launch.json`: local and untracked. The `quizleris-localdb` config runs the app on port 3999, `quizleris-nobank` runs it with an empty shared bank on port 3998, `quizleris-studio` runs it on port 3996 on the same database as `quizleris-localdb`, for when another session holds that port, and `quizleris-bench` runs it on port 3997 against `quizleris_bench` for checking lists at scale. Its 200,000 tasks are made up by `scripts/bench_bank.js`, they are not real ones: about 12,000 are published and 150,000 are unsorted.
 - `.env.example`: the variables the app expects.
 - `vitest.config.js`: unit test config, run with `npm.cmd test`.
 - `tests/setup.js`: shared test setup.
@@ -18,6 +18,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 - `scripts/init_db.js`: creates the app tables in an empty database.
 - `scripts/bench_bank.js`: fills a bench database with `--local --items=200000`.
 - `scripts/smoke-test.js`: smoke test, run with `npm.cmd run test:smoke`.
+- `scripts/bank-flow-test.js`: 92 checks of the creators' system through the real API, run with `npm.cmd run test:bank-flow` against a running `quizleris-studio`. It writes test data, reads `.claude/launch.json` only, and refuses a database that is not local.
 - `scripts/check-brain.js`: checks links, paths, node structure and the canvas in `docs/brain/`.
 - `.claude/commands/sync-brain.md`: the slash command's steps, also followed after finishing a feature.
 

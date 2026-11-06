@@ -34,6 +34,8 @@ flowchart TD
         Dashboard --> Showcase
         Dashboard --> Quiz_Editor
         Quiz_Editor <--> Task_Bank
+        Dashboard --> Creator_Workflow
+        Creator_Workflow --> Task_Bank
     end
     subgraph server["Server"]
         Auth_Roles_Plans --> Backend_API
@@ -49,8 +51,9 @@ flowchart TD
     Showcase <--> Backend_API
     Quiz_Editor --> Backend_API
     Task_Bank --> Backend_API
+    Creator_Workflow --> Backend_API
     Build_Deploy --> Backend_API
-    class Branding_Legal,Language_Strings,Page_Shell,URL_Routing,Theme_System,Quiz_Runtime,Dashboard,Quiz_Folders,Showcase,Quiz_Editor,Task_Bank,Auth_Roles_Plans,Backend_API,Local_Testing,Build_Deploy internal-link;
+    class Branding_Legal,Language_Strings,Page_Shell,URL_Routing,Theme_System,Quiz_Runtime,Dashboard,Quiz_Folders,Showcase,Quiz_Editor,Task_Bank,Creator_Workflow,Auth_Roles_Plans,Backend_API,Local_Testing,Build_Deploy internal-link;
 ```
 
 ## Routing / Trigger Table
@@ -69,6 +72,7 @@ Find the row that matches the task and read that node before touching code.
 | Creating or saving a quiz, drafts, the quiz limit, lost quizzes | `src/quiz-editor.js` | [[Quiz_Editor]] | active |
 | Students joining, playing, grading, quit tracking | `src/render.js`, `src/state.js` | [[Quiz_Runtime]] | active |
 | Task bank, teacher access, topics, stars, nicknames, tags, approvals | `src/bank-workspace.js`, `src/backend/bank.js` | [[Task_Bank]] | wip |
+| Sending tasks to the bank, approvals, unsorted tasks, the feed, votes, the bank's log, restoring | `src/bank-send.js`, `src/backend/bank-pool.js`, `src/backend/bank-history.js` | [[Creator_Workflow]] | wip |
 | API routes, schema at start, rate limits, cleanup jobs | `server.js`, `src/api.js` | [[Backend_API]] | needs-refactor |
 | Login, roles, invite codes, free and premium limits | `src/auth.js`, `src/backend/plans.js` | [[Auth_Roles_Plans]] | active |
 | Business name, copyright, legal pages, cookie text | `src/index.html`, `src/app.js`, `tests/branding.test.js` | [[Branding_Legal]] | wip |

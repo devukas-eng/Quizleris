@@ -13,7 +13,8 @@
     "db:migrate": "node scripts/migrate_quizzes.js",
     "db:seed": "node scripts/seed_premade.js",
     "lint": "eslint src server.js scripts",
-    "test:smoke": "node scripts/smoke-test.js"
+    "test:smoke": "node scripts/smoke-test.js",
+    "test:bank-flow": "node scripts/bank-flow-test.js"
   },
   "keywords": [],
   "author": "e1tvis",

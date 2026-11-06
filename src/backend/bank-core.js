@@ -6,7 +6,8 @@ const crypto = require('crypto');
 
 const QTYPES = ['multiple-choice', 'numeric', 'fill-blank', 'true-false', 'text', 'image-upload'];
 const KINDS = ['problem', 'template'];
-const STATUSES = ['draft', 'published', 'archived'];
+// 'pool': not sorted yet, in the shared bank's table but seen only by staff (see bank-pool.js)
+const STATUSES = ['draft', 'published', 'archived', 'pool'];
 const PREVIEW_LENGTH = 300;
 const SEARCH_LENGTH = 4000;
 const MIN_FULLTEXT_WORD = 3; // InnoDB's default innodb_ft_min_token_size: shorter words are not indexed
@@ -188,9 +189,10 @@ function addNullableIn(add, column, raw) {
  * classifier. `omit` leaves one filter out, so facet counts show the choices for that filter.
  */
 function buildFilter(params, ctx, omit = null) {
-    // ownerIds lists several banks at once: a user's starred or tagged tasks are their own and shared ones
-    const where = [ctx.ownerIds ? 'i.owner_id IN (?)' : 'i.owner_id = ?', 'i.status = ?'];
-    const args = [ctx.ownerIds || ctx.ownerId, ctx.status];
+    // ownerIds lists several banks at once: a user's starred or tagged tasks are their own and shared
+    // ones. statuses lists several states: staff's tags also hold tasks not yet in the bank.
+    const where = [ctx.ownerIds ? 'i.owner_id IN (?)' : 'i.owner_id = ?', ctx.statuses ? 'i.status IN (?)' : 'i.status = ?'];
+    const args = [ctx.ownerIds || ctx.ownerId, ctx.statuses || ctx.status];
     const add = (clause, ...values) => {
         where.push(clause);
         args.push(...values);
@@ -430,8 +432,8 @@ function listItem(row) {
 }
 
 module.exports = {
-    QTYPES, KINDS, STATUSES, FROM_ITEMS, TAG_LENGTH,
+    QTYPES, KINDS, STATUSES, FROM_ITEMS, LIST_COLUMNS, TAG_LENGTH,
     normalizeTag, plainText, foldText, previewText, searchText, contentHash, imageSlots, hasImage,
-    encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms, groupCountable, countFromGroups,
+    encodeCursor, decodeCursor, toId, idList, clampInt, searchTerms, addSearch, groupCountable, countFromGroups,
     buildFilter, listIndex, buildListQuery, buildFacetQueries, listItem
 };

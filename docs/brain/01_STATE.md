@@ -11,7 +11,7 @@ Start at [[00_MOC_Architecture]]. Check what is really live before trusting this
 | Check | State on 2026-11-06 |
 |---|---|
 | Live | `main` on spresk.eu, confirm it with the hash check in [[Build_Deploy]] |
-| Tests | 133 passing with `npm.cmd test` |
+| Tests | 178 passing with `npm.cmd test` |
 | Lint | 0 errors, 35 warnings with `npm.cmd run lint` |
 
 ## Completed in this session
@@ -52,9 +52,11 @@ Then:
 
 - Admin Bank tab: slim rows that open and shrink in place, loaded as you scroll, so it no longer stops at 60 tasks, see [[Dashboard]].
 
-Not pushed yet:
-
 - Quiz questions can be dragged straight onto Starred or a #tag, see [[Task_Bank]].
+
+Not committed yet:
+
+- The creators' system, see [[Creator_Workflow]]: sending a #tag or a task with its classification, approving a whole send, unsorted tasks with a feed and votes, suggestions for admins, a log of every change with undo, and shared tasks that are never deleted. It adds two steps to `MIGRATIONS`, which run at the first server start. All 14 code review findings on it are fixed, and `scripts/bank-flow-test.js` covers them.
 
 ## Current Architecture State / Active Context
 
@@ -88,7 +90,9 @@ Not pushed yet:
 4. **Say which address teachers should use.** spresk.lt and spresk.eu are different sites. [[Build_Deploy]]: `AGENTS.md`
 5. **Decide whether to restore lost quizzes.** Quizzes overwritten by the old "Create new quiz" bug can only come from a database backup. [[Quiz_Editor]]
 6. **Decide whether the dashboard needs a bank button.** Teachers reach the bank only by opening the quiz editor. [[Task_Bank]], [[Dashboard]]: `src/dashboard-ui.js`, `src/bank-workspace.js`
-7. **Ask the old teacher what they see after the deploy.** Their exact cause is not confirmed. Ask for a reload, whether an orange "Užduočių bankas" button shows at the bottom right, and check their `role` in the database is exactly `teacher`. [[Task_Bank]]: `src/bank-workspace.js`
+7. **Fill the unsorted tasks with real ones.** There are none on live, so the feed starts empty. The 162,000 tasks seen in testing are made up on a local computer. Add tasks from Word, PDF or text through the Creation tab, or say where a large collection should come from. [[Creator_Workflow]]: `src/bank-studio.js`
+8. **Set the vote limits** in the Creation tab once it is clear how many creators there are. The default is 2, and one creator alone needs 1. [[Creator_Workflow]]: `src/backend/bank-pool.js`
+9. **Ask the old teacher what they see after the deploy.** Their exact cause is not confirmed. Ask for a reload, whether an orange "Užduočių bankas" button shows at the bottom right, and check their `role` in the database is exactly `teacher`. [[Task_Bank]]: `src/bank-workspace.js`
 
 ### Ready for an agent
 
@@ -110,5 +114,6 @@ These were picked without asking. Ask before treating any of them as settled.
 
 - [[Quiz_Folders]]: folders exist only in the admin tab, and teachers' My quizzes has none.
 - [[Theme_System]]: every theme is free, the editor covers colours and shape only, and clicking a gallery theme applies it at once. (owner remarks: fuck if i understood this, the UI wasnt binding to a theme 2-3 pushed before- post this it got fixed)
-- [[Task_Bank]]: tags go on tasks and not quizzes, only staff can submit to the bank, and creators can import straight into the shared bank without approval.
+- [[Task_Bank]]: tags go on tasks and not quizzes, and only staff can submit to the bank.
+- [[Creator_Workflow]]: creators can no longer import straight into the shared bank, an admin still approves every send, the vote limits default to 2, admins' votes count like creators', and tasks scrolled past without a vote can come back in a later session.
 - [[Showcase]]: `customLabel` and `displayFormat` stay stored in case the titles idea returns. The owner said the idea may be good but was badly done.

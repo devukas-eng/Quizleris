@@ -3,6 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const core = require('./bank-core.js');
+const { ACTIONS, REVERTIBLE, snapshotOf, taskChanges, actionOf, reverseOf, recordHistory, listHistory } = require('./bank-history.js');
+const { addToPool, leavePool, poolRoutes } = require('./bank-pool.js');
 
 const { QTYPES, KINDS, STATUSES, toId, idList } = core;
 
@@ -23,8 +25,9 @@ const MAX_PRIVATE_ITEMS = 10000;
 const MAX_FOLDERS = 1000;
 const MAX_FAVORITES = 2000;
 const MAX_TAGS_PER_TASK = 12;
-const MAX_SUBMIT = 100;    // tasks sent to the shared bank in one go
-const MAX_PENDING = 500;   // a creator's tasks waiting for approval at once
+const MAX_SUBMIT = 500;    // tasks sent to the shared bank in one go: a whole #tag
+const MAX_PENDING = 2000;  // a creator's tasks waiting for approval at once
+const MAX_BATCHES = 200;   // sends listed at a time
 const MAX_OPEN_REPORTS = 30; // a teacher's reports waiting for an admin: enough for real mistakes, not for spam
 const REPORT_REASONS = ['answer', 'wording', 'classification', 'duplicate', 'other'];
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -160,7 +163,7 @@ const SCHEMA = [
         topic_id INT UNSIGNED NULL,
         difficulty_id TINYINT UNSIGNED NULL,
         folder_id INT UNSIGNED NULL,
-        status ENUM('draft', 'published', 'archived') NOT NULL DEFAULT 'published',
+        status ENUM('draft', 'published', 'archived', 'pool') NOT NULL DEFAULT 'published',
         preview VARCHAR(300) NOT NULL,
         search_text TEXT NOT NULL,
         has_image TINYINT(1) NOT NULL DEFAULT 0,
@@ -271,14 +274,24 @@ const SCHEMA = [
         INDEX bank_tags_item (item_id),
         CONSTRAINT bank_tags_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
-    // A creator's own task sent to the shared bank: its copy (item_id) waits there as a draft until an
-    // admin approves it (published) or rejects it (the copy is deleted, the reason kept for the
-    // creator). open_key is 1 only while pending, so a task waits at most once. Like reports, rows
-    // outlive their author's account.
+    // One send: the tasks a creator sent together, usually a whole #tag, so an admin decides them at once
+    `CREATE TABLE IF NOT EXISTS bank_batches (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        tag VARCHAR(40) NULL,
+        note VARCHAR(500) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX bank_batches_user (user_id, id)
+    ) ${TABLE_OPTIONS}`,
+    // A task sent to the shared bank: a creator's own task waits there as a draft copy (item_id), and an
+    // unsorted task waits in place (no source_id), until an admin approves it (published) or rejects it
+    // (the copy is archived, an unsorted task goes back, the reason kept for the creator). open_key is
+    // 1 only while pending, so a task waits at most once. Like reports, rows outlive their author's account.
     `CREATE TABLE IF NOT EXISTS bank_submissions (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         source_id INT UNSIGNED NULL,
         item_id INT UNSIGNED NULL,
+        batch_id INT UNSIGNED NULL,
         user_id INT NOT NULL,
         status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
         open_key TINYINT UNSIGNED AS (IF(status = 'pending', 1, NULL)) STORED,
@@ -290,15 +303,70 @@ const SCHEMA = [
         INDEX bank_submissions_open (status, item_id),
         INDEX bank_submissions_item (item_id),
         INDEX bank_submissions_user (user_id, status),
+        INDEX bank_submissions_batch (batch_id, status),
         CONSTRAINT bank_submissions_source_fk FOREIGN KEY (source_id) REFERENCES bank_items (id) ON DELETE SET NULL,
         CONSTRAINT bank_submissions_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE SET NULL
+    ) ${TABLE_OPTIONS}`,
+    // The shared bank's log (bank-history.js). No foreign keys: it outlives accounts, and tasks too
+    `CREATE TABLE IF NOT EXISTS bank_item_history (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        item_id INT UNSIGNED NOT NULL,
+        action VARCHAR(20) NOT NULL,
+        user_id INT NULL,
+        username VARCHAR(50) NULL,
+        changes JSON NULL,
+        note VARCHAR(500) NULL,
+        batch_id INT UNSIGNED NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX bank_item_history_item (item_id, id),
+        INDEX bank_item_history_user (user_id, id),
+        INDEX bank_item_history_action (action, id)
+    ) ${TABLE_OPTIONS}`,
+    // Tasks not sorted yet (status 'pool'), which only staff see (bank-pool.js). shuffle is a random
+    // place in the feed, set once, so the feed reads an index instead of sorting the table by RAND().
+    // suggested_at: enough likes, waiting for an admin; dismissed_at: an admin said not now.
+    `CREATE TABLE IF NOT EXISTS bank_pool (
+        item_id INT UNSIGNED PRIMARY KEY,
+        shuffle INT UNSIGNED NOT NULL,
+        likes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        dislikes SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        suggested_at DATETIME NULL DEFAULT NULL,
+        dismissed_at DATETIME NULL DEFAULT NULL,
+        INDEX bank_pool_feed (shuffle),
+        INDEX bank_pool_suggested (suggested_at),
+        CONSTRAINT bank_pool_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
+    ) ${TABLE_OPTIONS}`,
+    // Each staff member's one vote on an unsorted task: 1 likes it, -1 does not
+    `CREATE TABLE IF NOT EXISTS bank_pool_votes (
+        user_id INT NOT NULL,
+        item_id INT UNSIGNED NOT NULL,
+        vote TINYINT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, item_id),
+        INDEX bank_pool_votes_item (item_id),
+        CONSTRAINT bank_pool_votes_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`
 ];
 
+async function hasColumn(pool, table, column) {
+    const [[{ n }]] = await pool.query(
+        'SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [table, column]);
+    return Number(n) > 0;
+}
+
 // Schema changes after the first release, in order, each applied once (the version is kept in
 // bank_settings). Never edit or reorder a released step: add a new function, and change SCHEMA to
-// match, since a fresh database gets SCHEMA directly and skips the list.
-const MIGRATIONS = [];
+// match, since a fresh database gets SCHEMA directly and skips the list. A step may run twice if the
+// server stops right after it, so each must be safe to repeat.
+const MIGRATIONS = [
+    // Tasks not sorted yet
+    pool => pool.query("ALTER TABLE bank_items MODIFY status ENUM('draft', 'published', 'archived', 'pool') NOT NULL DEFAULT 'published'"),
+    // Tasks sent together
+    async pool => {
+        if (await hasColumn(pool, 'bank_submissions', 'batch_id')) return;
+        await pool.query('ALTER TABLE bank_submissions ADD COLUMN batch_id INT UNSIGNED NULL AFTER item_id, ADD INDEX bank_submissions_batch (batch_id, status)');
+    }
+];
 
 class BankError extends Error {
     constructor(message, status = 400, extra = {}) {
@@ -581,8 +649,13 @@ function contextFor(ownerId, status = 'published', { teacher = false } = {}) {
 }
 
 // Bank staff fill and correct the shared bank: admins, and creators (kūrėjai, in-house authors who
-// may do everything with tasks an admin may, but not change the classifier lists or user accounts)
+// edit shared tasks and send new ones, but publish nothing themselves: an admin approves what they
+// send, restores what was taken out and keeps the classifier lists and user accounts)
 const isStaff = user => user.role === 'admin' || user.role === 'creator';
+
+// Which of the shared bank's tasks can carry one's #tags: staff also collect tasks not yet in the
+// bank, to send them together
+const labelStatuses = user => (isStaff(user) ? ['published', 'pool', 'draft'] : ['published']);
 
 // What a user may do with the bank. Every teacher may browse the shared bank, take tasks from it
 // and keep a private bank of their own; only staff change the shared one. Premium limits
@@ -600,7 +673,10 @@ function listContext(user, params) {
     if (params.scope === 'favorites' || params.scope === 'tagged') {
         const ctx = { ...contextFor(0, 'published', { teacher }), ownerIds: [0, user.id], labelsOf: user.id };
         if (params.scope === 'favorites') ctx.favoritesOf = user.id;
-        else ctx.tagOf = { userId: user.id, tag: core.normalizeTag(params.tag) || '-' }; // no tag: nothing listed
+        else {
+            ctx.tagOf = { userId: user.id, tag: core.normalizeTag(params.tag) || '-' }; // no tag: nothing listed
+            ctx.statuses = labelStatuses(user);
+        }
         return ctx;
     }
     const mine = params.scope === 'mine';
@@ -888,20 +964,68 @@ async function insertItem(conn, ownerId, userId, item) {
             await conn.query('INSERT INTO bank_item_values (value_id, item_id) VALUES ?', [item.values.map(v => [v, result.insertId])]);
         }
         await linkMedia(conn, result.insertId, d.media);
+        if (item.status === 'pool') await addToPool(conn, result.insertId);
         return { id: result.insertId };
     } catch (error) {
         if (error.code !== 'ER_DUP_ENTRY') throw error;
         const existing = await findDuplicate(conn, ownerId, d.hash);
-        if (existing?.status === 'archived' && item.status !== 'archived') {
+        // A task taken out of the bank comes back when added again; one voted out of the unsorted tasks stays out
+        if (existing?.status === 'archived' && item.status !== 'archived' && item.status !== 'pool') {
             await conn.query('UPDATE bank_items SET status = ? WHERE id = ?', [item.status, existing.id]);
             return { id: existing.id, duplicate: true, restored: true };
         }
-        return { id: existing?.id ?? null, duplicate: true };
+        return { id: existing?.id ?? null, duplicate: true, status: existing?.status };
     }
 }
 
+/**
+ * Keeps the rest in step when a shared task's status is changed directly, by a bulk change, an edit or
+ * archiving rather than by an answer in the approvals: what waits for approval is settled, so no send
+ * stays stuck and its creator can send the task again, and a task that reached the bank is no longer unsorted.
+ */
+async function statusMoved(conn, user, ids, status) {
+    if (!ids.length || status === 'draft') return;
+    await conn.query(
+        "UPDATE bank_submissions SET status = ?, decided_at = NOW(), decided_by = ? WHERE status = 'pending' AND item_id IN (?)",
+        [status === 'published' ? 'approved' : 'rejected', user.id, ids]);
+    if (status === 'published') await leavePool(conn, ids);
+    if (status === 'pool') for (const id of ids) await addToPool(conn, id);
+}
+
+/**
+ * An admin imports a task that is already unsorted or waiting: it goes into the bank, with the
+ * classification the import gave it wherever it has one. An import is an admin's own "publish".
+ */
+async function publishExisting(conn, user, id, item) {
+    const [[row]] = await conn.query('SELECT kind, status, subject_id, grade_id, topic_id, difficulty_id, source FROM bank_items WHERE id = ?', [id]);
+    await conn.query(
+        `UPDATE bank_items SET status = 'published', subject_id = COALESCE(?, subject_id), grade_id = COALESCE(?, grade_id),
+                               topic_id = COALESCE(?, topic_id), difficulty_id = COALESCE(?, difficulty_id) WHERE id = ?`,
+        [item.subjectId, item.gradeId, item.topicId, item.difficultyId, id]);
+    await statusMoved(conn, user, [id], 'published');
+    const before = snapshotOf(row);
+    const { subjectId, gradeId, topicId, difficultyId } = item;
+    const given = Object.entries({ subjectId, gradeId, topicId, difficultyId }).filter(([, value]) => value !== null && value !== undefined);
+    return { itemId: id, action: 'published', changes: taskChanges(before, { status: 'published', ...Object.fromEntries(given) }) };
+}
+
+/**
+ * Where new tasks go. Staff add unsorted tasks (scope "pool"); only an admin puts tasks straight into
+ * the shared bank, because a creator's go through the send, which makes sure they are classified.
+ */
+function createOwner(user, scope) {
+    if (scope === 'pool') {
+        if (!isStaff(user)) throw new BankError('You may not change this bank', 403);
+        return 0;
+    }
+    const ownerId = writeScope(user, scope);
+    if (ownerId === 0 && user.role !== 'admin') throw new BankError('Send tasks to the bank for approval', 403);
+    return ownerId;
+}
+
 async function createItems(pool, user, body) {
-    const ownerId = writeScope(user, body.scope);
+    const toPool = body.scope === 'pool';
+    const ownerId = createOwner(user, body.scope);
     const list = Array.isArray(body.items) ? body.items : [];
     if (!list.length || list.length > MAX_BATCH) throw new BankError(`Send 1–${MAX_BATCH} tasks at a time`);
     if (ownerId !== 0 && !isStaff(user)) {
@@ -917,21 +1041,41 @@ async function createItems(pool, user, body) {
     };
     const prepared = list.map((raw, index) => {
         try {
-            return prepareItem(raw, defaults, folders);
+            const item = prepareItem(raw, defaults, folders);
+            // 'pool' is reached only here: it needs its place in the feed
+            if (toPool) item.status = 'pool';
+            else if (item.status === 'pool') throw new BankError('Invalid status');
+            return item;
         } catch (error) {
             failed(index, error);
             return null;
         }
     });
     await inTransaction(pool, async conn => {
+        const log = [];
         for (const [index, item] of prepared.entries()) {
             if (!item) continue;
             try {
-                results[index] = { index, ...(await insertItem(conn, ownerId, user.id, item)) };
+                const saved = await insertItem(conn, ownerId, user.id, item);
+                if (ownerId === 0 && item.status === 'published' && ['pool', 'draft'].includes(saved.status)) {
+                    results[index] = { index, id: saved.id, published: true };
+                    log.push(await publishExisting(conn, user, saved.id, item));
+                    continue;
+                }
+                results[index] = { index, ...saved };
+                if (ownerId !== 0 || (saved.duplicate && !saved.restored)) continue;
+                if (saved.restored) await statusMoved(conn, user, [saved.id], item.status);
+                const { subjectId, gradeId, topicId, difficultyId, status, source } = item;
+                log.push({
+                    itemId: saved.id,
+                    action: saved.restored ? 'restored' : toPool ? 'pool_added' : 'created',
+                    changes: taskChanges({}, { subjectId, gradeId, topicId, difficultyId, status, source })
+                });
             } catch (error) {
                 failed(index, error);
             }
         }
+        await recordHistory(conn, user, log);
     });
     const count = test => results.filter(test).length;
     return { results, created: count(r => r.id && !r.duplicate), duplicates: count(r => r.duplicate), failed: count(r => r.error) };
@@ -946,13 +1090,22 @@ async function loadEditable(pool, user, rawId) {
     return row;
 }
 
-async function updateItem(pool, user, rawId, body) {
+/**
+ * Saves a task. In the shared bank the change is logged with what each field was, and only an admin
+ * moves a task between states. `log` names the entry when it is not a plain edit (undoing a change).
+ */
+async function updateItem(pool, user, rawId, body, log = {}) {
     const row = await loadEditable(pool, user, rawId);
     const [links] = await pool.query('SELECT value_id FROM bank_item_values WHERE item_id = ?', [row.id]);
+    const values = links.map(link => link.value_id);
     const item = prepareItem(body, {
         kind: row.kind, status: row.status, subjectId: row.subject_id, gradeId: row.grade_id, topicId: row.topic_id,
-        difficultyId: row.difficulty_id, folderId: row.folder_id, source: row.source, values: links.map(link => link.value_id)
+        difficultyId: row.difficulty_id, folderId: row.folder_id, source: row.source, values
     }, await folderIdsOf(pool, row.owner_id));
+    const shared = row.owner_id === 0;
+    if (shared && item.status !== row.status && user.role !== 'admin') throw new BankError('Only an admin may publish or move shared tasks', 403);
+    if (item.status === 'pool' && row.status !== 'pool' && !log.action) throw new BankError('Invalid status');
+    const [[stored]] = shared ? await pool.query('SELECT content FROM bank_item_content WHERE item_id = ?', [row.id]) : [[]];
     await inTransaction(pool, async conn => {
         const d = await derivedColumns(conn, item.content);
         try {
@@ -974,6 +1127,15 @@ async function updateItem(pool, user, rawId, body) {
             await conn.query('INSERT INTO bank_item_values (value_id, item_id) VALUES ?', [item.values.map(v => [v, row.id])]);
         }
         await linkMedia(conn, row.id, d.media);
+        if (!shared) return;
+        if (item.status !== row.status) await statusMoved(conn, user, [row.id], item.status);
+        const { kind, status, subjectId, gradeId, topicId, difficultyId, source } = item;
+        const changes = taskChanges(
+            { ...snapshotOf(row), values, content: parseJson(stored?.content) },
+            { kind, status, subjectId, gradeId, topicId, difficultyId, source, values: item.values, content: item.content });
+        if (Object.keys(changes).length) {
+            await recordHistory(conn, user, [{ itemId: row.id, action: log.action || actionOf(changes), changes, note: log.note }]);
+        }
     });
     return { id: row.id };
 }
@@ -1041,7 +1203,9 @@ async function bulkUpdate(pool, user, body) {
     if (set.gradeId !== undefined) assign('grade_id = ?', nullableRef(set.gradeId, meta.grades, 'grade'));
     if (set.difficultyId !== undefined) assign('difficulty_id = ?', nullableRef(set.difficultyId, meta.difficulties, 'difficulty'));
     if (set.status !== undefined) {
-        if (!STATUSES.includes(set.status)) throw new BankError('Invalid status');
+        // 'pool' needs a place in the feed, so tasks are moved there only by adding or restoring them
+        if (!STATUSES.includes(set.status) || set.status === 'pool') throw new BankError('Invalid status');
+        if (ownerId === 0 && set.status !== 'archived' && user.role !== 'admin') throw new BankError('Only an admin may publish shared tasks', 403);
         assign('status = ?', set.status);
     }
     // Moving tasks between the owner's own folders (null takes them out of any folder)
@@ -1056,26 +1220,43 @@ async function bulkUpdate(pool, user, body) {
     if (!assignments.length && !addValues.length && !removeValues.length) throw new BankError('Nothing to change');
 
     const ids = await targetIds(pool, ownerId, body);
+    const valuesNote = addValues.length || removeValues.length ? `+${addValues.join(',')} -${removeValues.join(',')}` : null;
     await inTransaction(pool, async conn => {
         for (const chunk of chunks(ids, BULK_CHUNK)) {
+            const before = ownerId === 0 ? await snapshots(conn, chunk) : null;
             if (assignments.length) await conn.query(`UPDATE bank_items SET ${assignments.join(', ')} WHERE id IN (?)`, [...args, chunk]);
             for (const valueId of addValues) {
                 await conn.query('INSERT IGNORE INTO bank_item_values (value_id, item_id) SELECT ?, id FROM bank_items WHERE id IN (?)', [valueId, chunk]);
             }
             if (removeValues.length) await conn.query('DELETE FROM bank_item_values WHERE item_id IN (?) AND value_id IN (?)', [chunk, removeValues]);
+            if (ownerId !== 0) continue;
+            if (set.status !== undefined) await statusMoved(conn, user, chunk, set.status);
+            const after = await snapshots(conn, chunk);
+            const log = [];
+            for (const id of chunk) {
+                const changes = taskChanges(before.get(id), after.get(id));
+                if (Object.keys(changes).length || valuesNote) log.push({ itemId: id, action: actionOf(changes), changes, note: valuesNote });
+            }
+            await recordHistory(conn, user, log);
         }
     });
     return { matched: ids.length };
 }
 
+/** The logged fields of these tasks, by ID. */
+async function snapshots(db, ids) {
+    const [rows] = await db.query('SELECT id, kind, status, subject_id, grade_id, topic_id, difficulty_id, source FROM bank_items WHERE id IN (?)', [ids]);
+    return new Map(rows.map(row => [row.id, snapshotOf(row)]));
+}
+
 /**
- * Archives tasks (they leave the listings); `purge` deletes ones already archived for good, with
- * their content, classifier values and picture links (their pictures go in the hourly cleanup).
+ * Archives tasks (they leave the listings). `purge` deletes one's own archived tasks for good, with
+ * their content, classifier values and picture links (their pictures go in the hourly cleanup). The
+ * shared bank's tasks are never deleted: archived, they stay in the log and can come back.
  */
 async function archiveItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
-    // Creators archive shared tasks (which can be restored); deleting them for good is an admin's call
-    if (body.purge && ownerId === 0 && user.role !== 'admin') throw new BankError('Only an admin may delete shared tasks for good', 403);
+    if (body.purge && ownerId === 0) throw new BankError('Shared tasks are archived, never deleted', 403);
     const ids = idList(body.ids ?? [], MAX_BULK);
     if (!ids.length) throw new BankError('Choose the tasks');
     const sql = body.purge
@@ -1084,11 +1265,82 @@ async function archiveItems(pool, user, body) {
     let affected = 0;
     await inTransaction(pool, async conn => {
         for (const chunk of chunks(ids, BULK_CHUNK)) {
+            const [rows] = ownerId === 0
+                ? await conn.query("SELECT id, status FROM bank_items WHERE owner_id = 0 AND status <> 'archived' AND id IN (?)", [chunk])
+                : [[]];
             const [result] = await conn.query(sql, [ownerId, chunk]);
             affected += result.affectedRows;
+            await statusMoved(conn, user, rows.map(row => row.id), 'archived');
+            await recordHistory(conn, user, rows.map(row => ({ itemId: row.id, action: 'archived', changes: { status: [row.status, 'archived'] } })));
         }
     });
     return body.purge ? { deleted: affected } : { archived: affected };
+}
+
+/**
+ * Where an archived shared task stood before it was taken out: the log says, and for a task taken out
+ * before there was a log, its unsorted place or its last send does.
+ */
+async function statusBeforeArchive(conn, id) {
+    const [[entry]] = await conn.query(
+        `SELECT changes FROM bank_item_history
+         WHERE item_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(changes, '$.status[1]')) = 'archived' ORDER BY id DESC LIMIT 1`, [id]);
+    const logged = parseJson(entry?.changes)?.status?.[0];
+    if (STATUSES.includes(logged) && logged !== 'archived') return logged;
+    const [[unsorted]] = await conn.query('SELECT item_id FROM bank_pool WHERE item_id = ?', [id]);
+    if (unsorted) return 'pool';
+    const [[sent]] = await conn.query('SELECT status FROM bank_submissions WHERE item_id = ? ORDER BY id DESC LIMIT 1', [id]);
+    return sent?.status === 'rejected' ? 'draft' : 'published';
+}
+
+/** The answer that took a task out of the approvals is taken back: it waits for an admin again. */
+async function reopenSubmissions(conn, id) {
+    const [[{ last }]] = await conn.query("SELECT MAX(decided_at) AS last FROM bank_submissions WHERE item_id = ? AND status = 'rejected'", [id]);
+    if (!last) return;
+    await conn.query(
+        "UPDATE bank_submissions SET status = 'pending', note = NULL, decided_at = NULL, decided_by = NULL WHERE item_id = ? AND status = 'rejected' AND decided_at = ?",
+        [id, last]);
+}
+
+/**
+ * A shared task taken out goes back to where it was, never further: a task from the bank to the bank,
+ * an unsorted one to the unsorted tasks (with a clean slate), and one that was waiting or was rejected
+ * back before an admin. Only an approval publishes a creator's task.
+ */
+async function restoreItem(pool, user, rawId) {
+    const id = toId(rawId);
+    return inTransaction(pool, async conn => {
+        const [[row]] = id ? await conn.query("SELECT id FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'archived' FOR UPDATE", [id]) : [[]];
+        if (!row) throw new BankError('Task not found', 404);
+        const status = await statusBeforeArchive(conn, id);
+        await conn.query('UPDATE bank_items SET status = ? WHERE id = ?', [status, id]);
+        if (status === 'draft') await reopenSubmissions(conn, id);
+        if (status === 'pool') {
+            await addToPool(conn, id);
+            await conn.query('DELETE FROM bank_pool_votes WHERE item_id = ?', [id]);
+            await conn.query('UPDATE bank_pool SET likes = 0, dislikes = 0, suggested_at = NULL, dismissed_at = NULL WHERE item_id = ?', [id]);
+        }
+        await recordHistory(conn, user, [{ itemId: id, action: 'restored', changes: { status: ['archived', status] } }]);
+        return { id, status };
+    });
+}
+
+/** Puts back what one log entry changed, as a new change that is logged in turn. */
+async function revertChange(pool, user, rawId) {
+    const entryId = toId(rawId);
+    const [[entry]] = entryId ? await pool.query('SELECT id, item_id, action, changes FROM bank_item_history WHERE id = ?', [entryId]) : [[]];
+    if (!entry) throw new BankError('Entry not found', 404);
+    if (!REVERTIBLE.includes(entry.action)) throw new BankError('Nothing to undo here');
+    const { body, content } = reverseOf(parseJson(entry.changes) || {});
+    if (!Object.keys(body).length && !content) throw new BankError('Nothing to undo here');
+    const [[stored]] = await pool.query('SELECT c.content FROM bank_item_content c JOIN bank_items i ON i.id = c.item_id WHERE c.item_id = ? AND i.owner_id = 0', [entry.item_id]);
+    if (!stored) throw new BankError('Task not found', 404);
+    const restored = parseJson(stored.content);
+    for (const [key, [before]] of Object.entries(content || {})) {
+        if (before === null) delete restored[key];
+        else restored[key] = before;
+    }
+    return updateItem(pool, user, entry.item_id, { ...body, content: restored }, { action: 'reverted', note: `#${entry.id}` });
 }
 
 /** Distinct normalized tags, at most MAX_TAGS_PER_TASK of them. */
@@ -1099,18 +1351,54 @@ function tagList(raw) {
 
 // --- SENDING TASKS TO THE SHARED BANK ---
 /**
- * Copies staff's own tasks into the shared bank with their classification. A creator's copies are
- * drafts waiting for an admin (one pending submission per task); an admin's are published at once.
- * A task the shared bank already holds is reported as such.
+ * What a task needs before it goes into the bank: its topic (which gives the subject), grade and
+ * difficulty. Null while any of them is missing, so an admin never has to finish the sorting.
+ */
+function fullClassification(raw) {
+    const topicId = toId(raw?.topicId);
+    const gradeId = toId(raw?.gradeId);
+    const difficultyId = toId(raw?.difficultyId);
+    if (!meta.topics.has(topicId) || !meta.grades.has(gradeId) || !meta.difficulties.has(difficultyId)) return null;
+    return { subjectId: meta.topics.get(topicId).subject_id, topicId, gradeId, difficultyId };
+}
+
+function classifyRow(conn, id, { subjectId, gradeId, topicId, difficultyId }) {
+    return conn.query('UPDATE bank_items SET subject_id = ?, grade_id = ?, topic_id = ?, difficulty_id = ? WHERE id = ?',
+        [subjectId, gradeId, topicId, difficultyId, id]);
+}
+
+/**
+ * Sends tasks to the shared bank, each with the classification its sender gave: `items` are
+ * { id, topicId, gradeId, difficultyId }, and `tag` and `note` describe the send for the admin. Staff's
+ * own tasks are copied (their own task keeps the classification too); unsorted tasks move in place. A
+ * creator's wait as drafts for an admin, one pending submission per task; an admin's are published at
+ * once. A task the shared bank already holds is reported as such.
  */
 async function submitItems(pool, user, body) {
-    const ids = idList(body.ids ?? [], MAX_SUBMIT);
-    if (!ids.length) throw new BankError('Choose the tasks');
+    const list = Array.isArray(body.items) ? body.items : [];
+    if (!list.length) throw new BankError('Choose the tasks');
+    if (list.length > MAX_SUBMIT) throw new BankError(`At most ${MAX_SUBMIT} tasks at a time`);
     const admin = user.role === 'admin';
+    const results = [];
+    const wanted = new Map();
+    for (const raw of list) {
+        const id = toId(raw?.id);
+        if (!id || wanted.has(id)) continue;
+        const classified = fullClassification(raw);
+        if (classified) wanted.set(id, classified);
+        else results.push({ id, incomplete: true });
+    }
+    const count = key => results.filter(r => r[key]).length;
+    const summary = batchId => ({
+        batchId, results, submitted: count('submitted'), published: count('published'),
+        pending: count('pending'), exists: count('exists'), incomplete: count('incomplete')
+    });
+    if (!wanted.size) return summary(null);
+    const ids = [...wanted.keys()];
     const [rows] = await pool.query(
-        `SELECT i.id, i.kind, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.source, c.content
+        `SELECT i.id, i.owner_id, i.kind, i.status, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.source, c.content
          FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
-         WHERE i.id IN (?) AND i.owner_id = ? AND i.status = 'published'`, [ids, user.id]);
+         WHERE i.id IN (?) AND ((i.owner_id = ? AND i.status = 'published') OR (i.owner_id = 0 AND i.status = 'pool'))`, [ids, user.id]);
     if (!rows.length) throw new BankError('Task not found', 404);
     const found = rows.map(row => row.id);
     const [[links], [pending], [[{ n: waiting }]]] = await Promise.all([
@@ -1128,71 +1416,185 @@ async function submitItems(pool, user, body) {
         valuesOf.get(link.item_id).push(link.value_id);
     }
     const byId = new Map(rows.map(row => [row.id, row]));
-    const results = [];
-    await inTransaction(pool, async conn => {
+    const status = admin ? 'published' : 'draft';
+    const tag = core.normalizeTag(body.tag) || null;
+    const note = optionalText(body.note, 500);
+    const batchId = await inTransaction(pool, async conn => {
+        let batch = null;
+        const log = [];
+        // The task is in the shared bank by now: it waits for an admin, or an admin's goes in
+        const place = async (sourceId, itemId, before, classified) => {
+            batch ??= (await conn.query('INSERT INTO bank_batches (user_id, tag, note) VALUES (?, ?, ?)', [user.id, tag, note]))[0].insertId;
+            if (classified) await classifyRow(conn, itemId, classified);
+            // A draft someone else sent is already waiting: this task waits with it (an admin's settles both)
+            if (admin) {
+                await conn.query("UPDATE bank_submissions SET status = 'approved', decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
+                    [user.id, itemId]);
+            }
+            await conn.query(
+                'INSERT INTO bank_submissions (source_id, item_id, batch_id, user_id, status, decided_at, decided_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                admin ? [sourceId, itemId, batch, user.id, 'approved', new Date(), user.id] : [sourceId, itemId, batch, user.id, 'pending', null, null]);
+            await conn.query('UPDATE bank_items SET status = ? WHERE id = ?', [status, itemId]);
+            if (admin) await leavePool(conn, itemId);
+            log.push({ itemId, action: admin ? 'published' : 'submitted', changes: taskChanges(before, { status, ...classified }), note });
+        };
         for (const id of ids) {
             const row = byId.get(id);
             if (!row) continue;
+            const classified = wanted.get(id);
+            if (row.owner_id === 0) {
+                await place(null, id, snapshotOf(row), classified);
+                results.push({ id, itemId: id, [admin ? 'published' : 'submitted']: true });
+                continue;
+            }
             if (already.has(id)) {
                 results.push({ id, pending: true });
                 continue;
             }
-            // Classifiers removed since the task was saved are left out rather than refusing it
-            const ref = (value, map) => (value != null && map.has(value) ? value : null);
+            await classifyRow(conn, id, classified);
             const item = prepareItem({
                 content: parseJson(row.content),
                 kind: row.kind,
-                subjectId: ref(row.subject_id, meta.subjects),
-                gradeId: ref(row.grade_id, meta.grades),
-                topicId: ref(row.topic_id, meta.topics),
-                difficultyId: ref(row.difficulty_id, meta.difficulties),
+                ...classified,
+                // Classifiers removed since the task was saved are left out rather than refusing it
                 values: (valuesOf.get(id) || []).filter(v => meta.values.has(v)),
                 source: row.source,
-                status: admin ? 'published' : 'draft'
+                status
             }, {}, null);
             const copy = await insertItem(conn, 0, user.id, item);
-            const [[target]] = await conn.query('SELECT status FROM bank_items WHERE id = ?', [copy.id]);
+            const [[target]] = await conn.query('SELECT kind, status, subject_id, grade_id, topic_id, difficulty_id, source FROM bank_items WHERE id = ?', [copy.id]);
             if (copy.duplicate && !copy.restored && target?.status === 'published') {
                 results.push({ id, exists: true });
                 continue;
             }
-            // A draft someone else sent is already waiting: this task waits with it (an admin's settles both)
-            if (admin) {
-                await conn.query("UPDATE bank_submissions SET status = 'approved', decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
-                    [user.id, copy.id]);
-            }
-            await conn.query(
-                'INSERT INTO bank_submissions (source_id, item_id, user_id, status, decided_at, decided_by) VALUES (?, ?, ?, ?, ?, ?)',
-                admin ? [id, copy.id, user.id, 'approved', new Date(), user.id] : [id, copy.id, user.id, 'pending', null, null]);
-            if (admin && target?.status !== 'published') await conn.query("UPDATE bank_items SET status = 'published' WHERE id = ?", [copy.id]);
+            if (!copy.duplicate) await place(id, copy.id, {}, classified);
+            else if (copy.restored) await place(id, copy.id, { ...snapshotOf(target), status: 'archived' }, classified);
+            else if (target.status === 'pool') await place(id, copy.id, snapshotOf(target), classified);
+            else await place(id, copy.id, snapshotOf(target), admin ? classified : null); // waiting already, as its first sender classified it
             results.push({ id, itemId: copy.id, [admin ? 'published' : 'submitted']: true });
         }
+        await recordHistory(conn, user, log, { batchId: batch });
+        return batch;
     });
-    const count = key => results.filter(r => r[key]).length;
-    return { results, submitted: count('submitted'), published: count('published'), pending: count('pending'), exists: count('exists') };
+    return summary(batchId);
 }
 
 /**
- * An admin's answer to a creator's task (by its draft in the shared bank): approved, it is published;
- * rejected, the draft is deleted and the reason kept for the creator.
+ * An admin's answer to one waiting task (by its draft in the shared bank), inside the caller's
+ * transaction. Approved, it is published. Rejected, nothing is deleted: a task taken from the unsorted
+ * ones goes back there and any other is archived (sending it again brings it back), so a rejected
+ * task never stays a draft nobody can reach. The reason is kept for the creator. Gives how many
+ * submissions were settled.
  */
+async function decideDraft(conn, user, id, action, note) {
+    const [[draft]] = await conn.query("SELECT id FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'draft' FOR UPDATE", [id]);
+    if (!draft) return 0;
+    const [result] = await conn.query(
+        "UPDATE bank_submissions SET status = ?, note = ?, decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
+        [action === 'approve' ? 'approved' : 'rejected', note, user.id, id]);
+    if (!result.affectedRows) return 0;
+    let status = 'published';
+    if (action === 'reject') {
+        const [[unsorted]] = await conn.query('SELECT item_id FROM bank_pool WHERE item_id = ?', [id]);
+        status = unsorted ? 'pool' : 'archived';
+    }
+    await conn.query('UPDATE bank_items SET status = ? WHERE id = ?', [status, id]);
+    if (status === 'published') await leavePool(conn, id);
+    await recordHistory(conn, user, [{
+        itemId: id,
+        action: action === 'approve' ? 'approved' : 'rejected',
+        changes: { status: ['draft', status] },
+        note
+    }]);
+    return result.affectedRows;
+}
+
+const decisionOf = body => {
+    const action = ['approve', 'reject'].includes(body.action) ? body.action : null;
+    if (!action) throw new BankError('Approve or reject');
+    return { action, note: optionalText(body.note, 500) };
+};
+
 async function decideSubmission(pool, user, rawId, body) {
     const id = toId(rawId);
-    const action = ['approve', 'reject'].includes(body.action) ? body.action : null;
-    if (!id || !action) throw new BankError('Approve or reject');
-    const note = optionalText(body.note, 500);
+    const { action, note } = decisionOf(body);
+    if (!id) throw new BankError('Approve or reject');
     return inTransaction(pool, async conn => {
-        const [[draft]] = await conn.query("SELECT id, created_by FROM bank_items WHERE id = ? AND owner_id = 0 AND status = 'draft' FOR UPDATE", [id]);
-        const [senders] = await conn.query("SELECT user_id FROM bank_submissions WHERE item_id = ? AND status = 'pending'", [id]);
-        if (!draft || !senders.length) throw new BankError('Nothing waits for approval here', 404);
-        const [result] = await conn.query(
-            "UPDATE bank_submissions SET status = ?, note = ?, decided_at = NOW(), decided_by = ? WHERE item_id = ? AND status = 'pending'",
-            [action === 'approve' ? 'approved' : 'rejected', note, user.id, id]);
-        if (action === 'approve') await conn.query("UPDATE bank_items SET status = 'published' WHERE id = ?", [id]);
-        // A rejected copy goes (its sender keeps their own task); a draft staff had made themselves stays
-        else if (senders.some(row => row.user_id === draft.created_by)) await conn.query('DELETE FROM bank_items WHERE id = ?', [id]);
-        return { [action === 'approve' ? 'approved' : 'rejected']: result.affectedRows };
+        const settled = await decideDraft(conn, user, id, action, note);
+        if (!settled) throw new BankError('Nothing waits for approval here', 404);
+        return { [action === 'approve' ? 'approved' : 'rejected']: settled };
     });
+}
+
+/** Which submissions a send covers: `none` is the older ones sent one by one, by the person who sent them. */
+function batchFilter(rawId, rawUser) {
+    if (rawId === 'none') {
+        const user = toId(rawUser);
+        if (!user) throw new BankError('Say whose tasks');
+        return { sql: 's.batch_id IS NULL AND s.user_id = ?', args: [user] };
+    }
+    const id = toId(rawId);
+    if (!id) throw new BankError('Unknown send', 404);
+    return { sql: 's.batch_id = ?', args: [id] };
+}
+
+/** One answer for every task still waiting in a send. */
+async function decideBatch(pool, user, rawId, body) {
+    const { action, note } = decisionOf(body);
+    const { sql, args } = batchFilter(rawId, body.userId);
+    return inTransaction(pool, async conn => {
+        const [rows] = await conn.query(
+            `SELECT DISTINCT s.item_id FROM bank_submissions s JOIN bank_items i ON i.id = s.item_id
+             WHERE s.status = 'pending' AND i.status = 'draft' AND ${sql}`, args);
+        if (!rows.length) throw new BankError('Nothing waits for approval here', 404);
+        let settled = 0;
+        for (const row of rows) settled += await decideDraft(conn, user, row.item_id, action, note);
+        return { [action === 'approve' ? 'approved' : 'rejected']: settled };
+    });
+}
+
+const idsIn = text => String(text ?? '').split(',').map(Number).filter(Boolean);
+
+/** Everything waiting for an admin, one row per send, with what its tasks were classified as. */
+async function pendingBatches(pool) {
+    const [rows] = await pool.query(
+        `SELECT s.batch_id, s.user_id, u.username, b.tag, b.note, COUNT(*) AS n, MIN(s.created_at) AS created_at,
+                GROUP_CONCAT(DISTINCT i.topic_id) AS topics, GROUP_CONCAT(DISTINCT i.grade_id) AS grades,
+                GROUP_CONCAT(DISTINCT i.difficulty_id) AS levels
+         FROM bank_submissions s
+         JOIN bank_items i ON i.id = s.item_id
+         LEFT JOIN bank_batches b ON b.id = s.batch_id
+         LEFT JOIN users u ON u.id = s.user_id
+         WHERE s.status = 'pending' AND i.status = 'draft'
+         GROUP BY s.batch_id, s.user_id, u.username, b.tag, b.note
+         ORDER BY MIN(s.id) LIMIT ?`, [MAX_BATCHES]);
+    return rows.map(row => ({
+        id: row.batch_id, userId: row.user_id, username: row.username, tag: row.tag, note: row.note, count: Number(row.n), createdAt: row.created_at,
+        topics: idsIn(row.topics), grades: idsIn(row.grades), levels: idsIn(row.levels)
+    }));
+}
+
+/** What became of one's own sends, newest first. */
+async function ownBatches(pool, user) {
+    const [rows] = await pool.query(
+        `SELECT b.id, b.tag, b.note, b.created_at, COUNT(s.id) AS n, SUM(s.status = 'pending') AS pending,
+                SUM(s.status = 'approved') AS approved, SUM(s.status = 'rejected') AS rejected,
+                MAX(CASE WHEN s.status = 'rejected' THEN s.note END) AS reason
+         FROM bank_batches b JOIN bank_submissions s ON s.batch_id = b.id
+         WHERE b.user_id = ? GROUP BY b.id, b.tag, b.note, b.created_at ORDER BY b.id DESC LIMIT ?`, [user.id, MAX_BATCHES]);
+    return rows.map(row => ({
+        id: row.id, tag: row.tag, note: row.note, createdAt: row.created_at, count: Number(row.n), pending: Number(row.pending),
+        approved: Number(row.approved), rejected: Number(row.rejected), reason: row.reason
+    }));
+}
+
+/** The tasks still waiting in a send. */
+async function batchItems(pool, rawId, rawUser) {
+    const { sql, args } = batchFilter(rawId, rawUser);
+    const [rows] = await pool.query(
+        `SELECT ${core.LIST_COLUMNS} FROM bank_submissions s JOIN bank_items i ON i.id = s.item_id
+         WHERE s.status = 'pending' AND i.status = 'draft' AND ${sql} ORDER BY s.id LIMIT ?`, [...args, MAX_SUBMIT]);
+    return rows.map(core.listItem);
 }
 
 // --- READING TASKS ---
@@ -1206,7 +1608,7 @@ async function fetchItems(pool, user, ids) {
     const visible = admin ? '' : staff ? ' AND (i.owner_id = 0 OR i.owner_id = ?)'
         : " AND ((i.owner_id = 0 AND i.status = 'published') OR i.owner_id = ?)";
     const [rows] = await pool.query(
-        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, c.content
+        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, c.content
          FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
          WHERE i.id IN (?)${visible}`,
         admin ? [ids] : [ids, user.id]
@@ -1246,6 +1648,7 @@ async function fetchItems(pool, user, ids) {
         mine: row.owner_id === user.id,
         kind: row.kind,
         qtype: row.qtype,
+        preview: row.preview,
         subjectId: row.subject_id,
         gradeId: row.grade_id,
         topicId: row.topic_id,
@@ -1451,7 +1854,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         res.set('Cache-Control', 'private, no-cache');
         // A finished write that may touch the shared bank's counts has them counted again (reading
         // tasks, counting uses, folders, stars and reports change no counts)
-        const countsStay = /^\/(items\/fetch|sample|used|folders|favorites|labels|tags)(\/|$)|\/reports$/.test(req.path);
+        const countsStay = /^\/(items\/fetch|sample|used|folders|favorites|labels|tags)(\/|$)|\/(reports|vote)$/.test(req.path);
         if (req.method !== 'GET' && !countsStay && req.body?.scope !== 'mine') {
             res.on('finish', () => {
                 sharedWrites++;
@@ -1570,10 +1973,10 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         if (!row) throw new BankError('Task not found', 404);
         return row.id;
     };
-    const keptTask = async (user, rawId) => {
+    const keptTask = async (user, rawId, statuses = ['published']) => {
         const id = toId(rawId);
         const [[row]] = id
-            ? await pool.query("SELECT id FROM bank_items WHERE id = ? AND owner_id IN (0, ?) AND status = 'published'", [id, user.id])
+            ? await pool.query('SELECT id FROM bank_items WHERE id = ? AND owner_id IN (0, ?) AND status IN (?)', [id, user.id, statuses])
             : [[]];
         if (!row) throw new BankError('Task not found', 404);
         return row.id;
@@ -1628,12 +2031,12 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     router.get('/bank/tags', route(async req => {
         const [rows] = await pool.query(
             `SELECT t.tag, COUNT(*) AS n FROM bank_tags t JOIN bank_items i ON i.id = t.item_id
-             WHERE t.user_id = ? AND i.owner_id IN (0, ?) AND i.status = 'published' GROUP BY t.tag ORDER BY t.tag`,
-            [req.user.id, req.user.id]);
+             WHERE t.user_id = ? AND i.owner_id IN (0, ?) AND i.status IN (?) GROUP BY t.tag ORDER BY t.tag`,
+            [req.user.id, req.user.id, labelStatuses(req.user)]);
         return { tags: rows.map(row => ({ tag: row.tag, n: Number(row.n) })) };
     }));
     router.put('/bank/labels/:id', route(async req => {
-        const id = await keptTask(req.user, req.params.id);
+        const id = await keptTask(req.user, req.params.id, labelStatuses(req.user));
         const body = req.body || {};
         const nickname = body.nickname === undefined ? undefined : optionalText(body.nickname, 120);
         const tags = body.tags === undefined ? undefined : tagList(body.tags);
@@ -1657,7 +2060,7 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         const add = tagList(req.body?.add ?? []);
         const remove = tagList(req.body?.remove ?? []);
         if (!ids.length || (!add.length && !remove.length)) throw new BankError('Choose the tasks and the tag');
-        const [rows] = await pool.query("SELECT id FROM bank_items WHERE id IN (?) AND owner_id IN (0, ?) AND status = 'published'", [ids, req.user.id]);
+        const [rows] = await pool.query('SELECT id FROM bank_items WHERE id IN (?) AND owner_id IN (0, ?) AND status IN (?)', [ids, req.user.id, labelStatuses(req.user)]);
         const kept = rows.map(row => row.id);
         if (!kept.length) throw new BankError('Task not found', 404);
         await inTransaction(pool, async conn => {
@@ -1672,15 +2075,31 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         return { changed: kept.length };
     }));
 
-    // Staff send their own tasks to the shared bank: a creator's wait as drafts for an admin, an admin's
-    // go in at once. Admins approve or reject the waiting ones.
+    // Staff send tasks to the shared bank: a creator's wait as drafts for an admin, an admin's go in at
+    // once. Admins approve or reject the waiting ones, one by one or a whole send at a time.
     router.post('/bank/submissions', requireStaff, route(req => submitItems(pool, req.user, req.body || {})));
     router.patch('/bank/submissions/:id', requireAdmin, route(req => decideSubmission(pool, req.user, req.params.id, req.body || {})));
+    router.get('/bank/batches', requireStaff, route(async req => ({ batches: await ownBatches(pool, req.user) })));
+    router.get('/bank/batches/pending', requireAdmin, route(async () => ({ batches: await pendingBatches(pool) })));
+    router.get('/bank/batches/:id/items', requireAdmin, route(async req => ({ items: await batchItems(pool, req.params.id, req.query.user) })));
+    router.patch('/bank/batches/:id', requireAdmin, route(req => decideBatch(pool, req.user, req.params.id, req.body || {})));
 
     router.post('/bank/items', route(req => createItems(pool, req.user, req.body || {})));
     router.patch('/bank/items', route(req => bulkUpdate(pool, req.user, req.body || {})));
     router.delete('/bank/items', route(req => archiveItems(pool, req.user, req.body || {})));
     router.put('/bank/items/:id', route(req => updateItem(pool, req.user, req.params.id, req.body || {})));
+    router.post('/bank/items/:id/restore', requireAdmin, route(req => restoreItem(pool, req.user, req.params.id)));
+
+    // The shared bank's log: staff see a task's own story, admins the whole of it and may undo a change
+    router.get('/bank/items/:id/history', requireStaff, route(req => listHistory(pool, { item: req.params.id, limit: 100 })));
+    router.get('/bank/history', requireAdmin, route(req => listHistory(pool, req.query)));
+    router.get('/bank/history/users', requireAdmin, route(async () => {
+        const [rows] = await pool.query('SELECT user_id, MAX(username) AS username FROM bank_item_history WHERE user_id IS NOT NULL GROUP BY user_id ORDER BY username LIMIT 500');
+        return { users: rows.map(row => ({ id: row.user_id, username: row.username })), actions: ACTIONS };
+    }));
+    router.post('/bank/history/:id/revert', requireAdmin, route(req => revertChange(pool, req.user, req.params.id)));
+
+    poolRoutes(router, { pool, route, requireStaff, requireAdmin, BankError, inTransaction, fetchItems, fullClassification });
 
     // Subjects
     router.post('/bank/subjects', requireAdmin, route(async req => {
@@ -1785,7 +2204,9 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
         try {
             await inTransaction(pool, async conn => {
                 await conn.query('UPDATE bank_topics SET parent_id = ? WHERE parent_id = ?', [intoId, id]);
+                const [moved] = await conn.query('SELECT id FROM bank_items WHERE topic_id = ? AND owner_id = 0', [id]);
                 await conn.query('UPDATE bank_items SET topic_id = ? WHERE topic_id = ?', [intoId, id]);
+                await recordHistory(conn, req.user, moved.map(row => ({ itemId: row.id, action: 'merged', changes: { topicId: [id, intoId] } })));
                 // Grades the target already has keep its own row
                 await conn.query(
                     `INSERT IGNORE INTO bank_topic_grades (grade_id, topic_id, course_value_id, hours, description)
@@ -1902,4 +2323,4 @@ async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
     }
 }
 
-module.exports = { ensureBankSchema, createBankRouter, cleanupBank, loadMeta, listItems, contextFor, bankLimits };
+module.exports = { ensureBankSchema, createBankRouter, cleanupBank, loadMeta, listItems, contextFor, bankLimits, createOwner, labelStatuses };
