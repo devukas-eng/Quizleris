@@ -5409,6 +5409,24 @@ math-virtual-keyboard::part(action-toolbar) {
     color: var(--muted);
 }
 
+/* The free plan's renewing (dashboard-ui.js): a paused quiz students cannot open */
+.dash-chip.paused {
+    background: color-mix(in srgb, var(--danger-strong) 12%, transparent);
+    color: var(--danger-strong);
+}
+
+/* One height whether it shows the chip or plain text, so renewing never resizes the card */
+.dash-keep-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+}
+
+.dash-keep-hint {
+    margin: 0;
+}
+
 .dash-table-wrap {
     overflow-x: auto;
     border: 1px solid var(--border-color);
@@ -11179,6 +11197,86 @@ button.qb-crumb:hover {
     width: min(460px, 100%);
     max-width: 460px;
     text-align: left;
+}
+
+/* Deleted quizzes and earlier versions (quiz-recovery.js): the list keeps one height while it loads */
+.app-dialog.qd {
+    width: min(560px, 100%);
+    max-width: 560px;
+    text-align: left;
+}
+
+.qd-note {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.qd-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: min(52vh, 420px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.qd-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+    min-height: 64px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.qd-placeholder {
+    border-style: dashed;
+    opacity: 0.5;
+}
+
+.qd-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.qd-title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.qd-meta {
+    margin-top: 2px;
+    font-size: 0.82rem;
+}
+
+.qd-action {
+    flex: 0 0 auto;
+    min-width: 108px;
+}
+
+.qd-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.qd-empty {
+    margin: auto;
+    text-align: center;
+}
+
+.dash-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .qb-move-list {

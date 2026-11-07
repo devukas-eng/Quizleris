@@ -3,6 +3,7 @@ import {
     fetchAllUsers,
     fetchProfile,
     deleteQuizFromCloud,
+    keepQuiz,
     fetchInvites,
     createInvites,
     deleteInvite,
@@ -32,11 +33,13 @@ import {
 import { renderApprovals } from "./admin-approvals.js";
 import { renderBankLog, renderTaskHistory } from "./admin-bank-log.js";
 import { renderStudio } from "./bank-studio.js";
+import { deleteMessage, openDeletedQuizzes } from "./quiz-recovery.js";
 
 const BANK_TAB_PAGE = 50; // rows the Bank tab asks for at a time
 
 let dashboardModal = null;
 let activeAdminTab = "overview";
+let capabilities = null; // the plan's rules from /api/me, for deleting and restoring
 
 // Cached admin state for fast tab switching within a session
 let adminState = {
@@ -134,6 +137,7 @@ async function renderDashboard() {
     }
 
     const { user, limits, quizzes } = profile;
+    capabilities = profile.capabilities || null;
     // Role may have changed in the database since login
     cachedUser.role = user.role;
     cachedUser.subscription_tier = user.subscription_tier;
@@ -158,14 +162,36 @@ function wireQuizCardEvents(container, onDeleted = renderDashboard) {
     wireCopyButtons(container);
     initGlide(container);
     container.querySelector("#dashboard-create-btn")?.addEventListener("click", createQuiz);
+    container.querySelector("#dashboard-trash-btn")?.addEventListener("click", () => openDeletedQuizzes({
+        capabilities,
+        admin: getCurrentUser()?.role === "admin",
+        onRestored: renderDashboard
+    }));
     container.querySelectorAll("[data-edit-quiz]").forEach(btn => {
         btn.addEventListener("click", () => openEditor(btn.dataset.editQuiz));
+    });
+    // Renew: only the quiz's state text changes, so the card keeps its size
+    container.querySelectorAll("[data-keep-quiz]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            const result = await keepQuiz(btn.dataset.keepQuiz);
+            btn.disabled = false;
+            if (!result.ok) {
+                await alertDialog(t("profile.keepFailed"), result.data.error || "");
+                return;
+            }
+            const state = btn.closest(".dash-quiz")?.querySelector(".dash-keep-state");
+            if (!state) return;
+            state.innerHTML = result.data.expires_at
+                ? `<span class="dash-muted">✓ ${escapeHtml(t("profile.kept").replace("{date}", formatDate(result.data.expires_at)))}</span>`
+                : "";
+        });
     });
     container.querySelectorAll("[data-delete-quiz]").forEach(btn => {
         btn.addEventListener("click", async () => {
             const ok = await confirmDialog({
                 title: t("admin.deleteTitle"),
-                message: `„${btn.dataset.title}“ — ${t("admin.deleteConfirm")}`,
+                message: `„${btn.dataset.title}“ — ${deleteMessage(capabilities)}`,
                 confirmText: t("dialog.delete"),
                 danger: true
             });
@@ -1032,9 +1058,9 @@ function profileCard(user, limits, quizCount) {
         : `${quizCount} <span class="dash-muted">/ ${limits.max_quizzes}</span>`;
     const usagePct = limits.max_quizzes == null ? 0 : Math.min(100, Math.round((quizCount / limits.max_quizzes) * 100));
     const atLimit = limits.max_quizzes != null && quizCount >= limits.max_quizzes;
-    const privatePolicy = limits.private_expiry_days == null
+    const keepPolicy = limits.keep_days == null
         ? t("profile.privateKept")
-        : t("profile.privateDeleted").replace("{days}", limits.private_expiry_days);
+        : t("profile.keepEvery").replace("{first}", limits.first_days ?? 30).replace("{days}", limits.keep_days);
 
     return `
         <section class="dash-profile">
@@ -1057,8 +1083,8 @@ function profileCard(user, limits, quizCount) {
                     ${limits.max_quizzes == null ? "" : `<div class="dash-meter" role="progressbar" aria-valuenow="${quizCount}" aria-valuemin="0" aria-valuemax="${limits.max_quizzes}"><span style="width: ${usagePct}%"></span></div>`}
                 </div>
                 <div class="dash-stat">
-                    <div class="dash-stat-label">${t("profile.privateQuizzes")}</div>
-                    <div class="dash-stat-value">${escapeHtml(privatePolicy)}</div>
+                    <div class="dash-stat-label">${t("profile.keepLabel")}</div>
+                    <div class="dash-stat-value">${escapeHtml(keepPolicy)}</div>
                 </div>
                 <div class="dash-stat">
                     <div class="dash-stat-label">${t("profile.memberSince")}</div>
@@ -1070,14 +1096,30 @@ function profileCard(user, limits, quizCount) {
     `;
 }
 
+/** A free quiz's state: active until a date, or paused (students cannot open it) until it goes for good. */
+function keepStateHtml(expiresAt) {
+    const until = new Date(expiresAt);
+    if (until > new Date()) return `<span class="dash-muted">${escapeHtml(t("profile.activeUntil").replace("{date}", formatDate(until)))}</span>`;
+    const gone = new Date(until.getTime() + (capabilities?.pause_days ?? 3) * 24 * 3600 * 1000);
+    return `<span class="dash-chip paused">${escapeHtml(t("profile.paused"))}</span>
+        <span class="dash-muted">${escapeHtml(t("profile.pausedUntil").replace("{date}", formatDate(gone)))}</span>`;
+}
+
 function quizzesSection(quizzes) {
     let html = `
         <section class="dash-section">
             <div class="dash-section-head">
                 <h3>${t("profile.myQuizzes")}</h3>
-                <button id="dashboard-create-btn" class="btn btn-primary">+ ${t("profile.createQuiz")}</button>
+                <div class="dash-head-actions">
+                    <button id="dashboard-trash-btn" class="btn btn-secondary" type="button">🗑 ${t("trash.open")}</button>
+                    <button id="dashboard-create-btn" class="btn btn-primary">+ ${t("profile.createQuiz")}</button>
+                </div>
             </div>
     `;
+    // The free plan's rule, said where the Renew buttons are
+    if (capabilities?.keep_days && quizzes.length) {
+        html += `<p class="dash-hint dash-keep-hint">${escapeHtml(t("profile.keepHint").replace("{first}", capabilities.first_days ?? 30).replace("{days}", capabilities.keep_days).replace("{pause}", capabilities.pause_days))}</p>`;
+    }
     if (quizzes.length === 0) {
         html += `
             <div class="dash-empty">
@@ -1090,17 +1132,19 @@ function quizzesSection(quizzes) {
         html += `<div class="dash-quiz-list">`;
         quizzes.forEach(q => {
             const isPublic = q.visibility === "public";
-            const expiry = q.expires_at ? ` · ${escapeHtml(t("profile.expiresOn").replace("{date}", formatDate(q.expires_at)))}` : "";
+            const expiry = q.expires_at ? `<span class="dash-keep-state">${keepStateHtml(q.expires_at)}</span>` : "";
             html += `
                 <div class="dash-quiz" data-glide>
                     <div class="dash-quiz-main">
                         <div class="dash-quiz-title">${escapeHtml(q.title || "—")}</div>
                         <div class="dash-quiz-meta">
                             <span class="dash-chip ${isPublic ? "public" : "private"}">${isPublic ? t("profile.public") : t("profile.private")}</span>
-                            <span class="dash-muted">${t("profile.updated")} ${escapeHtml(formatDate(q.updated_at || q.created_at))}${expiry}</span>
+                            <span class="dash-muted">${t("profile.updated")} ${escapeHtml(formatDate(q.updated_at || q.created_at))}</span>
+                            ${expiry}
                         </div>
                     </div>
                     <div class="dash-quiz-actions">
+                        ${q.expires_at ? `<button class="btn btn-secondary dash-keep" data-keep-quiz="${escapeHtml(q.id)}" type="button">↻ ${t("profile.keep")}</button>` : ""}
                         <a class="btn btn-secondary dash-results" href="/?dashboard=${encodeURIComponent(q.id)}">📊 ${t("results.open")}${q.attempts ? ` <span class="dash-count">${q.attempts}</span>` : ""}</a>
                         <button class="btn btn-secondary" data-edit-quiz="${escapeHtml(q.id)}">${t("profile.edit")}</button>
                         <button class="btn btn-secondary btn-icon dash-delete" data-delete-quiz="${escapeHtml(q.id)}" data-title="${escapeHtml(q.title || "")}" title="${t("profile.delete")}" aria-label="${t("profile.delete")}">🗑</button>

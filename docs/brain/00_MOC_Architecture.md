@@ -76,7 +76,7 @@ Find the row that matches the task and read that node before touching code.
 | Task bank, teacher access, topics, stars, nicknames, tags, approvals | `src/bank-workspace.js`, `src/backend/bank.js` | [[Task_Bank]] | wip |
 | Sending tasks to the bank, approvals, unsorted tasks, the feed, votes, the bank's log, restoring | `src/bank-send.js`, `src/backend/bank-pool.js`, `src/backend/bank-history.js` | [[Creator_Workflow]] | wip |
 | API routes, schema at start, rate limits | `server.js`, `src/api.js` | [[Backend_API]] | needs-refactor |
-| Deleting anything, the hourly cleanup, expiry, quiz pictures, which quiz uses which task | `src/backend/quiz-links.js`, `server.js`, `src/quiz-pictures.js` | [[Data_Lifetime]] | active |
+| Deleting anything, deleted quizzes, restoring, quiz versions, the hourly cleanup, expiry, quiz pictures, which quiz uses which task | `src/backend/quiz-trash.js`, `src/backend/quiz-versions.js`, `src/backend/quiz-links.js` | [[Data_Lifetime]] | active |
 | Login, roles, invite codes, free and premium limits | `src/auth.js`, `src/backend/plans.js` | [[Auth_Roles_Plans]] | active |
 | Business name, copyright, legal pages, cookie text | `src/index.html`, `src/app.js`, `tests/branding.test.js` | [[Branding_Legal]] | wip |
 | Build, deploy, checking what is live | `copy-files.js`, `AGENTS.md` | [[Build_Deploy]] | active |

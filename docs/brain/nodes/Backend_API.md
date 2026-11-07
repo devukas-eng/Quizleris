@@ -17,6 +17,8 @@ Owns the Express app: routes, rate limits, table creation at start, running the 
 - `src/backend/quiz-folders.js`: folder router, see [[Quiz_Folders]].
 - `src/backend/bank.js`: bank router, see [[Task_Bank]].
 - `src/backend/quiz-links.js`: what a saved quiz points at, see [[Data_Lifetime]].
+- `src/backend/quiz-trash.js`: deleted quizzes and their router, see [[Data_Lifetime]].
+- `src/backend/quiz-versions.js`: earlier versions of each quiz, see [[Data_Lifetime]].
 - `src/backend/user-themes.js`: theme payload checks, see [[Theme_System]].
 - `src/backend/plans.js`: plan rules, see [[Auth_Roles_Plans]].
 - `scripts/init_db.js`: creates the app tables.
@@ -36,7 +38,8 @@ Owns the Express app: routes, rate limits, table creation at start, running the 
 
 ## Gotchas & Constraints
 
-- Mount order matters. The `/api` catch-all 404 comes right after the bank router, so any API route added below it never runs.
+- Mount order matters. The `/api` catch-all 404 comes right after the bank router, so any API route added below it never runs. A route under `/api/quizzes/` with a single word, like `trash`, is taken by `GET /api/quizzes/:id` as a quiz code, which is why deleted quizzes live at `/api/quiz-trash`.
+- `ensureSchema` sets up deleted quizzes and versions before the quiz links, because counting `uses` reads `deleted_quizzes`.
 - Outside `/api`, every unknown path answers 200 with `index.html`. Check content, not status, after a deploy.
 - `PUBLIC_DIR` is `dist`, so nothing else in the repository is served, including `docs/`.
 - New tables use `CREATE TABLE IF NOT EXISTS` at start. New columns use `addColumnIfMissing`.

@@ -104,7 +104,7 @@ editor ──POST /api/quizzes──▶ server
 |---|---|
 | Load all pictures when the quiz starts, and wait up to 2.5 seconds for them | **Built.** Stops the page jumping and keeps a test working if the network drops |
 | Give pictures their own request limit | **Built.** Schools share one address |
-| Keep the last 10 versions of each quiz on save | **Proposed.** Saving overwrites with no way back, which is how quizzes were lost before. Quiz JSON is small now that pictures are out, so versions cost little. Needs `quiz_media` to count them too |
+| Keep earlier versions of each quiz on save | **Built** after the owner agreed, see below. `quiz_media` counts the pictures of every kept version |
 | Warn teachers before a quiz expires, or count student use as activity | **Owner's call.** A class can be using a quiz when it expires, because only saving resets the clock |
 | Link hand-typed questions that match a bank task by hash | **Later.** Better usage numbers, not needed now |
 
@@ -114,15 +114,35 @@ editor ──POST /api/quizzes──▶ server
 - **Pictures are served by Node from MySQL.** No worse than today, when the same bytes came inside the JSON. Revisit with a file store or CDN if serving them becomes slow.
 - **Old quizzes keep their embedded pictures until the next save.** No job rewrites teachers' quizzes on its own. A deliberate one-off conversion can be run later.
 
-## Open questions for the owner
+## Owner's answers, 2026-11-07, and what was built
 
-1. When a free teacher's private quiz expires, its student results go with it, with no warning besides the date shown when saving. Is that the intended promise?
-2. Should quiz versions be built next?
+1. **Results of an expired or deleted quiz:** they still go with the quiz, but later. A deleted or expired quiz waits 14 days, or 30 on premium, before it is deleted for good. Restoring is a premium service, and admins can restore any quiz.
+   - Built as a separate `deleted_quizzes` table, so nothing that reads live quizzes changed.
+   - The quiz's results, pictures, links and versions stay keyed by its ID while it waits.
+   - The privacy text now says so.
+2. **Versions:** the owner suggested v0 plus a chain of changes. Built instead as git does it: each version lists question fingerprints, and each question is stored once per quiz.
+   - It saves almost as much space as a chain of changes.
+   - Any version opens in one read, with no replaying.
+   - One damaged step cannot break every later version.
+   - The free plan keeps 5 versions and premium 30.
+
+## Later the same day: renewing on the free plan
+
+To push Premium, the owner added renewing on top of the free plan's 30 days, like free hosting sites:
+- **First 30 days:** a new quiz needs nothing.
+- **Then every 7 days:** a teacher must click Renew on each quiz, or save it.
+- **Then a pause:** an unrenewed quiz pauses, and students are told the teacher did not renew it.
+- **Then gone:** after 3 days it is deleted for good with its results, and does not go to Deleted quizzes.
+- **Premium** never renews.
+
+This keeps the rule of this ADR: the hourly job deletes paused quizzes by their own date, by name, not for missing a parent.
+
+Not settled: how teachers on live hear about it before their first 7 days run out.
 
 ## Action Items
 
 1. [x] Delete by name, and remove the sweeps
 2. [x] Protect pictures as designed
 3. [x] Clear `expires_at` on public and showcase quizzes
-4. [ ] Decide the open questions
+4. [x] Decide the open questions, and build the recovery wait and versions
 5. [ ] Check on live after the deploy: run the read-only size totals from ADR-0001

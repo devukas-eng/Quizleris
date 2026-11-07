@@ -30,9 +30,11 @@ const pool = require('./src/backend/db.js');
 const { seedPremadeQuizzes } = require('./src/backend/premade.js');
 const { ensureBankSchema, createBankRouter, cleanupBank, removeBankOwner, inTransaction } = require('./src/backend/bank.js');
 const quizLinks = require('./src/backend/quiz-links.js');
-const { FREE_QUIZ_LIMIT, PRIVATE_EXPIRY_DAYS, hasActivePremium, isPremium, planCapabilities } = require('./src/backend/plans.js');
+const quizVersions = require('./src/backend/quiz-versions.js');
+const quizTrash = require('./src/backend/quiz-trash.js');
+const { FREE_QUIZ_LIMIT, FIRST_DAYS, KEEP_DAYS, PAUSE_DAYS, VERSIONS_KEPT, keepUntil, hasActivePremium, isPremium, planCapabilities } = require('./src/backend/plans.js');
 const { cleanThemePayload } = require('./src/backend/user-themes.js');
-const { ensureQuizFolderSchema, forgetQuizFolders, createQuizFolderRouter } = require('./src/backend/quiz-folders.js');
+const { ensureQuizFolderSchema, createQuizFolderRouter } = require('./src/backend/quiz-folders.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -370,7 +372,9 @@ app.get('/api/me', authenticateToken, async (req, res) => {
             },
             limits: {
                 max_quizzes: premium ? null : FREE_QUIZ_LIMIT,
-                private_expiry_days: premium ? null : PRIVATE_EXPIRY_DAYS
+                first_days: premium ? null : FIRST_DAYS,
+                keep_days: premium ? null : KEEP_DAYS,
+                pause_days: premium ? null : PAUSE_DAYS
             },
             quizzes: quizRows
         });
@@ -914,8 +918,10 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
         const targetId = toInt(req.params.id, 1, Number.MAX_SAFE_INTEGER, 0);
         if (!targetId) return res.status(400).json({ error: 'Invalid user ID' });
         if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account.' });
+        // Deleting an account deletes its quizzes for good at once, deleted ones too: no recovery wait
         const [quizzes] = await pool.query('SELECT id FROM quizzes WHERE owner_id = ?', [targetId]);
-        await deleteQuizzes(quizzes.map(quiz => quiz.id));
+        const [deleted] = quizTrash.isReady() ? await pool.query('SELECT id FROM deleted_quizzes WHERE owner_id = ?', [targetId]) : [[]];
+        await deleteQuizzes([...quizzes, ...deleted].map(quiz => quiz.id));
         await pool.query('DELETE FROM user_themes WHERE user_id = ?', [targetId]).catch(() => {});
         await removeBankOwner(pool, targetId);
         const [result] = await pool.query('DELETE FROM users WHERE id = ?', [targetId]);
@@ -1084,9 +1090,13 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
         const isCode = CODE_RE.test(key) || RANDOM_ID_RE.test(raw);
 
         // Private quizzes open with their code; custom IDs (guessable words) only for the owner and
-        // admins, expired quizzes too. 404 (not 403) so private IDs can't be probed.
-        if (!isOwner && !isAdmin && (isExpired || (!isListed && !isCode))) {
+        // admins. 404 (not 403) so private IDs can't be probed.
+        if (!isOwner && !isAdmin && !isListed && !isCode) {
             return res.status(404).json({ error: 'Quiz not found' });
+        }
+        // A free quiz its teacher did not renew is paused: students are told so, its teacher still opens it
+        if (!isOwner && !isAdmin && isExpired) {
+            return res.status(404).json({ error: 'Quiz paused', code: 'quiz_paused' });
         }
         res.json(typeof quiz.quiz_data === 'string' ? JSON.parse(quiz.quiz_data) : quiz.quiz_data);
     } catch (error) {
@@ -1101,7 +1111,9 @@ app.delete('/api/quizzes/:id', authenticateToken, async (req, res) => {
         if (!quiz || (req.user.role !== 'admin' && quiz.owner_id !== req.user.id)) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
-        await deleteQuizzes([quiz.id]); // its students' attempts go with it
+        // It waits among the deleted quizzes, with its results, for the owner plan's recovery days
+        if (quizTrash.isReady()) await quizTrash.trashQuizzes(pool, [quiz.id], { reason: 'deleted', by: req.user.id });
+        else await deleteQuizzes([quiz.id]);
         res.json({ message: 'Quiz deleted successfully' });
     } catch (error) {
         console.error('[DELETE QUIZ]', error);
@@ -1130,17 +1142,29 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
         }
 
         // Ownership check (IDOR prevention): only the owner or an admin may overwrite
-        let [existing] = await pool.query('SELECT owner_id FROM quizzes WHERE id = ?', [quizData.id]);
+        let [existing] = await pool.query('SELECT owner_id, created_at FROM quizzes WHERE id = ?', [quizData.id]);
         if (existing.length === 0) {
             // A draft still using an old long ID saves into the quiz that ID was converted to
             const target = await resolveAlias(quizData.id);
             if (target) {
                 quizData.id = target;
-                [existing] = await pool.query('SELECT owner_id FROM quizzes WHERE id = ?', [target]);
+                [existing] = await pool.query('SELECT owner_id, created_at FROM quizzes WHERE id = ?', [target]);
             }
         }
         if (existing.length > 0 && req.user.role !== 'admin' && existing[0].owner_id !== req.user.id) {
             return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.', code: 'quiz_id_taken' });
+        }
+        // A deleted quiz keeps its code until it is gone for good. Its owner's draft saves as a new
+        // quiz with a new code (the editor adopts it), so the deleted one can still be restored.
+        if (existing.length === 0 && quizTrash.isReady()) {
+            const [[trashed]] = await pool.query('SELECT owner_id FROM deleted_quizzes WHERE id = ?', [quizData.id]);
+            if (trashed && req.user.role !== 'admin' && trashed.owner_id !== req.user.id) {
+                return res.status(409).json({ error: 'Quiz ID is already taken or you do not have permission to edit it.', code: 'quiz_id_taken' });
+            }
+            if (trashed) {
+                quizData.id = await unusedCode();
+                if (!quizData.id) return res.status(409).json({ error: 'Could not find a free quiz code', code: 'quiz_id_taken' });
+            }
         }
 
         // Free tier: limited number of quizzes; private quizzes expire
@@ -1150,11 +1174,9 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
                 return res.status(403).json({ error: `Free tier is limited to ${FREE_QUIZ_LIMIT} quizzes. Please upgrade to create more.`, code: 'quiz_limit', limit: FREE_QUIZ_LIMIT });
             }
         }
-        let expiresAt = null;
-        if (visibility === 'private' && !isPremium(req.user)) {
-            expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + PRIVATE_EXPIRY_DAYS);
-        }
+        // On the free plan a save renews the quiz, public or private: its first 30 days, then 7 more
+        // from each save (keepUntil in plans.js)
+        const expiresAt = isPremium(req.user) ? null : keepUntil(existing[0]?.created_at ?? null);
 
         // On update, keep the original owner (an admin editing must not take ownership)
         const ownerId = existing.length > 0 ? existing[0].owner_id : req.user.id;
@@ -1180,14 +1202,30 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             return storageBytes;
         };
 
-        // All or nothing: a quiz must never show a picture that no row says it needs, or the cleanup
-        // would take it. Without the tables pictures simply stay inside the quiz, as they used to.
+        // All or nothing: a quiz or a version of it must never show a picture that no row says it
+        // needs, or the cleanup would take it. Without the tables pictures simply stay inside the quiz,
+        // and no versions are kept, as before.
+        const linksReady = quizLinks.isReady();
+        const versionsReady = quizVersions.isReady();
         let saved = { storageBytes: 0, pictures: {}, tasks: [] };
-        if (quizLinks.isReady()) {
+        if (linksReady || versionsReady) {
+            const ownerPremium = ownerId === req.user.id ? isPremium(req.user) : await quizTrash.ownerIsPremium(pool, ownerId);
+            const keep = ownerPremium ? VERSIONS_KEPT.premium : VERSIONS_KEPT.free;
             saved = await inTransaction(pool, async (conn) => {
-                const pictures = await quizLinks.storePictures(conn, quizData);
+                const pictures = linksReady ? await quizLinks.storePictures(conn, quizData) : {};
+                // A quiz saved before versions existed: what it was becomes its first version
+                if (versionsReady && existing.length > 0 && !(await quizVersions.hasVersions(conn, quizData.id))) {
+                    const [[before]] = await conn.query('SELECT quiz_data FROM quizzes WHERE id = ? FOR UPDATE', [quizData.id]);
+                    const previous = before && (typeof before.quiz_data === 'string' ? JSON.parse(before.quiz_data) : before.quiz_data);
+                    if (previous) {
+                        if (linksReady) await quizLinks.storePictures(conn, previous);
+                        await quizVersions.recordVersion(conn, { ...previous, id: quizData.id }, { keep });
+                    }
+                }
                 const storageBytes = await writeQuiz(conn);
-                return { storageBytes, pictures, tasks: await quizLinks.linkQuiz(conn, quizData, ownerId) };
+                const versionPictures = versionsReady ? await quizVersions.recordVersion(conn, quizData, { userId: req.user.id, keep }) : [];
+                const tasks = linksReady ? await quizLinks.linkQuiz(conn, quizData, ownerId, versionPictures) : [];
+                return { storageBytes, pictures, tasks };
             });
             await quizLinks.refreshUses(pool, saved.tasks);
         } else {
@@ -1196,13 +1234,84 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
 
         res.json({
             message: 'Quiz saved successfully',
-            id: quizData.id, // differs from the sent ID when an old ID was converted: the editor adopts it
+            id: quizData.id, // differs from the sent ID for an old ID or a deleted quiz's code: the editor adopts it
             expires_at: expiresAt,
+            ...(expiresAt ? { first_days: FIRST_DAYS, keep_days: KEEP_DAYS, pause_days: PAUSE_DAYS } : {}),
             storage_bytes: saved.storageBytes,
             pictures: saved.pictures // where embedded pictures went: the editor stops carrying them
         });
     } catch (error) {
         console.error('[SAVE QUIZ]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Renew: the free plan's quiz stays for KEEP_DAYS more, and a paused one opens for students again.
+// The date comes from the database, which the hourly job compares with.
+app.post('/api/quizzes/:id/keep', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await findQuiz(req.params.id, 'id, owner_id, featured');
+        if (!quiz || (req.user.role !== 'admin' && quiz.owner_id !== req.user.id)) {
+            return res.status(404).json({ error: 'Quiz not found' });
+        }
+        const forever = quiz.featured || await quizTrash.ownerIsPremium(pool, quiz.owner_id);
+        if (forever) await pool.query('UPDATE quizzes SET expires_at = NULL, updated_at = updated_at WHERE id = ?', [quiz.id]);
+        // Within its first 30 days renewing changes nothing; after, 7 days from now
+        else await pool.query('UPDATE quizzes SET expires_at = GREATEST(created_at + INTERVAL ? DAY, NOW() + INTERVAL ? DAY), updated_at = updated_at WHERE id = ?', [FIRST_DAYS, KEEP_DAYS, quiz.id]);
+        const [[row]] = await pool.query('SELECT expires_at FROM quizzes WHERE id = ?', [quiz.id]);
+        res.json({ id: quiz.id, expires_at: row?.expires_at ?? null });
+    } catch (error) {
+        console.error('[KEEP QUIZ]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// A new code that no live or deleted quiz has, or null
+async function unusedCode() {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const code = generateCode();
+        const [[live]] = await pool.query('SELECT id FROM quizzes WHERE id = ?', [code]);
+        const [[deleted]] = await pool.query('SELECT id FROM deleted_quizzes WHERE id = ?', [code]);
+        if (!live && !deleted) return code;
+    }
+    return null;
+}
+
+// --- VERSIONS (src/backend/quiz-versions.js) ---
+// Earlier versions of a live quiz, for its owner and admins. Opening one only loads it into the
+// editor: saving it there makes it the newest version, so going back can itself be undone.
+async function quizForVersions(req, res) {
+    if (!quizVersions.isReady()) {
+        res.status(503).json({ error: 'Versions are not available' });
+        return null;
+    }
+    const quiz = await findQuiz(req.params.id, 'id, owner_id');
+    if (!quiz || (req.user.role !== 'admin' && quiz.owner_id !== req.user.id)) {
+        res.status(404).json({ error: 'Quiz not found' });
+        return null;
+    }
+    return quiz;
+}
+
+app.get('/api/quizzes/:id/versions', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await quizForVersions(req, res);
+        if (quiz) res.json({ versions: await quizVersions.listVersions(pool, quiz.id) });
+    } catch (error) {
+        console.error('[QUIZ VERSIONS]', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.get('/api/quizzes/:id/versions/:version', authenticateToken, async (req, res) => {
+    try {
+        const quiz = await quizForVersions(req, res);
+        if (!quiz) return;
+        const version = await quizVersions.loadVersion(pool, quiz.id, toInt(req.params.version, 1, 1e9, 0));
+        if (!version) return res.status(404).json({ error: 'Version not found' });
+        res.json(version);
+    } catch (error) {
+        console.error('[QUIZ VERSION]', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -1369,6 +1478,7 @@ app.delete('/api/quizzes/:id/attempts/:attemptId', authenticateToken, async (req
 });
 
 // --- TASK BANK (užduočių bankas): /api/bank/* and the pictures at /api/media/* ---
+app.use('/api', quizTrash.createQuizTrashRouter(pool, { authenticateToken, attemptsReady: () => attemptsReady }));
 app.use('/api', createBankRouter({ pool, authenticateToken, requireAdmin }));
 
 // Unknown API routes return JSON 404 instead of the SPA HTML
@@ -1564,6 +1674,18 @@ async function ensureSchema() {
         console.error('[SCHEMA] could not set up the task bank:', error.code || error.message);
     }
     try {
+        await quizTrash.ensureQuizTrash(pool);
+    } catch (error) {
+        // Non-fatal: deleting a quiz then deletes it for good at once, as it used to
+        console.error('[SCHEMA] could not set up deleted quizzes:', error.code || error.message);
+    }
+    try {
+        await quizVersions.ensureQuizVersions(pool);
+    } catch (error) {
+        // Non-fatal: saving then keeps no versions
+        console.error('[SCHEMA] could not set up quiz versions:', error.code || error.message);
+    }
+    try {
         await quizLinks.ensureQuizLinks(pool);
     } catch (error) {
         // Non-fatal: quizzes then keep their pictures inside, and the cleanup deletes no picture
@@ -1571,51 +1693,53 @@ async function ensureSchema() {
     }
 }
 
-// A quiz and everything that is only there for it, by name and all at once. Nothing in this app is
-// deleted for not finding its parent: that would turn a failed conversion or a bad restore into lost
-// results (docs/adr/0002-what-may-delete-data.md).
-async function deleteQuizzes(ids) {
-    for (let start = 0; start < ids.length; start += 500) {
-        const part = ids.slice(start, start + 500);
-        const tasks = await inTransaction(pool, async (conn) => {
-            await forgetQuizFolders(conn, part);
-            if (attemptsReady) await conn.query('DELETE FROM quiz_attempts WHERE quiz_id IN (?)', [part]);
-            const used = await quizLinks.forgetQuizzes(conn, part);
-            await conn.query('DELETE FROM quizzes WHERE id IN (?)', [part]);
-            return used;
-        });
-        await quizLinks.refreshUses(pool, tasks);
-    }
-}
+// A quiz for good, live or deleted, with everything that is only there for it, by name and all at
+// once. Nothing in this app is deleted for not finding its parent: that would turn a failed
+// conversion or a bad restore into lost results (docs/adr/0002-what-may-delete-data.md).
+const deleteQuizzes = (ids) => quizTrash.purgeQuizzes(pool, ids, { attemptsReady });
 
-// Expired private quizzes are promised to be deleted, not just hidden.
+// The free plan's quizzes stay while their teacher renews them (KEEP_DAYS and PAUSE_DAYS in plans.js).
+// An owner with premium's limits is mirrored from isPremium in plans.js.
+const PREMIUM_OWNER = `(u.role IN ('admin', 'creator')
+    OR (u.subscription_tier = 'premium' AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())))`;
+
 async function purgeExpiredQuizzes() {
     try {
-        // Owners who now have premium's limits (staff, or premium granted since) keep their private
-        // quizzes: the expiry was set while they were on the free plan. Mirrors isPremium in plans.js.
+        // Owners who now have premium's limits (staff, or premium granted since) keep their quizzes
         const [kept] = await pool.query(`
             UPDATE quizzes q JOIN users u ON u.id = q.owner_id
             SET q.expires_at = NULL, q.updated_at = q.updated_at
-            WHERE q.expires_at IS NOT NULL
-              AND (u.role IN ('admin', 'creator')
-                   OR (u.subscription_tier = 'premium' AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())))
+            WHERE q.expires_at IS NOT NULL AND ${PREMIUM_OWNER}
         `);
-        if (kept.affectedRows > 0) console.log(`[CLEANUP] ${kept.affectedRows} private quiz(zes) no longer expire (owner has premium)`);
-        // Only private quizzes expire: an admin may have made this one public or put it in the showcase
-        const [shown] = await pool.query(`
-            UPDATE quizzes SET expires_at = NULL, updated_at = updated_at
-            WHERE expires_at IS NOT NULL AND (visibility <> 'private' OR featured = 1)
-        `);
-        if (shown.affectedRows > 0) console.log(`[CLEANUP] ${shown.affectedRows} public or showcase quiz(zes) no longer expire`);
+        if (kept.affectedRows > 0) console.log(`[CLEANUP] ${kept.affectedRows} quiz(zes) no longer need renewing (owner has premium)`);
+        // A quiz an admin put in the showcase stays
+        const [shown] = await pool.query('UPDATE quizzes SET expires_at = NULL, updated_at = updated_at WHERE expires_at IS NOT NULL AND featured = 1');
+        if (shown.affectedRows > 0) console.log(`[CLEANUP] ${shown.affectedRows} showcase quiz(zes) no longer need renewing`);
+        // Every other free quiz gets a renew-by date if it has none (one an admin saved, a lapsed
+        // premium's, a public one from before renewing): its first 30 days, or 7 from now. Dates
+        // already set, such as the old rule's 30 days, are left as they are.
+        const [timed] = await pool.query(`
+            UPDATE quizzes q JOIN users u ON u.id = q.owner_id
+            SET q.expires_at = GREATEST(q.created_at + INTERVAL ? DAY, NOW() + INTERVAL ? DAY), q.updated_at = q.updated_at
+            WHERE q.featured = 0 AND q.expires_at IS NULL AND NOT ${PREMIUM_OWNER}
+        `, [FIRST_DAYS, KEEP_DAYS]);
+        if (timed.affectedRows > 0) console.log(`[CLEANUP] ${timed.affectedRows} free quiz(zes) now have a renew-by date`);
     } catch (error) {
         // Without these steps a quiz that should stay could be deleted: delete nothing this round
         console.error('[CLEANUP] quizzes to keep, skipping this round:', error.code || error.message);
         return;
     }
     try {
-        const [expired] = await pool.query('SELECT id FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
-        await deleteQuizzes(expired.map(quiz => quiz.id));
-        if (expired.length > 0) console.log(`[CLEANUP] deleted ${expired.length} expired quiz(zes)`);
+        if (quizTrash.isReady()) {
+            // Paused past PAUSE_DAYS goes for good; deleted ones past their recovery days too
+            const { gone, purged } = await quizTrash.hourly(pool, { attemptsReady, pauseDays: PAUSE_DAYS });
+            if (gone > 0) console.log(`[CLEANUP] deleted ${gone} quiz(zes) for good: not renewed`);
+            if (purged > 0) console.log(`[CLEANUP] deleted ${purged} quiz(zes) for good after their recovery days`);
+        } else {
+            const [gone] = await pool.query('SELECT id FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW() - INTERVAL ? DAY', [PAUSE_DAYS]);
+            await deleteQuizzes(gone.map(quiz => quiz.id));
+            if (gone.length > 0) console.log(`[CLEANUP] deleted ${gone.length} quiz(zes) for good: not renewed`);
+        }
     } catch (error) {
         console.error('[CLEANUP] failed:', error.code || error.message);
     }

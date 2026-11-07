@@ -2,8 +2,9 @@ import { quiz } from "./state.js";
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, loadQuizFromStorage } from "./storage.js";
 import { imageSrc, embeddedPictures, adoptStoredPictures } from "./quiz-pictures.js";
+import { deleteMessage, openQuizVersions } from "./quiz-recovery.js";
 import { isAdminAccessAllowed, promptAdminPassword, getStoredUser } from "./auth.js";
-import { t, updatePageLanguage } from "./lang.js";
+import { t, updatePageLanguage, localDate } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
 import { openImportDialog } from "./import-dialog.js";
 import { initGlide } from "./glide.js";
@@ -16,9 +17,6 @@ import { openPrintPreview } from "./print-preview.js";
 import { codeChipHtml, linkRowsHtml, wireCopyButtons } from "./share-links.js";
 import { typeTriggerHtml, openTypeWheel, kindOfQuestion, getKind, ANSWER_KINDS, answerKindTriggerHtml, kindOfChoice } from "./type-wheel.js";
 import { getToken, deleteQuizFromCloud, fetchProfile, fetchCloudQuizzes } from "./api.js";
-
-// Private quizzes on the free plan are deleted after this many days (mirrors server PRIVATE_EXPIRY_DAYS)
-const FREE_PRIVATE_EXPIRY_DAYS = 30;
 
 // Line icons for the question card buttons; they stay when the labels slide away on narrow cards
 const cardIcon = (paths) => `<svg class="btn-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -74,9 +72,6 @@ let adminRedoBtn = null;
 let adminLocalSelector = null;
 let adminLocalDeleteBtn = null;
 
-// null = private quizzes never expire (premium/admin); refreshed from the server profile
-let privateExpiryDays = FREE_PRIVATE_EXPIRY_DAYS;
-
 let goHome = () => {
 };
 
@@ -84,11 +79,7 @@ function updateVisibilityLabels() {
   if (!adminQuizVisibility) return;
   const privateOpt = adminQuizVisibility.querySelector('option[value="private"]');
   const publicOpt = adminQuizVisibility.querySelector('option[value="public"]');
-  if (privateOpt) {
-    privateOpt.textContent = privateExpiryDays == null
-      ? t("admin.visPrivate")
-      : t("admin.visPrivateExpiry").replace("{days}", privateExpiryDays);
-  }
+  if (privateOpt) privateOpt.textContent = t("admin.visPrivate");
   if (publicOpt) publicOpt.textContent = t("admin.visPublic");
 }
 function refreshAdminToggleVisibility() {
@@ -1216,15 +1207,18 @@ async function saveAdminQuiz() {
       } catch (e) { console.error("Could not cache community quizzes:", e); } // storage full; the quiz is saved anyway
   }
 
+  // The free plan: each save renews the quiz for so many days (src/backend/plans.js)
   let warningHtml = '';
   if (saveResult && saveResult.expires_at) {
-      const expDate = new Date(saveResult.expires_at).toLocaleDateString('lt-LT');
-      const bytes = saveResult.storage_bytes || 0;
-      const kb = (bytes / 1024).toFixed(1);
+      const notice = t("admin.freeNotice")
+        .replace("{date}", localDate(saveResult.expires_at, { year: "numeric", month: "2-digit", day: "2-digit" }))
+        .replace("{first}", saveResult.first_days ?? 30)
+        .replace("{days}", saveResult.keep_days ?? 7)
+        .replace("{pause}", saveResult.pause_days ?? 3);
       warningHtml = `
       <div class="admin-notice warning">
-          <strong>⚠️ Nemokamas planas</strong>
-          <span>Šis testas galios iki <strong>${expDate}</strong>. Dydis: <strong>${kb} KB</strong>. Norėdami išlaikyti testus visam laikui be limito, įsigykite Premium planą.</span>
+          <strong>⚠️ ${escapeHtml(t("admin.freeNoticeTitle"))}</strong>
+          <span>${escapeHtml(notice)}</span>
       </div>`;
   }
   
@@ -1420,6 +1414,26 @@ function setupFileMenu() {
   // Word / PDF import (File menu) opens the import dialog straight at the file picker
   document.getElementById("admin-docx-import-btn")?.addEventListener("click", () => openImport({ pickFile: true }));
 
+  // Earlier versions (File menu): one opens in the editor as unsaved changes, so undo takes it back
+  // and saving makes it the newest version
+  document.getElementById("admin-versions-btn")?.addEventListener("click", async () => {
+    if (!adminQuiz) return;
+    const quizId = adminQuiz.id;
+    const keep = await fetchProfile().then(p => p.capabilities?.versions_kept).catch(() => null);
+    openQuizVersions(quizId, {
+      saved: !!readDraft()?.inCloud,
+      keep,
+      onOpen: (version) => {
+        if (!adminQuiz || adminQuiz.id !== quizId) return;
+        saveStateForUndo();
+        adminQuiz = { ...version, id: quizId };
+        writeDraft(true);
+        updateDraftStatusBadge("saved");
+        renderAdminForm();
+      }
+    });
+  });
+
   // Print preview: layout changes (order, image sizes, page breaks…) are saved with the quiz
   const printBtn = document.getElementById("admin-docx-btn");
   if (printBtn) {
@@ -1563,6 +1577,7 @@ function setupAdminEventsInternal() {
         id === "admin-preview" || 
         id === "admin-export" ||
         id === "admin-file-btn" ||
+        id === "admin-versions-btn" ||
         id === "admin-docx-btn" ||
         id === "admin-new-quiz" ||
         id === "admin-btn-back" || 
@@ -1955,8 +1970,7 @@ async function populateLocalSelector() {
   try {
       // Teachers can only edit their own quizzes, so list those (not every public quiz); admins can edit all
       if (getToken()) {
-          const { user, quizzes: ownQuizzes, limits } = await fetchProfile();
-          privateExpiryDays = limits.private_expiry_days;
+          const { user, quizzes: ownQuizzes } = await fetchProfile();
           updateVisibilityLabels();
           const quizzes = user.role === "admin" ? await fetchCloudQuizzes() : ownQuizzes;
           quizzes.forEach(q => {
@@ -2007,9 +2021,10 @@ async function handleLocalDeleteClick() {
   if (!selectedId) return;
   
   const selectedTitle = adminLocalSelector.selectedOptions[0]?.textContent || "";
+  const capabilities = await fetchProfile().then(p => p.capabilities).catch(() => null);
   const ok = await confirmDialog({
     title: t("admin.deleteTitle"),
-    message: `„${selectedTitle}“ — ${t("admin.deleteConfirm")}`,
+    message: `„${selectedTitle}“ — ${deleteMessage(capabilities)}`,
     confirmText: t("dialog.delete"),
     danger: true
   });

@@ -6,7 +6,10 @@ const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
-const { sweepPictures } = require('../src/backend/bank.js');
+const { sweepPictures, ensureBankSchema } = require('../src/backend/bank.js');
+const quizTrash = require('../src/backend/quiz-trash.js');
+const quizVersions = require('../src/backend/quiz-versions.js');
+const quizLinks = require('../src/backend/quiz-links.js');
 
 const CONFIG = process.argv[2] || 'quizleris-studio';
 const launch = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude', 'launch.json'), 'utf8'));
@@ -431,7 +434,32 @@ const check = (name, ok, extra) => {
     let [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
     check('uses counts quizzes, not questions', counted.uses === 1, counted);
     const [pictures] = await db.query('SELECT sha256 FROM quiz_media WHERE quiz_id = ?', [quizId]);
-    check('a saved quiz lets go of pictures it no longer shows', pictures.length === 1 && pictures[0].sha256 === shaOf(oldPicture), pictures);
+    const counts = new Set(pictures.map(p => p.sha256));
+    check('pictures of its earlier version still count as used', counts.size === 3 && [oldPicture, questionUrl, choiceUrl].every(url => counts.has(shaOf(url))), pictures);
+
+    // Versions
+    r = await site(teacher, 'GET', `/quizzes/${quizId}/versions`);
+    check('each save that changed something is a version, newest first', r.status === 200 && r.data.versions?.map(v => v.version).join() === '2,1', r);
+    await site(teacher, 'POST', '/quizzes', { id: quizId, title: 'Flow', questions: [copyOfTask('q2'), { ...copyOfTask('q3'), prompt: 'Mokytojo pakeista' }] });
+    r = await site(teacher, 'GET', `/quizzes/${quizId}/versions`);
+    check('saving the same again adds none', r.data.versions?.length === 2, r);
+    r = await site(teacher, 'GET', `/quizzes/${quizId}/versions/1`);
+    check('an earlier version comes back whole, with its pictures', r.status === 200 && r.data.id === quizId && r.data.questions?.[0].id === 'q1'
+        && r.data.questions[0].image === questionUrl && r.data.questions[0].choices[0].image === choiceUrl && r.data.title === 'Flow', r);
+    r = await site(creator2, 'GET', `/quizzes/${quizId}/versions`);
+    check('nobody else sees them', r.status === 404, r);
+    for (let i = 1; i <= 6; i++) {
+        await site(teacher, 'POST', '/quizzes', { id: `${quizId}c`, title: 'Flow 3', questions: [{ id: 'q1', type: 'numeric', prompt: `Keitimas ${i}`, correctAnswerNumber: i }] });
+    }
+    const [[kept]] = await db.query(
+        'SELECT (SELECT COUNT(*) FROM quiz_versions WHERE quiz_id = ?) AS versions, (SELECT COUNT(*) FROM quiz_version_questions WHERE quiz_id = ?) AS questions',
+        [`${quizId}c`, `${quizId}c`]);
+    check('the free plan keeps 5 versions, and only the questions they show', Number(kept.versions) === 5 && Number(kept.questions) === 5, kept);
+    await db.query("INSERT INTO quizzes (id, owner_id, title, visibility, quiz_data, storage_bytes) VALUES (?, ?, 'Senas', 'private', ?, 0)",
+        [`${quizId}d`, teacher.id, JSON.stringify({ id: `${quizId}d`, title: 'Senas', questions: [{ id: 'old', type: 'numeric', prompt: 'Senas klausimas', correctAnswerNumber: 1 }] })]);
+    await site(teacher, 'POST', '/quizzes', { id: `${quizId}d`, title: 'Naujas', questions: [{ id: 'new', type: 'numeric', prompt: 'Naujas klausimas', correctAnswerNumber: 2 }] });
+    r = await site(teacher, 'GET', `/quizzes/${quizId}d/versions/1`);
+    check('a quiz saved before versions existed keeps what it was as version 1', r.data.title === 'Senas' && r.data.questions?.[0].prompt === 'Senas klausimas', r);
 
     r = await api(creator2, 'POST', '/items', { items: [task('Svetima')], scope: 'mine' });
     const someoneElses = r.data.results[0].id;
@@ -454,24 +482,94 @@ const check = (name, ok, extra) => {
     r = await api(admin, 'POST', '/items/fetch', { ids: [shared] });
     check('and brings the picture back', r.data.items?.[0].content.image === oldPicture, r);
 
-    // Deleting, by name
+    // Renewing on the free plan: public or private, a save gives 7 days, then it pauses, then it goes
+    const renewed = `${quizId}b`;
+    r = await site(teacher, 'POST', '/quizzes', { id: renewed, title: 'Flow 2', visibility: 'public', questions: [{ id: 'q9', type: 'numeric', prompt: 'Vieša', correctAnswerNumber: 1 }] });
+    check('a free teacher\'s save says how long the quiz stays', r.status === 200 && r.data.keep_days === 7 && r.data.pause_days === 3 && Boolean(r.data.expires_at), r);
+    let [[renewal]] = await db.query('SELECT TIMESTAMPDIFF(HOUR, NOW(), expires_at) AS hours FROM quizzes WHERE id = ?', [renewed]);
+    check('a new free quiz, public too, is kept its first 30 days', Math.abs(Number(renewal.hours) - 30 * 24) <= 3, renewal);
+    r = await site(teacher, 'POST', `/quizzes/${renewed}/keep`);
+    [[renewal]] = await db.query('SELECT TIMESTAMPDIFF(HOUR, NOW(), expires_at) AS hours FROM quizzes WHERE id = ?', [renewed]);
+    check('renewing within them does not shorten them', Math.abs(Number(renewal.hours) - 30 * 24) <= 3, renewal);
+    // From day 30 on: the quiz was made 40 days ago, and its date has passed
+    await db.query('UPDATE quizzes SET created_at = NOW() - INTERVAL 40 DAY, expires_at = NOW() - INTERVAL 1 HOUR WHERE id = ?', [renewed]);
+    await db.query("INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score) VALUES (?, 'Mokinys', 1, 1)", [renewed]);
+    r = await site(null, 'GET', `/quizzes/${renewed}`);
+    check('not renewed, students are told it is paused', r.status === 404 && r.data.code === 'quiz_paused', r);
+    r = await site(teacher, 'GET', `/quizzes/${renewed}`);
+    check('its teacher still opens it', r.status === 200, r);
+    r = await site(creator2, 'POST', `/quizzes/${renewed}/keep`);
+    check('nobody else can renew it', r.status === 404, r);
+    r = await site(teacher, 'POST', `/quizzes/${renewed}/keep`);
+    [[renewal]] = await db.query('SELECT TIMESTAMPDIFF(HOUR, NOW(), expires_at) AS hours FROM quizzes WHERE id = ?', [renewed]);
+    check('after day 30, Renew brings it back for 7 days', r.status === 200 && Math.abs(Number(renewal.hours) - 7 * 24) <= 3, renewal);
+    r = await site(null, 'GET', `/quizzes/${renewed}`);
+    check('and students open it again', r.status === 200, r);
+    r = await site(admin, 'POST', `/quizzes/${renewed}/keep`);
+    [[renewal]] = await db.query('SELECT expires_at FROM quizzes WHERE id = ?', [renewed]);
+    check('an admin renewing a free quiz gives the same 7 days, not forever', r.status === 200 && renewal.expires_at !== null, renewal);
+
+    // Deleting: first among the deleted quizzes, for the plan's days, then for good, by name
+    await site(teacher, 'POST', '/quizzes', { id: quizId, title: 'Flow', questions: [copyOfTask('q2'), { ...copyOfTask('q3'), prompt: 'Mokytojo pakeista' }] });
     const stray = `gone_${stamp}`;
     await db.query("INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score) VALUES (?, 'Niekieno', 1, 1)", [stray]);
     await db.query("INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score) VALUES (?, 'Mokinys', 1, 1)", [quizId]);
-    await db.query('INSERT INTO quiz_media (quiz_id, sha256) VALUES (?, ?)', [quizId, shaOf(choiceUrl)]);
+    const everything = async () => (await db.query(
+        `SELECT (SELECT COUNT(*) FROM quizzes WHERE id = ?) AS live, (SELECT COUNT(*) FROM deleted_quizzes WHERE id = ?) AS deleted,
+                (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = ?) AS attempts, (SELECT COUNT(*) FROM quiz_media WHERE quiz_id = ?) AS pictures,
+                (SELECT COUNT(*) FROM quiz_bank_links WHERE quiz_id = ?) AS links, (SELECT COUNT(*) FROM quiz_versions WHERE quiz_id = ?) AS versions`,
+        Array(6).fill(quizId)))[0][0];
     r = await site(teacher, 'DELETE', `/quizzes/${quizId}`);
     check('a teacher deletes a quiz', r.status === 200, r);
-    const [[gone]] = await db.query(
-        `SELECT (SELECT COUNT(*) FROM quizzes WHERE id = ?) AS quizzes, (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = ?) AS attempts,
-                (SELECT COUNT(*) FROM quiz_media WHERE quiz_id = ?) AS pictures, (SELECT COUNT(*) FROM quiz_bank_links WHERE quiz_id = ?) AS links`,
-        [quizId, quizId, quizId, quizId]);
-    check('everything of that quiz goes with it', Object.values(gone).every(n => Number(n) === 0), gone);
+    let state = await everything();
+    check('it moves to the deleted ones with its results, pictures, links and versions', Number(state.live) === 0 && Number(state.deleted) === 1
+        && Number(state.attempts) === 1 && Number(state.pictures) === 3 && Number(state.links) === 2 && Number(state.versions) === 2, state);
+    const [[waits]] = await db.query("SELECT reason, DATEDIFF(purge_at, deleted_at) AS days FROM deleted_quizzes WHERE id = ?", [quizId]);
+    check('a free teacher\'s waits 14 days', waits.reason === 'deleted' && Number(waits.days) === 14, waits);
+    r = await site(null, 'GET', `/quizzes/${quizId}`);
+    check('students can no longer open it', r.status === 404, r);
+    [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
+    check('a deleted quiz no longer counts as using a task', counted.uses === 0, counted);
+    r = await site(teacher, 'GET', '/quiz-trash');
+    const listed = r.data.quizzes?.find(q => q.id === quizId);
+    check('the teacher sees it among the deleted ones', listed && listed.attempts === 1 && listed.questions === 2 && listed.reason === 'deleted', r);
+    r = await site(teacher, 'POST', `/quiz-trash/${quizId}/restore`);
+    check('the free plan cannot restore it', r.status === 403 && r.data.code === 'restore_premium', r);
+    r = await site(creator2, 'POST', `/quiz-trash/${quizId}/restore`);
+    check('nor anyone else', r.status === 404, r);
+    r = await site(teacher, 'POST', '/quizzes', { id: quizId, title: 'Iš juodraščio', questions: [] });
+    const fromDraft = r.data.id;
+    check('saving the old draft makes a new quiz with a new code', r.status === 200 && fromDraft && fromDraft !== quizId, r);
+    r = await site(admin, 'POST', `/quiz-trash/${quizId}/restore`);
+    check('an admin restores it', r.status === 200 && r.data.id === quizId, r);
+    state = await everything();
+    check('it comes back with its results', Number(state.live) === 1 && Number(state.deleted) === 0 && Number(state.attempts) === 1, state);
+    [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
+    check('and counts as using its task again', counted.uses === 1, counted);
+
+    r = await site(teacher, 'DELETE', `/quizzes/${quizId}`);
+    await db.query('UPDATE deleted_quizzes SET purge_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?', [quizId]);
+    await db.query('UPDATE quizzes SET expires_at = NOW() - INTERVAL 4 DAY WHERE id = ?', [renewed]); // paused past its 3 days
+    // The hourly job, as the server runs it
+    const pool = mysql.createPool({ host: cfg.DB_HOST, port: Number(cfg.DB_PORT), user: cfg.DB_USER, password: cfg.DB_PASS || '', database: cfg.DB_NAME, connectionLimit: 3 });
+    await ensureBankSchema(pool);
+    await quizTrash.ensureQuizTrash(pool);
+    await quizVersions.ensureQuizVersions(pool);
+    await quizLinks.ensureQuizLinks(pool);
+    await quizTrash.hourly(pool, { attemptsReady: true, pauseDays: 3 });
+    await pool.end();
+    state = await everything();
+    check('after its days everything of that quiz goes, by name', Object.values(state).every(n => Number(n) === 0), state);
+    const [[lapsed]] = await db.query(
+        `SELECT (SELECT COUNT(*) FROM quizzes WHERE id = ?) AS live, (SELECT COUNT(*) FROM deleted_quizzes WHERE id = ?) AS deleted,
+                (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = ?) AS attempts, (SELECT COUNT(*) FROM quiz_versions WHERE quiz_id = ?) AS versions`,
+        Array(4).fill(renewed));
+    check('a quiz paused past its 3 days goes for good with its results, not to the deleted ones', Object.values(lapsed).every(n => Number(n) === 0), lapsed);
     const [[strayRow]] = await db.query('SELECT COUNT(*) AS n FROM quiz_attempts WHERE quiz_id = ?', [stray]);
     check('and nothing else: a result without a quiz is left alone', Number(strayRow.n) === 1, strayRow);
     await db.query('DELETE FROM quiz_attempts WHERE quiz_id = ?', [stray]);
-    [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
-    check('uses falls when a quiz is deleted', counted.uses === 0, counted);
 
+    await db.query('DELETE FROM quiz_media WHERE sha256 = ? AND quiz_id NOT IN (?)', [shaOf(choiceUrl), [quizId]]); // only this quiz showed it
     await sweepPictures(db);
     row = await exists(shaOf(choiceUrl));
     check('a picture nothing uses waits', row && row.unused_since !== null, row);
@@ -481,8 +579,11 @@ const check = (name, ok, extra) => {
 
     r = await site(admin, 'DELETE', `/admin/users/${teacher.id}`);
     check('an admin deletes an account', r.status === 200, r);
-    const [[left]] = await db.query('SELECT (SELECT COUNT(*) FROM quizzes WHERE owner_id = ?) AS quizzes, (SELECT COUNT(*) FROM bank_items WHERE owner_id = ?) AS tasks', [teacher.id, teacher.id]);
-    check('its quizzes and own tasks go, by name', Number(left.quizzes) === 0 && Number(left.tasks) === 0, left);
+    const [[left]] = await db.query(
+        `SELECT (SELECT COUNT(*) FROM quizzes WHERE owner_id = ?) AS quizzes, (SELECT COUNT(*) FROM deleted_quizzes WHERE owner_id = ?) AS deleted,
+                (SELECT COUNT(*) FROM bank_items WHERE owner_id = ?) AS tasks, (SELECT COUNT(*) FROM quiz_versions WHERE quiz_id = ?) AS versions`,
+        [teacher.id, teacher.id, teacher.id, fromDraft]);
+    check('its quizzes, deleted ones too, and own tasks go at once, by name', Object.values(left).every(n => Number(n) === 0), left);
     const [[stillShared]] = await db.query('SELECT COUNT(*) AS n FROM bank_items WHERE id = ?', [shared]);
     check('the shared bank is not touched', Number(stillShared.n) === 1, stillShared);
 

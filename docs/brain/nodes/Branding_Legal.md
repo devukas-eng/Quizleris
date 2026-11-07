@@ -1,7 +1,7 @@
 ---
 tags: [node, content]
 status: wip
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -32,6 +32,7 @@ Owns the public name, copyright and legal texts. The business is UAB Judelta, th
 - Every legal page takes its contact address from the `email` constant in `getLegalContent`. `tests/branding.test.js` fails if a personal Gmail address returns.
 - The company was founded about 2024-05-15, from the age the owner gave on 2026-11-06. The footer reads 2024 to the current year.
 - `.legal-year` is set once at boot, so the year in the HTML is only a fallback.
+- The privacy text says how long student results stay: 14 days after their quiz is deleted, 30 on Premium, and on the free plan 30 days from creation, then 7 days without renewing plus a 3-day pause. It must change with `RECOVERY_DAYS`, `FIRST_DAYS`, `KEEP_DAYS` and `PAUSE_DAYS`, see [[Data_Lifetime]].
 - The copyright text also exists in a fallback footer in `src/app.js`, used only if `#legal-footer` is missing. That fallback is built after `.legal-year` runs, so it would keep the written year.
 - Keep the lowercase `quizleris_*` storage keys. The cookie policy names them, so renaming would make the policy wrong.
 - The icon's `s` is the first letter's outline from `src/spresk.svg`, not a font. It fills 68% of the tile's height, the owner's pick over a larger 87.5% version. The full word is unreadable at tab size, which is what was wrong with the old icon.

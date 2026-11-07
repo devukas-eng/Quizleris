@@ -5,6 +5,7 @@ import { renderStartMenu, setupMenu, renderStudentJoin } from "./menu.js";
 import { setupDashboard, renderDashboard, closeResults } from "./dashboard.js";
 import { pushResultsRoute } from "./url-state.js";
 import { loadQuiz } from "./storage.js";
+import { quizMissingText } from "./api.js";
 import { initLanguage, setLanguage, getLanguage, updatePageLanguage, t } from "./lang.js";
 import { initAuthUI } from "./auth-ui.js";
 import { initDashboardUI } from "./dashboard-ui.js";
@@ -44,7 +45,7 @@ async function openLinkedQuiz() {
         return;
     }
     renderStartMenu();
-    alertDialog(t("menu.quizNotFoundTitle"), t("menu.quizNotFound"));
+    alertDialog(...quizMissingText());
 }
 
 /**
@@ -399,7 +400,7 @@ function getLegalContent(type, lang) {
                 <ul>
                     <li><strong>Techninė ir naudojimo informacija:</strong> Renkame anoniminius analitikos duomenis, tokius kaip jūsų naršyklės tipas, įrenginio operacinė sistema, pasirinkta kalba, temos nustatymai, ir sąveika su testais.</li>
                     <li><strong>Naudotojo pateikti duomenys:</strong> Duomenys, kuriuos savanoriškai įvedate, pavyzdžiui, slapyvardžiai, testų atsakymai bei sukurto turinio informacija.</li>
-                    <li><strong>Testų rezultatai:</strong> Baigus mokytojo testą, įvestas vardas, rezultatas, sugaištas laikas ir atsakymai išsaugomi, kad juos matytų tik to testo autorius. Jie ištrinami kartu su testu, o mokytojas gali ištrinti ir atskirą bandymą.</li>
+                    <li><strong>Testų rezultatai:</strong> Baigus mokytojo testą, įvestas vardas, rezultatas, sugaištas laikas ir atsakymai išsaugomi, kad juos matytų tik to testo autorius. Ištrynus testą, jie kartu su juo dar saugomi 14 d. (Premium plane – 30 d.), kad testą būtų galima atkurti, o tada ištrinami visam laikui. Nemokamo plano testas laikomas 30 d. nuo sukūrimo, o vėliau, jei mokytojas jo 7 d. nepratęsia, jis sustabdomas, o dar po 3 d. ištrinamas visam laikui kartu su rezultatais. Mokytojas gali ištrinti ir atskirą bandymą.</li>
                 </ul>
                 
                 <p><strong>3. Kaip naudojame jūsų duomenis?</strong></p>
@@ -418,7 +419,7 @@ function getLegalContent(type, lang) {
                 <ul>
                     <li><strong>Technical and Usage Information:</strong> We collect anonymous analytics data such as your browser type, device OS, language preferences, theme settings, and interactions with our quizzes.</li>
                     <li><strong>User-Provided Data:</strong> Any information you voluntarily enter into the platform, including nicknames, quiz answers, and custom quiz content.</li>
-                    <li><strong>Quiz results:</strong> When you finish a teacher's quiz, the name you entered, your score, time taken and answers are stored so that only that quiz's author can see them. They are deleted together with the quiz, and the teacher can delete a single attempt.</li>
+                    <li><strong>Quiz results:</strong> When you finish a teacher's quiz, the name you entered, your score, time taken and answers are stored so that only that quiz's author can see them. When the quiz is deleted, they are kept with it for 14 more days (30 on Premium) so it can be restored, and then deleted for good. A free-plan quiz is kept for 30 days from its creation; after that, one its teacher does not renew for 7 days pauses, and 3 days later it is deleted for good with its results. The teacher can also delete a single attempt.</li>
                 </ul>
                 
                 <p><strong>3. How We Use Your Data</strong></p>

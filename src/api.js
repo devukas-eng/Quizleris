@@ -178,6 +178,24 @@ export async function deleteQuizFromCloud(quizId) {
     }
 }
 
+// --- Deleted quizzes and earlier versions (src/backend/quiz-trash.js, quiz-versions.js) ---
+// Each resolves to { ok, status, data } and never throws
+
+async function authed(path, options = {}) {
+    try {
+        const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { Authorization: `Bearer ${getToken()}`, ...(options.headers || {}) } });
+        return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
+    } catch (error) {
+        console.error("Request failed", error);
+        return { ok: false, status: 0, data: { error: "Network error" } };
+    }
+}
+
+export const listDeletedQuizzes = (all = false) => authed(`/quiz-trash${all ? "?all=1" : ""}`);
+export const restoreDeletedQuiz = (quizId) => authed(`/quiz-trash/${encodeURIComponent(quizId)}/restore`, { method: "POST" });
+export const listQuizVersions = (quizId) => authed(`/quizzes/${encodeURIComponent(quizId)}/versions`);
+export const fetchQuizVersion = (quizId, version) => authed(`/quizzes/${encodeURIComponent(quizId)}/versions/${encodeURIComponent(version)}`);
+
 // --- Students' attempts ---
 
 /** Sends a finished attempt to the quiz's teacher; failures are only logged (the local copy stays). */
@@ -253,12 +271,37 @@ export async function fetchCloudQuizzes() {
     return await res.json();
 }
 
+let lastQuizRefusal = null; // why the last quiz could not be opened, e.g. "quiz_paused"
+
 export async function fetchQuizDetails(quizId) {
     const token = getToken();
     const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
     const res = await fetch(`${API_BASE}/quizzes/${encodeURIComponent(quizId)}`, { headers });
-    if (!res.ok) return null;
+    if (!res.ok) {
+        lastQuizRefusal = (await res.json().catch(() => ({}))).code || null;
+        return null;
+    }
+    lastQuizRefusal = null;
     return await res.json();
+}
+
+/** Title and text for a quiz that did not open: paused by its teacher, or not there at all. */
+export function quizMissingText() {
+    return lastQuizRefusal === "quiz_paused"
+        ? [t("menu.quizPausedTitle"), t("menu.quizPaused")]
+        : [t("menu.quizNotFoundTitle"), t("menu.quizNotFound")];
+}
+
+/** Renew a free quiz: it stays for the plan's days more, and opens for students again if paused. */
+export async function keepQuiz(quizId) {
+    try {
+        const res = await fetch(`${API_BASE}/quizzes/${encodeURIComponent(quizId)}/keep`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok, data };
+    } catch (error) {
+        console.error("Renew failed", error);
+        return { ok: false, data: { error: "Network error" } };
+    }
 }
 
 /** The refusal in the teacher's language; the server's own wording is English */

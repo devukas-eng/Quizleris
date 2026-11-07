@@ -30,6 +30,7 @@ Owns the student side: joining by code, playing a quiz, grading, quit tracking a
 
 ## Gotchas & Constraints
 
+- A free quiz its teacher did not renew answers 404 with code `quiz_paused`. `quizMissingText` in `src/api.js` turns that into "the teacher did not renew this quiz" on joining, in `src/menu.js` and `src/app.js`. Results sent while it is paused are refused.
 - A quiz waits up to 2.5 seconds for its pictures before it starts (`preloadPictures` in `src/menu.js`). Pictures load separately from the quiz now, so without this the page jumps as they arrive, and a dropped connection would lose the later ones.
 - `sanitizeImageUrl` in `src/render.js` must keep accepting stored pictures, or they turn into an empty image.
 - `.quiz-main` being visible is the signal for "in a quiz". `placeFooter` sets `body.quiz-page` from it, and [[Dashboard]] reads that class to avoid opening results over a running quiz.

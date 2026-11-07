@@ -10,13 +10,31 @@ Start at [[00_MOC_Architecture]]. Check what is really live before trusting this
 
 | Check | State on 2026-11-07 |
 |---|---|
-| Live | `3411d46` on spresk.eu, confirm it with the hash check in [[Build_Deploy]]. Everything below is in the working copy only |
-| Tests | 202 passing with `npm.cmd test`, 126 API checks with `npm.cmd run test:bank-flow`, smoke test passing |
+| Live | Pushed to `main` on 2026-11-07 with everything below (`976703d` and the commit carrying this note). Confirm it with the hash check in [[Build_Deploy]] |
+| Tests | 211 passing with `npm.cmd test`, 152 API checks with `npm.cmd run test:bank-flow`, smoke test passing |
 | Lint | 0 errors, 35 warnings with `npm.cmd run lint` |
 
 ## Completed in this session
 
-None of this is committed or deployed. The decisions are in `docs/adr/0001-quiz-storage-and-the-bank.md` and `docs/adr/0002-what-may-delete-data.md`.
+All of it was pushed to `main` on 2026-11-07 in two commits. The decisions are in `docs/adr/0001-quiz-storage-and-the-bank.md` and `docs/adr/0002-what-may-delete-data.md`.
+
+| Second commit | Nodes |
+|---|---|
+| Deleted quizzes: a deleted or expired quiz waits with its results, 14 days on the free plan and 30 on premium, then goes for good. Premium and admins restore from a "Deleted quizzes" window in My quizzes | [[Data_Lifetime]], [[Dashboard]], [[Auth_Roles_Plans]] |
+| Quiz versions: every save that changes something keeps a version, 5 on the free plan and 30 on premium, with each question stored once. File > Earlier versions opens one in the editor | [[Data_Lifetime]], [[Quiz_Editor]] |
+| Renewing on the free plan: each quiz, public or private, is kept 30 days from creation, then must be renewed (Renew button or a save) every 7 days. Otherwise it pauses, students are told so, and 3 days later it goes for good with its results | [[Data_Lifetime]], [[Dashboard]], [[Quiz_Runtime]], [[Auth_Roles_Plans]] |
+| The privacy text says how long results stay, and `docs/planai.md` lists the new plan rules | [[Branding_Legal]], [[Auth_Roles_Plans]] |
+
+Checked on a local database for these:
+- The API flow, including the hourly job.
+- The hourly job's date rules, with planted quizzes and a restart.
+- As a free teacher in the browser: the delete warning, the deleted quizzes window with Restore greyed out, opening version 1 and undoing it, an active and a paused card, and Renew keeping the card's size.
+- As a student: the paused message.
+
+Not tried: restoring from the window as a premium teacher in the browser, which the API flow covers as an admin.
+
+| Committed as `976703d` | Nodes |
+|---|---|
 
 | What changed | Nodes |
 |---|---|
@@ -29,7 +47,7 @@ None of this is committed or deployed. The decisions are in `docs/adr/0001-quiz-
 | Students: a quiz waits briefly for its pictures, and pictures have their own request limit for school networks | [[Quiz_Runtime]], [[Backend_API]] |
 | Smoke test: it had been failing unnoticed since the `featured` column, and passes again | [[Local_Testing]] |
 
-Checked on a local database: the API flow, the hourly job with planted cases, and as a free teacher in the browser (add a bank task with a picture, save, play as a student with no login, print preview, Word export). Not tried: the database migration on live MySQL, a real network drop during a test, and dragging a picture question onto Starred.
+Checked on a local database for those: the API flow, the hourly job with planted cases, and as a free teacher in the browser (add a bank task with a picture, save, play as a student with no login, print preview, Word export). Not tried: the database migration on live MySQL, a real network drop during a test, and dragging a picture question onto Starred.
 
 ## Current Architecture State / Active Context
 
@@ -69,9 +87,8 @@ Checked on a local database: the API flow, the hourly job with planted cases, an
 9. **Ask the old teacher what they see after the deploy.** Their exact cause is not confirmed. Ask for a reload, whether an orange "Užduočių bankas" button shows at the bottom right, and check their `role` in the database is exactly `teacher`. [[Task_Bank]]: `src/bank-workspace.js`
 
 10. **Decide whether creators' edits need approval.** Today a creator can edit or archive a published shared task without an admin, and the log records it. [[Creator_Workflow]]: `updateItem` and `archiveItems` in `src/backend/bank.js`
-11. **Commit and deploy the storage and deletion work.** It adds a third step to `MIGRATIONS` and two tables at the first server start. Take a database backup first, then check the log for `[QUIZ LINKS]`. [[Data_Lifetime]], [[Build_Deploy]]
-12. **Decide what happens to results when a free quiz expires.** Today they go with it, and a class can be using a quiz on that day, because only saving resets its 30 days. [[Data_Lifetime]]: `purgeExpiredQuizzes` in `server.js`
-13. **Decide whether to keep quiz versions.** Saving overwrites with no way back, which is how quizzes were lost before. See `docs/adr/0002-what-may-delete-data.md`. [[Data_Lifetime]], [[Quiz_Editor]]
+11. **Check the first start on live.** The deploy adds a third step to `MIGRATIONS` and six tables. Hostinger's log should show `[QUIZ LINKS] linked the existing quizzes` and no `[SCHEMA] could not` line. Then save one quiz with a picture and open it as a student. [[Data_Lifetime]], [[Build_Deploy]]
+12. **Decide whether public free quizzes older than 30 days need a warning.** After the deploy they get 7 days, then pause, and nobody is emailed. Private quizzes keep their current dates. [[Data_Lifetime]]: `purgeExpiredQuizzes` in `server.js`
 
 ### Ready for an agent
 
@@ -100,4 +117,6 @@ These were picked without asking. Ask before treating any of them as settled.
 - [[Task_Bank]]: tags go on tasks and not quizzes, and only staff can submit to the bank.
 - [[Creator_Workflow]]: creators can no longer import straight into the shared bank, an admin still approves every send, the vote limits default to 2, admins' votes count like creators', and tasks scrolled past without a vote can come back in a later session.
 - [[Showcase]]: `customLabel` and `displayFormat` stay stored in case the titles idea returns. The owner said the idea may be good but was badly done.
-- [[Data_Lifetime]]: an unused picture waits 7 days, the brake stops at over 100 pictures and a quarter of all, old quizzes change only when next saved, pictures allow 30,000 requests per 15 minutes per address, and a quiz waits up to 2.5 seconds for its pictures. The owner approved the design, not these numbers.
+- [[Data_Lifetime]]: an unused picture waits 7 days, the brake stops at over 100 pictures and a quarter of all, old quizzes change only when next saved, pictures allow 30,000 requests per 15 minutes per address, and a quiz waits up to 2.5 seconds for its pictures. The owner approved the design and gave the 2.5 seconds the benefit of the doubt.
+- [[Data_Lifetime]]: the owner set 30 days from creation, then renewing every 7 days, per quiz, with saving counting, and a 3-day pause before deleting for good. Picked without asking: it applies to public quizzes too, showcase quizzes are exempt, a quiz the teacher deletes still waits 14 days in the deleted ones, and an admin's Renew on a free quiz gives 7 days, not forever.
+- [[Data_Lifetime]]: the owner set 14 and 30 days for deleted quizzes. Picked without asking: free teachers cannot restore (only see the dates), admins restore anyone's, a restored free quiz gets a fresh 30 days, an account deleted by an admin loses its quizzes at once, and 5 versions on the free plan against 30 on premium.

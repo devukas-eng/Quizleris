@@ -1,7 +1,7 @@
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { updatePageLanguage, t, getLanguage } from "./lang.js";
 import { renderTopicsPage } from "./topics.js";
-import { fetchShowcase } from "./api.js";
+import { fetchShowcase, quizMissingText } from "./api.js";
 import { clearRoute } from "./url-state.js";
 import { startTicker } from "./code-ticker.js";
 import { } from "./legal.js";
@@ -357,7 +357,7 @@ async function startStudentQuiz(name, quizId) {
     
     if (!quiz) {
         const { alertDialog } = await import("./dialog.js");
-        await alertDialog(t("menu.quizNotFoundTitle"), t("menu.quizNotFound"));
+        await alertDialog(...quizMissingText());
         document.getElementById("hero-pin-input")?.focus();
         return;
     }

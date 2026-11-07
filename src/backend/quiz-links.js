@@ -77,9 +77,10 @@ async function storePictures(conn, quiz) {
  * may have changed. Only pictures that exist and tasks its owner may read count: quiz_data comes from
  * the browser, and a question naming something else simply stays an unlinked copy.
  */
-async function linkQuiz(conn, quiz, ownerId) {
+async function linkQuiz(conn, quiz, ownerId, versionPictures = []) {
     const questions = questionsOf(quiz);
-    const shas = storedPictures(questions);
+    // Pictures its kept versions show count too: opening an old version must find them
+    const shas = [...new Set([...storedPictures(questions), ...versionPictures])];
     const [pictures] = shas.length ? await conn.query('SELECT sha256 FROM bank_media WHERE sha256 IN (?)', [shas]) : [[]];
     await conn.query('DELETE FROM quiz_media WHERE quiz_id = ?', [quiz.id]);
     if (pictures.length) await conn.query('INSERT INTO quiz_media (quiz_id, sha256) VALUES ?', [pictures.map(row => [quiz.id, row.sha256])]);
@@ -112,17 +113,19 @@ async function forgetQuizzes(conn, quizIds) {
     return items.map(row => row.item_id);
 }
 
+// Quizzes in the deleted ones keep their links until deleted for good, but no longer count as using a task
+const LIVE_LINKS = `SELECT COUNT(DISTINCT l.quiz_id) FROM quiz_bank_links l
+    WHERE l.item_id = i.id AND NOT EXISTS (SELECT 1 FROM deleted_quizzes d WHERE d.id = l.quiz_id)`;
+
 /**
- * "Most used" is how many quizzes hold a task. Done after the save, not in it: only a count, so it must
- * never fail a save, and locking popular tasks inside saves could make two teachers wait on each other.
+ * "Most used" is how many live quizzes hold a task. Done after the save, not in it: only a count, so
+ * it must never fail a save, and locking popular tasks inside saves could make two teachers wait on
+ * each other.
  */
 async function refreshUses(pool, itemIds) {
     if (!itemIds.length) return;
-    await pool.query(
-        `UPDATE bank_items i
-         SET i.uses = (SELECT COUNT(DISTINCT l.quiz_id) FROM quiz_bank_links l WHERE l.item_id = i.id), i.updated_at = i.updated_at
-         WHERE i.id IN (?)`, [itemIds]
-    ).catch(error => console.error('[QUIZ LINKS] uses:', error.code || error.message));
+    await pool.query(`UPDATE bank_items i SET i.uses = (${LIVE_LINKS}), i.updated_at = i.updated_at WHERE i.id IN (?)`, [itemIds])
+        .catch(error => console.error('[QUIZ LINKS] uses:', error.code || error.message));
 }
 
 /** Once: links for the quizzes saved before these tables existed. Reads quizzes, and never changes them. */

@@ -1,7 +1,7 @@
 ---
 tags: [node, frontend]
 status: needs-refactor
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -23,10 +23,13 @@ Owns the dashboard window (teachers' My quizzes and the admin tabs) and the resu
 - Dispatches `open-results` to -> [[URL_Routing]]
 - Passes the window's position with `open-editor`, so the dashboard can glide into its column in -> [[Task_Bank]]
 - Loads and saves through -> [[Backend_API]]
+- Opens the deleted quizzes, and words the delete warning by plan, with -> [[Data_Lifetime]]
 - Which tabs and buttons appear depends on the role from -> [[Auth_Roles_Plans]]
 
 ## Gotchas & Constraints
 
+- On the free plan each quiz card has Renew (`data-keep-quiz`) and shows "active until" or a red Paused chip with the day it goes. Renewing swaps only the text in `.dash-keep-state`, whose fixed height keeps the card the same size. A hint above the list states the rule.
+- My quizzes has a "Deleted quizzes" button beside "Create new quiz". It opens a window from `src/quiz-recovery.js`, everyone's for an admin. The delete warning comes from `deleteMessage`, using the `capabilities` kept from `/api/me`.
 - `createQuiz` must open the editor with `fresh`. Without it, the draft resumes and saving overwrites the teacher's last quiz.
 - Two functions are called `openEditor`. This file's local one takes `(quizId, bankQueue, fresh)` and dispatches `open-editor`. The real one in `src/quiz-editor.js` takes `(quizId, { fresh })`.
 - Call `stopShowcase` on every way out of the Showcase tab, or its board keeps running.

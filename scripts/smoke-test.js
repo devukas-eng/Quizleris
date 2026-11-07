@@ -34,9 +34,9 @@ const fakePool = {
     if (s.startsWith('SELECT id, username, role, subscription_tier, password_hash FROM users')) return [users.filter(u => u.username === p[0])];
     if (s === 'SELECT * FROM users WHERE id = ?') return [users.filter(u => u.id === p[0])];
     if (s.startsWith('SELECT id, username, email, role')) return [users.map(({ password_hash, ...u }) => u)];
-    if (s.startsWith('SELECT owner_id FROM quizzes')) { const q = quizzes.get(p[0]); return [q ? [{ owner_id: q.owner_id }] : []]; }
+    if (s.startsWith('SELECT owner_id, created_at FROM quizzes')) { const q = quizzes.get(p[0]); return [q ? [{ owner_id: q.owner_id, created_at: q.created_at }] : []]; }
     if (s.startsWith('SELECT COUNT(*)')) return [[{ cnt: [...quizzes.values()].filter(q => q.owner_id === p[0]).length }]];
-    if (s.startsWith('INSERT INTO quizzes')) { quizzes.set(p[0], { id: p[0], owner_id: p[1], title: p[2], visibility: p[3], quiz_data: JSON.parse(p[4]), expires_at: p[6] }); return [{}]; }
+    if (s.startsWith('INSERT INTO quizzes')) { quizzes.set(p[0], { id: p[0], owner_id: p[1], title: p[2], visibility: p[3], quiz_data: JSON.parse(p[4]), expires_at: p[6], created_at: quizzes.get(p[0])?.created_at ?? new Date() }); return [{}]; }
     if (s.startsWith('SELECT owner_id, visibility, featured, expires_at, quiz_data')) { const q = quizzes.get(p[0]); return [q ? [q] : []]; }
     if (s.startsWith('SELECT q.id')) return [[...quizzes.values()]];
     if (s.startsWith('SELECT id, owner_id FROM quizzes WHERE id = ?')) { const q = quizzes.get(p[0]); return [q ? [{ id: q.id, owner_id: q.owner_id }] : []]; }

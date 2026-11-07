@@ -30,6 +30,8 @@ Owns creating and editing a quiz: the blank start, draft recovery and saving to 
 ## Gotchas & Constraints
 
 - A picture in a question takes one of several forms: a stored address, a data URL until the first save, or bare base64 in the oldest quizzes. Show it with `imageSrc`, never by checking for `data:`. The stored address also looks like base64, which is why `normalizeImageSrc` tests for it first.
+- File > Earlier versions opens `openQuizVersions` from `src/quiz-recovery.js`. A picked version replaces `adminQuiz` after `saveStateForUndo`, so undo takes it back. Its button is in the list of clicks that make no undo step of their own.
+- Deleting from the header warns with `deleteMessage`, and the quiz goes to the deleted ones, see [[Data_Lifetime]]. A save of a deleted quiz's draft comes back with a new code, and the editor adopts it like a converted ID.
 - After a save the server answers where each new picture went, and `adoptStoredPictures` swaps them in unless the teacher changed that picture meanwhile. This keeps the draft in browser storage small.
 - `fresh` means start blank. Without it, `openEditor` resumes the draft, and saving then overwrote the teacher's last quiz. This was the worst teacher bug found.
 - Quizzes already lost that way can only come from a database backup, see [[01_STATE]].
