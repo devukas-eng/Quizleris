@@ -125,13 +125,10 @@ async function ensureQuizFolderSchema(pool) {
     }
 }
 
-/** Quizzes whose folder is gone stay listed (they fall back to their automatic place); this drops rows of deleted quizzes */
-async function cleanupQuizFolders(pool) {
-    await pool.query(`
-        DELETE i FROM quiz_folder_items i
-        LEFT JOIN quizzes q ON q.id = i.quiz_id
-        WHERE q.id IS NULL
-    `);
+/** Deleted quizzes leave their folders. Only filing, so it never stops a quiz from being deleted. */
+async function forgetQuizFolders(db, quizIds) {
+    await db.query('DELETE FROM quiz_folder_items WHERE quiz_id IN (?)', [quizIds])
+        .catch(error => console.error('[QUIZ FOLDERS] forget:', error.code || error.message));
 }
 
 /**
@@ -441,6 +438,6 @@ module.exports = {
     moveProblem,
     visibleChildren,
     ensureQuizFolderSchema,
-    cleanupQuizFolders,
+    forgetQuizFolders,
     createQuizFolderRouter,
 };

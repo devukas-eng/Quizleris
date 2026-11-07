@@ -1,62 +1,35 @@
 ---
 tags: [state, architecture]
 status: active
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 # Project state
 
 Start at [[00_MOC_Architecture]]. Check what is really live before trusting this page: see [[Build_Deploy]].
 
-| Check | State on 2026-11-06 |
+| Check | State on 2026-11-07 |
 |---|---|
-| Live | `main` on spresk.eu, confirm it with the hash check in [[Build_Deploy]] |
-| Tests | 178 passing with `npm.cmd test` |
+| Live | `3411d46` on spresk.eu, confirm it with the hash check in [[Build_Deploy]]. Everything below is in the working copy only |
+| Tests | 202 passing with `npm.cmd test`, 126 API checks with `npm.cmd run test:bank-flow`, smoke test passing |
 | Lint | 0 errors, 35 warnings with `npm.cmd run lint` |
 
 ## Completed in this session
 
-All of this shipped in commit `97f9904`.
+None of this is committed or deployed. The decisions are in `docs/adr/0001-quiz-storage-and-the-bank.md` and `docs/adr/0002-what-may-delete-data.md`.
 
 | What changed | Nodes |
 |---|---|
-| Theme picker: a pick survives a reload during sync, the try-on trap is gone, clicks are no longer lost, and tabs stay in step | [[Theme_System]] |
-| Address bar: the home page clears `?dashboard=` and `?quiz=`, results open in-app, and a dead `?quiz=` link goes home | [[URL_Routing]], [[Dashboard]] |
-| Loading: fixed dashboard size, no size transitions, and the page box stays hidden until filled | [[Page_Shell]] |
-| All quizzes: server-side recursive folders, one folder loaded at a time, with server search | [[Quiz_Folders]], [[Backend_API]] |
-| Showcase: rebuilt as one screen with autosave, search to add and drag to order, plus a shared code board with five effects | [[Showcase]] |
-| Quiz titles under the landing code: removed at the owner's request | [[Showcase]] |
-| Teacher panel: "Create new quiz" starts blank, drafts belong to their account, `[hidden]` always wins, unused bank columns stay away, and refusals use the teacher's language | [[Quiz_Editor]], [[Task_Bank]], [[Dashboard]], [[Page_Shell]] |
-| Business name: UAB Judelta in the title, footer, cookie banner and legal text | [[Branding_Legal]], [[Language_Strings]] |
-| Footer: back in the main window, and at the page bottom only during a quiz | [[Page_Shell]], [[Quiz_Runtime]] |
-| API: `/api/showcase` no longer exposes playlists, and `/api/quizzes/:id` reads JSON columns safely | [[Showcase]], [[Backend_API]] |
-| Final code review: 10 findings fixed before the commit, then pushed and verified live | [[Build_Deploy]] |
+| Deleting: nothing is deleted for not finding its parent any more. Results, own tasks and labels go by name, with the quiz or account that owns them | [[Data_Lifetime]], [[Backend_API]], [[Quiz_Folders]], [[Task_Bank]] |
+| Picture cleanup: it counts quizzes too, waits a real 7 days from the last use, has a brake, and the database refuses to delete a picture in use | [[Data_Lifetime]] |
+| Undo in the bank's log: a shared task keeps its old pictures, so undoing a picture change works after the cleanup too | [[Data_Lifetime]], [[Task_Bank]] |
+| Expiry: a public or showcase quiz with an old date is no longer deleted | [[Data_Lifetime]] |
+| Quiz pictures are stored once and quizzes point at them, in the editor, the student screen, print preview and Word export | [[Data_Lifetime]], [[Quiz_Editor]], [[Quiz_Runtime]] |
+| The server records which quiz uses which task, and "most used" is now a true count | [[Data_Lifetime]], [[Task_Bank]] |
+| Students: a quiz waits briefly for its pictures, and pictures have their own request limit for school networks | [[Quiz_Runtime]], [[Backend_API]] |
+| Smoke test: it had been failing unnoticed since the `featured` column, and passes again | [[Local_Testing]] |
 
-Later commits added:
-
-- This brain, with `/sync-brain` and `scripts/check-brain.js`, see [[Local_Testing]].
-- The real contact address on every legal page and in `README.md`, see [[Branding_Legal]].
-- The task bank for every teacher: the `BANK_OPEN` switch is gone and each teacher gets a bank of their own, see [[Task_Bank]].
-- A new site icon, the logo's `s` in white on green, with icon links in `src/index.html`, see [[Branding_Legal]].
-
-The latest push added:
-
-- Editor header: undo and redo moved beside close, and the quiz picker and delete button now share one oval, see [[Quiz_Editor]].
-- Admin badges: the bank counts on `/api/admin/overview` were always 0, and now match the tabs, see [[Dashboard]].
-- Approvals tab: it never listed waiting tasks because it asked for published ones, see [[Dashboard]].
-- Task cards in the admin tabs: Save and Cancel sit where Edit was, stay in reach while scrolling, and saving shrinks the card in place, see [[Dashboard]].
-- Bank loading: it now recovers from a role changed in the database and from one failed request, see [[Task_Bank]].
-- Browser translation: the page no longer says it is English and refuses machine translation, see [[Language_Strings]].
-
-Then:
-
-- Admin Bank tab: slim rows that open and shrink in place, loaded as you scroll, so it no longer stops at 60 tasks, see [[Dashboard]].
-
-- Quiz questions can be dragged straight onto Starred or a #tag, see [[Task_Bank]].
-
-Not committed yet:
-
-- The creators' system, see [[Creator_Workflow]]: sending a #tag or a task with its classification, approving a whole send, unsorted tasks with a feed and votes, suggestions for admins, a log of every change with undo, and shared tasks that are never deleted. It adds two steps to `MIGRATIONS`, which run at the first server start. All 14 code review findings on it are fixed, and `scripts/bank-flow-test.js` covers them.
+Checked on a local database: the API flow, the hourly job with planted cases, and as a free teacher in the browser (add a bank task with a picture, save, play as a student with no login, print preview, Word export). Not tried: the database migration on live MySQL, a real network drop during a test, and dragging a picture question onto Starred.
 
 ## Current Architecture State / Active Context
 
@@ -65,6 +38,7 @@ Not committed yet:
 - **Boot:** `src/app.js` starts themes, the dashboard and the bank workspace, then picks a screen from the address: results, a linked quiz, or the home page. Removing `booting` reveals the page. See [[Page_Shell]] and [[URL_Routing]].
 - **Between screens:** modules talk through document events: `open-editor`, `open-results`, `quizleris-auth-changed` and `quizleris-themes-changed`.
 - **Data:** the browser calls the server through `src/api.js`, and through `src/bank-api.js` for the bank. See [[Backend_API]] and [[Task_Bank]].
+- **Quizzes and the bank:** a quiz keeps its question text as a copy, points at shared pictures, and the server records which tasks it came from. See [[Data_Lifetime]].
 - **Server:** `server.js` holds the quiz, attempt, admin and showcase routes. The folder router sits at `/api/admin` and the bank router at `/api`. Tables are created at server start.
 - **Hosting:** `main` deploys through Hostinger to spresk.eu in under a minute. spresk.lt is a separate Website Builder site, not this app.
 
@@ -94,19 +68,28 @@ Not committed yet:
 8. **Set the vote limits** in the Creation tab once it is clear how many creators there are. The default is 2, and one creator alone needs 1. [[Creator_Workflow]]: `src/backend/bank-pool.js`
 9. **Ask the old teacher what they see after the deploy.** Their exact cause is not confirmed. Ask for a reload, whether an orange "Užduočių bankas" button shows at the bottom right, and check their `role` in the database is exactly `teacher`. [[Task_Bank]]: `src/bank-workspace.js`
 
+10. **Decide whether creators' edits need approval.** Today a creator can edit or archive a published shared task without an admin, and the log records it. [[Creator_Workflow]]: `updateItem` and `archiveItems` in `src/backend/bank.js`
+11. **Commit and deploy the storage and deletion work.** It adds a third step to `MIGRATIONS` and two tables at the first server start. Take a database backup first, then check the log for `[QUIZ LINKS]`. [[Data_Lifetime]], [[Build_Deploy]]
+12. **Decide what happens to results when a free quiz expires.** Today they go with it, and a class can be using a quiz on that day, because only saving resets its 30 days. [[Data_Lifetime]]: `purgeExpiredQuizzes` in `server.js`
+13. **Decide whether to keep quiz versions.** Saving overwrites with no way back, which is how quizzes were lost before. See `docs/adr/0002-what-may-delete-data.md`. [[Data_Lifetime]], [[Quiz_Editor]]
+
 ### Ready for an agent
 
 Each of these still needs the owner's OK before it goes to production.
 
-1. **Correct `AGENTS.md`:** the app runs on spresk.eu, not spresk.lt. [[Build_Deploy]]
-2. **Build task bank stage 4 (templates)** inside the existing three-column layout. [[Task_Bank]]: `src/bank-workspace.js`, `src/backend/bank.js`, `src/backend/bank-core.js`
-3. **Add a teacher path to the smoke test,** because the owner never sees teacher bugs. [[Local_Testing]]: `scripts/smoke-test.js`
-4. **Remove the bank's read-only paths.** No role reaches them now that every teacher has `writeMine`, for example `homeFolder` and `hasBankToShow`. [[Task_Bank]]: `src/bank-workspace.js`
-5. **Remove unused code.** Delete `src/legal.js` and its empty import at `src/menu.js:7`. Check `src/i18n.js` for the owner's earlier edits, move anything needed to `src/lang.js`, then delete it. [[Branding_Legal]], [[Language_Strings]]
-6. **Clear the 35 lint warnings.** [[Local_Testing]]: `eslint.config.mjs`
-7. **Move routes out of `server.js`,** following the router in `src/backend/quiz-folders.js`. [[Backend_API]]
-8. **Split `src/dashboard-ui.js`,** following `src/admin-quiz-browser.js` and `src/admin-showcase.js`. [[Dashboard]]
-9. **Add `/api/admin/overview` to the smoke test.** Its bank counts were silently wrong for a long time and no test covers them. [[Local_Testing]]: `scripts/smoke-test.js`
+1. **Offer corrected tasks to teachers:** show "this task was corrected, update your copy?" for a question whose `origin_hash` differs from its task and that the teacher did not change. Find the card's place first, because UI must not grow into place. [[Data_Lifetime]], [[Quiz_Editor]]: `src/quiz-editor.js`, `src/backend/quiz-links.js`
+2. **Measure quiz sizes on live, read-only,** to replace the estimates in `docs/adr/0001-quiz-storage-and-the-bank.md`. [[Data_Lifetime]]: `quizzes.storage_bytes`
+3. **Log deleting a classifier value.** It leaves tasks without an entry in the log. [[Task_Bank]]: `/bank/values/:id` in `src/backend/bank.js`
+4. **Correct `AGENTS.md`:** the app runs on spresk.eu, not spresk.lt. [[Build_Deploy]]
+5. **Build task bank stage 4 (templates)** inside the existing three-column layout. Check that a quiz can hold a copy of a template. [[Task_Bank]]: `src/bank-workspace.js`, `src/backend/bank.js`, `src/backend/bank-core.js`
+6. **Add a teacher path to the smoke test,** because the owner never sees teacher bugs. [[Local_Testing]]: `scripts/smoke-test.js`
+7. **Remove the bank's read-only paths.** No role reaches them now that every teacher has `writeMine`, for example `homeFolder` and `hasBankToShow`. [[Task_Bank]]: `src/bank-workspace.js`
+8. **Remove unused code.** Delete `src/legal.js` and its empty import at `src/menu.js:7`. Check `src/i18n.js` for the owner's earlier edits, move anything needed to `src/lang.js`, then delete it. [[Branding_Legal]], [[Language_Strings]]
+9. **Clear the 35 lint warnings.** [[Local_Testing]]: `eslint.config.mjs`
+10. **Move routes out of `server.js`,** following the router in `src/backend/quiz-folders.js`. [[Backend_API]]
+11. **Split `src/dashboard-ui.js`,** following `src/admin-quiz-browser.js` and `src/admin-showcase.js`. [[Dashboard]]
+12. **Add `/api/admin/overview` to the smoke test.** Its bank counts were silently wrong for a long time and no test covers them. [[Local_Testing]]: `scripts/smoke-test.js`
+13. **Add unit tests for the log's comparison.** Key order and new lines in `taskChanges` are covered only by the API flow, which needs a running server. [[Creator_Workflow]]: `tests/bank-history.test.js`
 
 ### Defaults the owner never confirmed
 
@@ -117,3 +100,4 @@ These were picked without asking. Ask before treating any of them as settled.
 - [[Task_Bank]]: tags go on tasks and not quizzes, and only staff can submit to the bank.
 - [[Creator_Workflow]]: creators can no longer import straight into the shared bank, an admin still approves every send, the vote limits default to 2, admins' votes count like creators', and tasks scrolled past without a vote can come back in a later session.
 - [[Showcase]]: `customLabel` and `displayFormat` stay stored in case the titles idea returns. The owner said the idea may be good but was badly done.
+- [[Data_Lifetime]]: an unused picture waits 7 days, the brake stops at over 100 pictures and a quarter of all, old quizzes change only when next saved, pictures allow 30,000 requests per 15 minutes per address, and a quiz waits up to 2.5 seconds for its pictures. The owner approved the design, not these numbers.

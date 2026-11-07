@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
+const { sweepPictures } = require('../src/backend/bank.js');
 
 const CONFIG = process.argv[2] || 'quizleris-studio';
 const launch = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude', 'launch.json'), 'utf8'));
@@ -44,7 +45,7 @@ const check = (name, ok, extra) => {
     const task = text => ({ content: { type: 'numeric', prompt: `${text} ${stamp}`, correctAnswerNumber: 4 } });
 
     const [[version]] = await db.query("SELECT value FROM bank_settings WHERE name = 'schema_version'");
-    check('migrations ran', Number(version.value) === 2, version);
+    check('migrations ran', Number(version.value) === 3, version);
     const [[col]] = await db.query("SELECT COLUMN_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bank_items' AND COLUMN_NAME = 'status'");
     check('status has pool', String(col.t).includes("'pool'"), col);
 
@@ -354,6 +355,136 @@ const check = (name, ok, extra) => {
     check('the log searches', r.status === 200 && r.data.entries.length > 0, r);
     r = await api(teacher, 'GET', '/history');
     check('teachers have no log', r.status === 403, r);
+
+    // --- quizzes keep their text, and point at pictures and tasks ---
+    const site = async (who, method, url, body) => {
+        const res = await fetch(`${BASE.replace('/bank', '')}${url}`, {
+            method,
+            headers: { ...(who ? { Authorization: `Bearer ${who.token}` } : {}), 'Content-Type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body)
+        });
+        return { status: res.status, data: await res.json().catch(() => ({})), headers: res.headers };
+    };
+    const picture = label => `data:image/png;base64,${Buffer.from(`${label} ${stamp}`).toString('base64')}`;
+    const shaOf = url => url.slice('/api/media/'.length);
+    const exists = async sha => (await db.query('SELECT sha256, unused_since FROM bank_media WHERE sha256 = ?', [sha]))[0][0];
+    // Long past the week of waiting, and only for the pictures named: other local pictures stay out of it
+    const age = sha => db.query('UPDATE bank_media SET unused_since = NOW() - INTERVAL 30 DAY WHERE sha256 = ?', [sha]);
+    await db.query('DELETE FROM quizzes WHERE owner_id = ?', [teacher.id]); // what a failed run left: the free limit counts them
+
+    const quizId = `flow_${stamp}`;
+    const choices = [{ id: 'a', text: 'Taip', isCorrect: true }, { id: 'b', text: 'Ne' }];
+    r = await site(teacher, 'POST', '/quizzes', {
+        id: quizId,
+        title: 'Flow',
+        questions: [{
+            id: 'q1',
+            type: 'multiple-choice',
+            prompt: 'Su paveikslais',
+            image: picture('klausimas'),
+            choices: [{ ...choices[0], image: picture('pasirinkimas') }, choices[1]]
+        }]
+    });
+    check('a quiz with pictures saves', r.status === 200 && r.data.pictures, r);
+    const questionUrl = r.data.pictures['q1|'];
+    const choiceUrl = r.data.pictures['q1|a'];
+    check('its pictures got addresses', /^\/api\/media\/[0-9a-f]{64}$/.test(questionUrl) && /^\/api\/media\/[0-9a-f]{64}$/.test(choiceUrl), r.data);
+    check('its size no longer counts them', r.data.storage_bytes < 1000, r.data);
+    r = await site(teacher, 'GET', `/quizzes/${quizId}`);
+    check('the stored quiz holds the addresses', r.data.questions?.[0].image === questionUrl && r.data.questions[0].choices[0].image === choiceUrl, r);
+    const media = await fetch(`${BASE.replace('/api/bank', '')}${questionUrl}`);
+    check('a picture needs no login and is kept by the browser', media.status === 200 && /immutable/.test(media.headers.get('cache-control')), media.status);
+    const [quizMedia] = await db.query('SELECT sha256 FROM quiz_media WHERE quiz_id = ?', [quizId]);
+    check('the quiz is recorded as using both', quizMedia.length === 2, quizMedia);
+
+    r = await site(teacher, 'POST', '/quizzes', { id: `${quizId}b`, title: 'Flow 2', questions: [{ id: 'q1', type: 'multiple-choice', prompt: 'Tas pats', image: picture('klausimas'), choices }] });
+    check('the same picture in a second quiz is the same stored picture', r.data.pictures?.['q1|'] === questionUrl, r);
+    r = await site(teacher, 'POST', '/quizzes', { id: `${quizId}c`, title: 'Flow 3', questions: [{ id: 'q1', type: 'multiple-choice', prompt: 'Keista', image: 'data:image/svg+xml;base64,PHN2Zz4=', choices }] });
+    check('a picture the store refuses stays in the quiz, and the save works', r.status === 200 && !r.data.pictures['q1|'], r);
+    r = await site(teacher, 'POST', '/quizzes', { id: `${quizId}c`, title: 'Flow 3', questions: [{ id: 'q1', type: 'multiple-choice', prompt: 'Dingęs', image: `/api/media/${'0'.repeat(64)}`, choices }] });
+    check('a picture that no longer exists does not stop a save', r.status === 200, r);
+
+    // The cleanup against the rules, on this database
+    await age(shaOf(questionUrl));
+    await sweepPictures(db);
+    let row = await exists(shaOf(questionUrl));
+    check('the cleanup leaves a picture a quiz shows, and stops its clock', row && row.unused_since === null, row);
+    const refused = await db.query('DELETE FROM bank_media WHERE sha256 = ?', [shaOf(questionUrl)]).catch(error => error);
+    check('the database itself refuses to delete it', refused.errno === 1451, refused.errno);
+
+    // Tasks
+    const bankTask = { type: 'multiple-choice', prompt: `Banko užduotis ${stamp}`, image: picture('banko'), choices };
+    r = await api(admin, 'POST', '/items', { items: [{ content: bankTask, ...c }], scope: 'shared' });
+    const shared = r.data.results?.[0].id;
+    check('an admin adds a shared task with a picture', Boolean(shared), r);
+    r = await api(teacher, 'POST', '/items/fetch', { ids: [shared] });
+    const fetched = r.data.items?.[0];
+    check('a task comes with its fingerprint', /^[0-9a-f]{40}$/.test(fetched?.hash), r);
+    const oldPicture = fetched.content.image;
+    const copyOfTask = id => ({ ...fetched.content, id, source: { bankId: shared, hash: fetched.hash } });
+    r = await site(teacher, 'POST', '/quizzes', { id: quizId, title: 'Flow', questions: [copyOfTask('q2'), { ...copyOfTask('q3'), prompt: 'Mokytojo pakeista' }] });
+    check('a quiz with bank questions saves', r.status === 200, r);
+    const [links] = await db.query('SELECT question_id, item_id, origin_hash, question_hash FROM quiz_bank_links WHERE quiz_id = ? ORDER BY question_id', [quizId]);
+    check('the server knows which task each came from', links.length === 2 && links.every(link => link.item_id === shared), links);
+    check('an unchanged copy matches its task', links[0]?.origin_hash === fetched.hash && links[0]?.question_hash === fetched.hash, links);
+    check('a changed one shows it', links[1]?.origin_hash === fetched.hash && links[1]?.question_hash !== fetched.hash, links);
+    let [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
+    check('uses counts quizzes, not questions', counted.uses === 1, counted);
+    const [pictures] = await db.query('SELECT sha256 FROM quiz_media WHERE quiz_id = ?', [quizId]);
+    check('a saved quiz lets go of pictures it no longer shows', pictures.length === 1 && pictures[0].sha256 === shaOf(oldPicture), pictures);
+
+    r = await api(creator2, 'POST', '/items', { items: [task('Svetima')], scope: 'mine' });
+    const someoneElses = r.data.results[0].id;
+    await site(teacher, 'POST', '/quizzes', { id: `${quizId}b`, title: 'Flow 2', questions: [{ id: 'q9', type: 'numeric', prompt: 'Svetima', source: { bankId: someoneElses } }] });
+    const [[claimed]] = await db.query('SELECT COUNT(*) AS n FROM quiz_bank_links WHERE item_id = ?', [someoneElses]);
+    check('a quiz cannot claim another teacher\'s task', Number(claimed.n) === 0, claimed);
+
+    // An edit and its undo, a week later
+    r = await api(admin, 'PUT', `/items/${shared}`, { content: { ...fetched.content, image: picture('naujas') } });
+    check('the shared task gets a new picture', r.status === 200, r);
+    r = await api(admin, 'GET', `/history?item=${shared}&action=edited`);
+    const pictureEdit = r.data.entries?.[0];
+    check('the log has the edit', Boolean(pictureEdit), r);
+    await db.query('DELETE FROM quiz_media WHERE quiz_id = ?', [quizId]); // so only the task's own link can save the old picture
+    await age(shaOf(oldPicture));
+    await sweepPictures(db);
+    check('the task keeps the picture it had, for its log', Boolean(await exists(shaOf(oldPicture))), oldPicture);
+    r = await api(admin, 'POST', `/history/${pictureEdit?.id}/revert`);
+    check('so undoing the edit still works', r.status === 200, r);
+    r = await api(admin, 'POST', '/items/fetch', { ids: [shared] });
+    check('and brings the picture back', r.data.items?.[0].content.image === oldPicture, r);
+
+    // Deleting, by name
+    const stray = `gone_${stamp}`;
+    await db.query("INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score) VALUES (?, 'Niekieno', 1, 1)", [stray]);
+    await db.query("INSERT INTO quiz_attempts (quiz_id, student_name, score, max_score) VALUES (?, 'Mokinys', 1, 1)", [quizId]);
+    await db.query('INSERT INTO quiz_media (quiz_id, sha256) VALUES (?, ?)', [quizId, shaOf(choiceUrl)]);
+    r = await site(teacher, 'DELETE', `/quizzes/${quizId}`);
+    check('a teacher deletes a quiz', r.status === 200, r);
+    const [[gone]] = await db.query(
+        `SELECT (SELECT COUNT(*) FROM quizzes WHERE id = ?) AS quizzes, (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = ?) AS attempts,
+                (SELECT COUNT(*) FROM quiz_media WHERE quiz_id = ?) AS pictures, (SELECT COUNT(*) FROM quiz_bank_links WHERE quiz_id = ?) AS links`,
+        [quizId, quizId, quizId, quizId]);
+    check('everything of that quiz goes with it', Object.values(gone).every(n => Number(n) === 0), gone);
+    const [[strayRow]] = await db.query('SELECT COUNT(*) AS n FROM quiz_attempts WHERE quiz_id = ?', [stray]);
+    check('and nothing else: a result without a quiz is left alone', Number(strayRow.n) === 1, strayRow);
+    await db.query('DELETE FROM quiz_attempts WHERE quiz_id = ?', [stray]);
+    [[counted]] = await db.query('SELECT uses FROM bank_items WHERE id = ?', [shared]);
+    check('uses falls when a quiz is deleted', counted.uses === 0, counted);
+
+    await sweepPictures(db);
+    row = await exists(shaOf(choiceUrl));
+    check('a picture nothing uses waits', row && row.unused_since !== null, row);
+    await age(shaOf(choiceUrl));
+    await sweepPictures(db);
+    check('and goes when its week is over', !(await exists(shaOf(choiceUrl))), choiceUrl);
+
+    r = await site(admin, 'DELETE', `/admin/users/${teacher.id}`);
+    check('an admin deletes an account', r.status === 200, r);
+    const [[left]] = await db.query('SELECT (SELECT COUNT(*) FROM quizzes WHERE owner_id = ?) AS quizzes, (SELECT COUNT(*) FROM bank_items WHERE owner_id = ?) AS tasks', [teacher.id, teacher.id]);
+    check('its quizzes and own tasks go, by name', Number(left.quizzes) === 0 && Number(left.tasks) === 0, left);
+    const [[stillShared]] = await db.query('SELECT COUNT(*) AS n FROM bank_items WHERE id = ?', [shared]);
+    check('the shared bank is not touched', Number(stillShared.n) === 1, stillShared);
 
     await db.end();
     console.log(failures ? `\n${failures} FAILED` : '\nall passed');

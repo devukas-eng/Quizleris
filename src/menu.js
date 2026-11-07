@@ -338,10 +338,11 @@ export function handleStudentClick() {
         }
     }
 }
-function startStudentQuizDirect(name, quizData) {
+async function startStudentQuizDirect(name, quizData) {
     // Reuse logic
     if (name)
         localStorage.setItem("current_student_name", name);
+    await preloadPictures(quizData);
     startMenu.style.display = "none";
     quizHeader.style.display = "flex";
     quizMain.style.display = "flex";
@@ -349,6 +350,7 @@ function startStudentQuizDirect(name, quizData) {
 }
 import { loadQuizFromStorage } from "./storage.js";
 import { initializeQuiz } from "./render.js";
+import { preloadPictures } from "./quiz-pictures.js";
 async function startStudentQuiz(name, quizId) {
     quizId = quizId.trim() || "demo"; // default to demo if empty
     let quiz = await loadQuizFromStorage(quizId);
@@ -363,6 +365,7 @@ async function startStudentQuiz(name, quizId) {
     if (name) {
         localStorage.setItem("current_student_name", name);
     }
+    await preloadPictures(quiz);
     // Start Game
     startMenu.style.display = "none";
     quizHeader.style.display = "flex";

@@ -1,12 +1,12 @@
 ---
 tags: [node, backend]
 status: needs-refactor
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
 
-Owns the Express app: routes, rate limits, table creation at start, cleanup jobs and serving `dist/`. Larger areas already live in routers under `src/backend/`, and their rules belong to their own nodes.
+Owns the Express app: routes, rate limits, table creation at start, running the hourly job and serving `dist/`. Larger areas already live in routers under `src/backend/`, and their rules belong to their own nodes. What the hourly job may delete belongs to [[Data_Lifetime]].
 
 ## Canonical File Map
 
@@ -16,6 +16,7 @@ Owns the Express app: routes, rate limits, table creation at start, cleanup jobs
 - `src/backend/premade.js`: `seedPremadeQuizzes`.
 - `src/backend/quiz-folders.js`: folder router, see [[Quiz_Folders]].
 - `src/backend/bank.js`: bank router, see [[Task_Bank]].
+- `src/backend/quiz-links.js`: what a saved quiz points at, see [[Data_Lifetime]].
 - `src/backend/user-themes.js`: theme payload checks, see [[Theme_System]].
 - `src/backend/plans.js`: plan rules, see [[Auth_Roles_Plans]].
 - `scripts/init_db.js`: creates the app tables.
@@ -29,6 +30,7 @@ Owns the Express app: routes, rate limits, table creation at start, cleanup jobs
 - Serves quizzes and stores attempts for -> [[Quiz_Runtime]]
 - Serves the bank to -> [[Task_Bank]]
 - Stores themes for -> [[Theme_System]]
+- Saves and deletes quizzes by the rules of -> [[Data_Lifetime]]
 - Every protected route uses the guards from -> [[Auth_Roles_Plans]]
 - Runs on Hostinger from what is shipped by -> [[Build_Deploy]]
 
@@ -38,7 +40,8 @@ Owns the Express app: routes, rate limits, table creation at start, cleanup jobs
 - Outside `/api`, every unknown path answers 200 with `index.html`. Check content, not status, after a deploy.
 - `PUBLIC_DIR` is `dist`, so nothing else in the repository is served, including `docs/`.
 - New tables use `CREATE TABLE IF NOT EXISTS` at start. New columns use `addColumnIfMissing`.
-- `express.json` allows 20 MB because quizzes embed base64 images.
-- `authLimiter`, `apiLimiter`, `quizLookupLimiter` and `attemptLimiter` each guard their own routes.
+- `express.json` allows 20 MB because a save can carry new pictures as base64. The server moves them out of the quiz, see [[Data_Lifetime]].
+- `authLimiter`, `apiLimiter`, `mediaLimiter`, `quizLookupLimiter` and `attemptLimiter` each guard their own routes.
+- The hourly job also runs at every server start, after the schema work, so restarting is how to try it locally.
 - Local MariaDB returns JSON columns as strings, so route code must accept both forms.
 - `server.js` mixes routes, schema and jobs. New areas should follow the router in `src/backend/quiz-folders.js`.

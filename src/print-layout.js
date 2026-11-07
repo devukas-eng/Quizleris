@@ -1,4 +1,5 @@
 import { isTypedSlot } from "./state.js";
+import { isStoredPicture } from "./quiz-pictures.js";
 
 // Shared by the print preview and the Word export, so both lay a quiz out the same way.
 // The layout is stored on the quiz as `printLayout` and only affects the printout:
@@ -139,7 +140,7 @@ const naturalSizeCache = new Map();
 
 export function normalizeImageSrc(src) {
     if (!src || typeof src !== "string") return null;
-    if (src.startsWith("data:image/")) return src;
+    if (src.startsWith("data:image/") || isStoredPicture(src)) return src;
     // Older quizzes stored bare base64 JPEG
     return /^[A-Za-z0-9+/=\s]+$/.test(src.slice(0, 200)) ? `data:image/jpeg;base64,${src}` : null;
 }

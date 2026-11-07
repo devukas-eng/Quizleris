@@ -1,7 +1,7 @@
 ---
 tags: [node, bank]
 status: wip
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -15,7 +15,7 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 - `src/bank-list.js`: the virtualized task list (`createTaskList`).
 - `src/bank-drag.js`: the pointer drag engine (`armDrag`, `addDropZone`).
 - `src/bank-forms.js`: classifying and topic forms.
-- `src/backend/bank.js`: `SCHEMA`, `MIGRATIONS`, `bankLimits`, `sharedGroups`, `createBankRouter` and `cleanupBank`.
+- `src/backend/bank.js`: `SCHEMA`, `MIGRATIONS`, `bankLimits`, `sharedGroups`, `createBankRouter`, `removeBankOwner` and `cleanupBank`.
 - `src/backend/bank-core.js`: core helpers used by the bank router.
 - `tests/bank-access.test.js`: covers who may do what.
 - `tests/bank-core.test.js`: covers the core helpers.
@@ -23,6 +23,7 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 ## Connections & Data Flow
 
 - Sits beside, and feeds tasks into -> [[Quiz_Editor]]
+- Shares its pictures with quizzes, and is told which quizzes use a task, through -> [[Data_Lifetime]]
 - The dashboard window glides into its left column, using the position sent by -> [[Dashboard]]
 - Reads and writes `/api/bank` on -> [[Backend_API]]
 - Who may read or write depends on the role from -> [[Auth_Roles_Plans]]
@@ -41,6 +42,8 @@ Owns the shared and private task banks shown beside the quiz editor: browsing, c
 - New tables go into `SCHEMA`. Changing an existing table needs a `MIGRATIONS` step.
 - Nicknames and tags are per-user overlays (`bank_nicknames`, `bank_tags`) and never change the task.
 - A quiz question dropped on Starred or a #tag becomes a task first (`taskOfQuestion`): an unchanged bank question uses its bank task, anything else is saved as an own task, and a blank question is refused with a notice.
+- A task added to a quiz is a copy that keeps pointing at the same picture, and `source` notes the task and its hash (`toQuestion`). Only the task's text is copied.
+- "Most used" (`uses`) counts saved quizzes holding the task, not drops into the editor.
 - `src/bank-drag.js` also drives question reordering in the editor, so changes reach both.
 - Layout follows the owner's sketch: own tasks left, editor middle, bank right. Three columns from 1400px, tabs from 1100px, a drawer below that, and full screen on phones.
 - Large screens must use the room, with 1920x1080 as the owner's standard. Later stages stay inside this layout.

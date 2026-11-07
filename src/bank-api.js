@@ -36,7 +36,6 @@ export const fetchAccess = () => request("/access");
 export const fetchMeta = () => request("/meta");
 export const listItems = (params, signal) => request(`/items?${query(params)}`, { signal });
 export const sampleItems = (filter, count) => request("/sample", { method: "POST", body: { filter, count } });
-export const markUsed = ids => request("/used", { method: "POST", body: { ids } });
 
 export const createItems = (items, defaults = {}, scope = "mine") =>
     request("/items", { method: "POST", body: { scope, items, defaults } });

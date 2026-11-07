@@ -1,7 +1,7 @@
 ---
 tags: [node, frontend]
 status: active
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -14,6 +14,8 @@ Owns creating and editing a quiz: the blank start, draft recovery and saving to 
 - `src/api.js`: `saveQuizToCloud`, `fetchQuizDetails` and `quizSaveError`.
 - `src/storage.js`: quiz ids and browser storage (`generateQuizId`, `saveQuizToStorage`).
 - `src/sync.js`: `syncCloudQuizzes`.
+- `src/quiz-pictures.js`: `imageSrc` for showing a picture, `embeddedPictures` and `adoptStoredPictures` around a save.
+- `src/print-layout.js`: `normalizeImageSrc`, used by the print preview and the Word export.
 - `server.js`: `POST /api/quizzes`, including the `quiz_limit` and `quiz_id_taken` refusals.
 - `tests/quiz-save-errors.test.js`: covers how refusals turn into messages.
 
@@ -23,9 +25,12 @@ Owns creating and editing a quiz: the blank start, draft recovery and saving to 
 - Takes tasks from, and saves questions to -> [[Task_Bank]]
 - Saves quizzes through `POST /api/quizzes` on -> [[Backend_API]]
 - The free quiz limit comes from -> [[Auth_Roles_Plans]]
+- A save stores pictures and task links through -> [[Data_Lifetime]]
 
 ## Gotchas & Constraints
 
+- A picture in a question takes one of several forms: a stored address, a data URL until the first save, or bare base64 in the oldest quizzes. Show it with `imageSrc`, never by checking for `data:`. The stored address also looks like base64, which is why `normalizeImageSrc` tests for it first.
+- After a save the server answers where each new picture went, and `adoptStoredPictures` swaps them in unless the teacher changed that picture meanwhile. This keeps the draft in browser storage small.
 - `fresh` means start blank. Without it, `openEditor` resumes the draft, and saving then overwrote the teacher's last quiz. This was the worst teacher bug found.
 - Quizzes already lost that way can only come from a database backup, see [[01_STATE]].
 - A draft records its `owner`, and a draft from another account is not restored, which protects shared computers. Older drafts with no owner still restore.

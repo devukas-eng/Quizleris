@@ -83,8 +83,9 @@ function canonical(value) {
 
 /** Same text, answers and pictures give the same fingerprint, whatever the IDs and spacing. */
 function contentHash(content) {
-    // Only the question's and its choices' IDs differ between copies of one task
-    const question = { ...content, id: undefined };
+    // Only the question's and its choices' IDs, and a quiz's note of where a copy came from, differ
+    // between copies of one task
+    const question = { ...content, id: undefined, source: undefined };
     if (Array.isArray(content.choices)) {
         question.choices = content.choices.map(choice => (choice && typeof choice === 'object' ? { ...choice, id: undefined } : choice));
     }

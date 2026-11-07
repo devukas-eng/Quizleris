@@ -10,7 +10,7 @@ Owns every Lithuanian and English interface string and how the page switches lan
 
 ## Canonical File Map
 
-- `src/lang.js`: the live strings and `t`, `getLanguage`, `setLanguage`, `initLanguage` and `updatePageLanguage`.
+- `src/lang.js`: the live strings and `t`, `getLanguage`, `localDate`, `setLanguage`, `initLanguage` and `updatePageLanguage`.
 - `src/i18n.js`: unused older copy. Nothing imports it, so editing it changes nothing.
 - `tests/lang.test.js`: checks the string tables.
 

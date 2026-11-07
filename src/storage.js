@@ -15,6 +15,7 @@ export function generateQuizId() {
     return Array.from(bytes, b => QUIZ_CODE_ALPHABET[b % QUIZ_CODE_ALPHABET.length]).join("");
 }
 import { saveQuizToCloud, fetchQuizDetails } from "./api.js";
+import { imageSrc } from "./quiz-pictures.js";
 
 /**
  * 2026 Senior Concept: Pure Cloud Mode. Saves instantly to cloud. LocalStorage is deprecated for quizzes.
@@ -54,15 +55,10 @@ export async function loadQuiz() {
                 bytes[i] = binary.charCodeAt(i);
             const decoded = new TextDecoder().decode(bytes);
             const parsed = JSON.parse(decoded);
-            const prefix = "data:image/jpeg;base64,";
             parsed.questions.forEach(q => {
-                if (q.image && !q.image.startsWith("data:") && !q.image.startsWith("local:")) {
-                    q.image = prefix + q.image;
-                }
+                if (q.image) q.image = imageSrc(q.image);
                 q.choices?.forEach(c => {
-                    if (c.image && !c.image.startsWith("data:") && !c.image.startsWith("local:")) {
-                        c.image = prefix + c.image;
-                    }
+                    if (c.image) c.image = imageSrc(c.image);
                 });
             });
             return parsed;

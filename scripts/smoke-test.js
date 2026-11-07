@@ -37,10 +37,16 @@ const fakePool = {
     if (s.startsWith('SELECT owner_id FROM quizzes')) { const q = quizzes.get(p[0]); return [q ? [{ owner_id: q.owner_id }] : []]; }
     if (s.startsWith('SELECT COUNT(*)')) return [[{ cnt: [...quizzes.values()].filter(q => q.owner_id === p[0]).length }]];
     if (s.startsWith('INSERT INTO quizzes')) { quizzes.set(p[0], { id: p[0], owner_id: p[1], title: p[2], visibility: p[3], quiz_data: JSON.parse(p[4]), expires_at: p[6] }); return [{}]; }
-    if (s.startsWith('SELECT owner_id, visibility, expires_at, quiz_data')) { const q = quizzes.get(p[0]); return [q ? [q] : []]; }
+    if (s.startsWith('SELECT owner_id, visibility, featured, expires_at, quiz_data')) { const q = quizzes.get(p[0]); return [q ? [q] : []]; }
     if (s.startsWith('SELECT q.id')) return [[...quizzes.values()]];
-    if (s.startsWith('DELETE FROM quizzes WHERE id = ? AND owner_id')) { const q = quizzes.get(p[0]); if (q && q.owner_id === p[1]) { quizzes.delete(p[0]); return [{ affectedRows: 1 }]; } return [{ affectedRows: 0 }]; }
+    if (s.startsWith('SELECT id, owner_id FROM quizzes WHERE id = ?')) { const q = quizzes.get(p[0]); return [q ? [{ id: q.id, owner_id: q.owner_id }] : []]; }
+    if (s.startsWith('DELETE FROM quiz_folder_items')) return [{}];
+    if (s.startsWith('DELETE FROM quizzes WHERE id IN')) { p[0].forEach(id => quizzes.delete(id)); return [{}]; }
     throw new Error('Unhandled SQL in fake: ' + s);
+  },
+  async getConnection() {
+    const nothing = async () => {};
+    return { query: fakePool.query, beginTransaction: nothing, commit: nothing, rollback: nothing, release() {} };
   }
 };
 require.cache[require.resolve(path.join(ROOT, 'src/backend/db.js'))] = { exports: fakePool, loaded: true, id: 'db' };
@@ -105,6 +111,8 @@ const app = require(path.join(ROOT, 'server.js'));
   r = await j('DELETE', '/api/quizzes/quiz_priv', null, bob); assert.equal(r.status, 404);
   for (let i = 0; i < 3; i++) await j('POST', '/api/quizzes', { id: 'q' + i, title: 't', questions: [] }, alice);
   r = await j('POST', '/api/quizzes', { id: 'q9', title: 't', questions: [] }, alice); assert.equal(r.status, 403, 'free limit 5');
+  r = await j('DELETE', '/api/quizzes/q0', null, alice); assert.equal(r.status, 200, 'an owner deletes a quiz');
+  assert.ok(!quizzes.has('q0'), 'the quiz is gone');
   r = await j('GET', '/api/nope'); assert.equal(r.status, 404); assert.equal(typeof r.data, 'object');
   r = await fetch(base + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' }); assert.equal(r.status, 400);
   r = await fetch(base + '/'); assert.equal(r.status, 200); assert.ok((await r.text()).includes('<html'));

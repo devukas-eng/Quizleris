@@ -28,10 +28,11 @@ for (const key of ['DB_USER', 'DB_PASS', 'DB_NAME']) {
 
 const pool = require('./src/backend/db.js');
 const { seedPremadeQuizzes } = require('./src/backend/premade.js');
-const { ensureBankSchema, createBankRouter, cleanupBank } = require('./src/backend/bank.js');
+const { ensureBankSchema, createBankRouter, cleanupBank, removeBankOwner, inTransaction } = require('./src/backend/bank.js');
+const quizLinks = require('./src/backend/quiz-links.js');
 const { FREE_QUIZ_LIMIT, PRIVATE_EXPIRY_DAYS, hasActivePremium, isPremium, planCapabilities } = require('./src/backend/plans.js');
 const { cleanThemePayload } = require('./src/backend/user-themes.js');
-const { ensureQuizFolderSchema, cleanupQuizFolders, createQuizFolderRouter } = require('./src/backend/quiz-folders.js');
+const { ensureQuizFolderSchema, forgetQuizFolders, createQuizFolderRouter } = require('./src/backend/quiz-folders.js');
 
 // Always rebuild dist/ from src/ on boot so the served frontend can never be stale,
 // regardless of whether the host runs `npm run build` before `npm start`.
@@ -74,11 +75,22 @@ app.use('/api/auth/', authLimiter);
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 3000,
+    skip: req => req.path.startsWith('/media/'),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'School/Network limit reached. Please wait a few minutes.' }
 });
 app.use('/api/', apiLimiter);
+
+// Pictures have their own limit: one class starting a quiz with 20 pictures is 600 requests from one IP
+const mediaLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30000,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'School/Network limit reached. Please wait a few minutes.' }
+});
+app.use('/api/media/', mediaLimiter);
 
 // Wrong quiz codes/IDs are counted separately so game codes can't be guessed by brute force;
 // successful lookups (a class joining) don't count
@@ -902,13 +914,12 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
         const targetId = toInt(req.params.id, 1, Number.MAX_SAFE_INTEGER, 0);
         if (!targetId) return res.status(400).json({ error: 'Invalid user ID' });
         if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account.' });
-        await pool.query('DELETE FROM quizzes WHERE owner_id = ?', [targetId]);
+        const [quizzes] = await pool.query('SELECT id FROM quizzes WHERE owner_id = ?', [targetId]);
+        await deleteQuizzes(quizzes.map(quiz => quiz.id));
         await pool.query('DELETE FROM user_themes WHERE user_id = ?', [targetId]).catch(() => {});
-        await pool.query('DELETE FROM bank_items WHERE owner_id = ?', [targetId]).catch(() => {});
-        await pool.query('DELETE FROM bank_folders WHERE owner_id = ?', [targetId]).catch(() => {});
+        await removeBankOwner(pool, targetId);
         const [result] = await pool.query('DELETE FROM users WHERE id = ?', [targetId]);
         if (!result.affectedRows) return res.status(404).json({ error: 'User not found' });
-        await deleteOrphanAttempts();
         res.json({ ok: true });
     } catch (error) {
         console.error('[ADMIN DELETE USER]', error);
@@ -1086,18 +1097,11 @@ app.get('/api/quizzes/:id', quizLookupLimiter, optionalAuth, async (req, res) =>
 
 app.delete('/api/quizzes/:id', authenticateToken, async (req, res) => {
     try {
-        const remove = (id) => (req.user.role === 'admin'
-            ? pool.query('DELETE FROM quizzes WHERE id = ?', [id])
-            : pool.query('DELETE FROM quizzes WHERE id = ? AND owner_id = ?', [id, req.user.id]));
-        let [result] = await remove(req.params.id);
-        if (result.affectedRows === 0) {
-            const target = await resolveAlias(req.params.id);
-            if (target) [result] = await remove(target);
-        }
-        if (result.affectedRows === 0) {
+        const quiz = await findQuiz(req.params.id, 'id, owner_id');
+        if (!quiz || (req.user.role !== 'admin' && quiz.owner_id !== req.user.id)) {
             return res.status(404).json({ error: 'Quiz not found' });
         }
-        await deleteOrphanAttempts(); // its students' attempts go with it
+        await deleteQuizzes([quiz.id]); // its students' attempts go with it
         res.json({ message: 'Quiz deleted successfully' });
     } catch (error) {
         console.error('[DELETE QUIZ]', error);
@@ -1152,31 +1156,50 @@ app.post('/api/quizzes', authenticateToken, async (req, res) => {
             expiresAt.setDate(expiresAt.getDate() + PRIVATE_EXPIRY_DAYS);
         }
 
-        const quizJsonStr = JSON.stringify(quizData);
         // On update, keep the original owner (an admin editing must not take ownership)
         const ownerId = existing.length > 0 ? existing[0].owner_id : req.user.id;
 
-        await pool.query(`
-            INSERT INTO quizzes (id, owner_id, title, visibility, quiz_data, storage_bytes, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                title = VALUES(title), visibility = VALUES(visibility), quiz_data = VALUES(quiz_data),
-                storage_bytes = VALUES(storage_bytes), expires_at = VALUES(expires_at)
-        `, [
-            quizData.id,
-            ownerId,
-            quizData.title.trim(),
-            visibility,
-            quizJsonStr,
-            Buffer.byteLength(quizJsonStr, 'utf8'),
-            expiresAt
-        ]);
+        const writeQuiz = async (db) => {
+            const quizJsonStr = JSON.stringify(quizData);
+            const storageBytes = Buffer.byteLength(quizJsonStr, 'utf8');
+            await db.query(`
+                INSERT INTO quizzes (id, owner_id, title, visibility, quiz_data, storage_bytes, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    title = VALUES(title), visibility = VALUES(visibility), quiz_data = VALUES(quiz_data),
+                    storage_bytes = VALUES(storage_bytes), expires_at = VALUES(expires_at)
+            `, [
+                quizData.id,
+                ownerId,
+                quizData.title.trim(),
+                visibility,
+                quizJsonStr,
+                storageBytes,
+                expiresAt
+            ]);
+            return storageBytes;
+        };
+
+        // All or nothing: a quiz must never show a picture that no row says it needs, or the cleanup
+        // would take it. Without the tables pictures simply stay inside the quiz, as they used to.
+        let saved = { storageBytes: 0, pictures: {}, tasks: [] };
+        if (quizLinks.isReady()) {
+            saved = await inTransaction(pool, async (conn) => {
+                const pictures = await quizLinks.storePictures(conn, quizData);
+                const storageBytes = await writeQuiz(conn);
+                return { storageBytes, pictures, tasks: await quizLinks.linkQuiz(conn, quizData, ownerId) };
+            });
+            await quizLinks.refreshUses(pool, saved.tasks);
+        } else {
+            saved.storageBytes = await writeQuiz(pool);
+        }
 
         res.json({
             message: 'Quiz saved successfully',
             id: quizData.id, // differs from the sent ID when an old ID was converted: the editor adopts it
             expires_at: expiresAt,
-            storage_bytes: Buffer.byteLength(quizJsonStr, 'utf8')
+            storage_bytes: saved.storageBytes,
+            pictures: saved.pictures // where embedded pictures went: the editor stops carrying them
         });
     } catch (error) {
         console.error('[SAVE QUIZ]', error);
@@ -1540,16 +1563,28 @@ async function ensureSchema() {
         // Non-fatal: quizzes and the editor work without the task bank
         console.error('[SCHEMA] could not set up the task bank:', error.code || error.message);
     }
+    try {
+        await quizLinks.ensureQuizLinks(pool);
+    } catch (error) {
+        // Non-fatal: quizzes then keep their pictures inside, and the cleanup deletes no picture
+        console.error('[SCHEMA] could not set up the quiz links:', error.code || error.message);
+    }
 }
 
-// Attempts whose quiz is gone (deleted or expired) are deleted with it
-async function deleteOrphanAttempts() {
-    await cleanupQuizFolders(pool).catch(error => console.error('[CLEANUP] quiz folders:', error.code || error.message));
-    if (!attemptsReady) return;
-    try {
-        await pool.query('DELETE a FROM quiz_attempts a LEFT JOIN quizzes q ON q.id = a.quiz_id WHERE q.id IS NULL');
-    } catch (error) {
-        console.error('[CLEANUP] attempts:', error.code || error.message);
+// A quiz and everything that is only there for it, by name and all at once. Nothing in this app is
+// deleted for not finding its parent: that would turn a failed conversion or a bad restore into lost
+// results (docs/adr/0002-what-may-delete-data.md).
+async function deleteQuizzes(ids) {
+    for (let start = 0; start < ids.length; start += 500) {
+        const part = ids.slice(start, start + 500);
+        const tasks = await inTransaction(pool, async (conn) => {
+            await forgetQuizFolders(conn, part);
+            if (attemptsReady) await conn.query('DELETE FROM quiz_attempts WHERE quiz_id IN (?)', [part]);
+            const used = await quizLinks.forgetQuizzes(conn, part);
+            await conn.query('DELETE FROM quizzes WHERE id IN (?)', [part]);
+            return used;
+        });
+        await quizLinks.refreshUses(pool, tasks);
     }
 }
 
@@ -1566,15 +1601,21 @@ async function purgeExpiredQuizzes() {
                    OR (u.subscription_tier = 'premium' AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())))
         `);
         if (kept.affectedRows > 0) console.log(`[CLEANUP] ${kept.affectedRows} private quiz(zes) no longer expire (owner has premium)`);
+        // Only private quizzes expire: an admin may have made this one public or put it in the showcase
+        const [shown] = await pool.query(`
+            UPDATE quizzes SET expires_at = NULL, updated_at = updated_at
+            WHERE expires_at IS NOT NULL AND (visibility <> 'private' OR featured = 1)
+        `);
+        if (shown.affectedRows > 0) console.log(`[CLEANUP] ${shown.affectedRows} public or showcase quiz(zes) no longer expire`);
     } catch (error) {
-        // Without this step a premium owner's quiz could be deleted: delete nothing this round
-        console.error('[CLEANUP] premium owners, skipping this round:', error.code || error.message);
+        // Without these steps a quiz that should stay could be deleted: delete nothing this round
+        console.error('[CLEANUP] quizzes to keep, skipping this round:', error.code || error.message);
         return;
     }
     try {
-        const [result] = await pool.query('DELETE FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
-        if (result.affectedRows > 0) console.log(`[CLEANUP] deleted ${result.affectedRows} expired quiz(zes)`);
-        await deleteOrphanAttempts();
+        const [expired] = await pool.query('SELECT id FROM quizzes WHERE expires_at IS NOT NULL AND expires_at <= NOW()');
+        await deleteQuizzes(expired.map(quiz => quiz.id));
+        if (expired.length > 0) console.log(`[CLEANUP] deleted ${expired.length} expired quiz(zes)`);
     } catch (error) {
         console.error('[CLEANUP] failed:', error.code || error.message);
     }
@@ -1586,8 +1627,7 @@ async function purgeExpiredQuizzes() {
 }
 
 if (process.env.NODE_ENV !== 'test') {
-    // Cleanup waits for the schema work: while old quiz IDs are being converted, a quiz's
-    // attempts briefly point at its old ID and would look orphaned (and be deleted)
+    // Cleanup waits for the schema work: it needs the tables and columns set up there
     ensureSchema().finally(() => {
         purgeExpiredQuizzes();
         setInterval(purgeExpiredQuizzes, 60 * 60 * 1000).unref();

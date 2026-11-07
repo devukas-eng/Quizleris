@@ -1,6 +1,7 @@
 import { quiz } from "./state.js";
 import { getRequiredElement, escapeHtml } from "./dom.js";
 import { generateQuizId, saveQuizToStorage, saveImageRegistry, getAllQuizIds, loadQuizFromStorage } from "./storage.js";
+import { imageSrc, embeddedPictures, adoptStoredPictures } from "./quiz-pictures.js";
 import { isAdminAccessAllowed, promptAdminPassword, getStoredUser } from "./auth.js";
 import { t, updatePageLanguage } from "./lang.js";
 import { exportQuizForSharing } from "./admin-export.js";
@@ -473,7 +474,7 @@ function renderAdminForm() {
         <div class="admin-q-image-area" style="margin-bottom: 15px;">
           ${q.image ? `
             <div style="position: relative; display: inline-block;">
-              <img src="${q.image.startsWith("data:") ? q.image : "data:image/jpeg;base64," + q.image}" style="max-height: 120px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);" />
+              <img src="${imageSrc(q.image)}" style="max-height: 120px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);" />
               <button class="admin-remove-q-image btn btn-danger btn-icon" aria-label="Remove Image" data-qidx="${qIdx}" 
                       style="position: absolute; top: -10px; right: -10px; width: 24px; height: 24px; padding: 0; min-width: 24px; font-size: 10px;">\u2715</button>
             </div>
@@ -927,7 +928,7 @@ function renderChoiceBody(choice, qIdx, cIdx) {
       value="${escapeHtml(choice.text || "")}" placeholder="${t("rich.choicePlaceholder")} ${String.fromCharCode(65 + cIdx)}"></rich-input>
     ${choice.image ? `
       <div style="position: relative; display: inline-block;">
-        <img src="${choice.image.startsWith("data:") ? choice.image : "data:image/jpeg;base64," + choice.image}" style="max-height: 40px; border-radius: 4px;" />
+        <img src="${imageSrc(choice.image)}" style="max-height: 40px; border-radius: 4px;" />
         <button class="admin-choice-remove-image btn btn-danger" aria-label="Remove Image" data-cidx="${cIdx}" style="position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; padding:0; min-width: 14px; font-size: 8px;">✕</button>
       </div>
     ` : `
@@ -1174,6 +1175,7 @@ async function saveAdminQuiz() {
     return;
   }
   adminSaveBtn.disabled = true;
+  const sentPictures = embeddedPictures(adminQuiz);
   let saveResult = await saveQuizToStorage(adminQuiz);
   // A new quiz whose random code is already someone else's (409) just gets another code
   for (let attempt = 0; attempt < 3 && saveResult?.status === 409 && !readDraft()?.inCloud; attempt++) {
@@ -1187,6 +1189,7 @@ async function saveAdminQuiz() {
   }
   // An old long ID is converted to a short code by the server: carry on with the code
   if (saveResult?.id && saveResult.id !== adminQuiz.id) adminQuiz.id = saveResult.id;
+  adoptStoredPictures(adminQuiz, saveResult?.pictures, sentPictures);
   // The draft stays as the working copy; it now matches the cloud
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = null;

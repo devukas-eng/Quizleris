@@ -7,6 +7,7 @@ import { renderStartMenu } from "./menu.js";
 import { t, getLanguage } from "./lang.js";
 import { playCorrect, playWrong, toggleMute, getIsMuted } from "./audio.js";
 import { confirmDialog } from "./dialog.js";
+import { isStoredPicture } from "./quiz-pictures.js";
 
 let quizSessionActive = false;
 let quizSessionEnded = false;
@@ -137,8 +138,8 @@ function sanitizeImageUrl(url) {
     if (/^data:image\/(jpeg|png|gif|webp);base64,/.test(url)) {
         return url;
     }
-    // Allow internal app registry references
-    if (url.startsWith('local:img')) {
+    // Allow internal app registry references and pictures stored on this server
+    if (url.startsWith('local:img') || isStoredPicture(url)) {
         return url;
     }
     // Strictly enforce http/https for remote URLs

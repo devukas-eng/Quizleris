@@ -1,7 +1,7 @@
 ---
 tags: [node, infra]
 status: active
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -18,7 +18,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 - `scripts/init_db.js`: creates the app tables in an empty database.
 - `scripts/bench_bank.js`: fills a bench database with `--local --items=200000`.
 - `scripts/smoke-test.js`: smoke test, run with `npm.cmd run test:smoke`.
-- `scripts/bank-flow-test.js`: 92 checks of the creators' system through the real API, run with `npm.cmd run test:bank-flow` against a running `quizleris-studio`. It writes test data, reads `.claude/launch.json` only, and refuses a database that is not local.
+- `scripts/bank-flow-test.js`: 126 checks of the creators' system, quiz pictures, links and deleting through the real API, run with `npm.cmd run test:bank-flow` against a running `quizleris-studio`. It writes test data, reads `.claude/launch.json` only, and refuses a database that is not local.
 - `scripts/check-brain.js`: checks links, paths, node structure and the canvas in `docs/brain/`.
 - `.claude/commands/sync-brain.md`: the slash command's steps, also followed after finishing a feature.
 
@@ -35,6 +35,7 @@ Owns how to run and check the app without touching production: the throwaway dat
 - Local database: XAMPP's `C:\xampp\mysql\bin\mysqld.exe` with its own `my.ini` on port 3399, using `quizleris_dev`, `quizleris_nobank` and `quizleris_bench`. Earlier setups lived in session scratch folders, so it may need recreating. Run it with the shell tool's background mode, because a process from `Start-Process` dies when the command ends.
 - On 2026-11-06 the real data was in the scratch folder whose `my.ini` says port 3399 and that holds a `quizleris_dev` folder. Another scratch `my.ini` starts an empty server on 3398, so check the port before starting one.
 - Copying a database fails on generated columns, so list the columns.
+- `scripts/smoke-test.js` answers SQL from a fake database that matches statements by their text, so a changed query can fail it for no real reason. It had been failing unnoticed since the `featured` column came in, until 2026-11-07. Run it after changing a quiz query.
 - Local sign-in: sign a JWT with the `JWT_SECRET` from `.claude/launch.json`, then set `quizleris_jwt` and `quizleris_user` in the browser.
 - **Test teacher work as a real teacher:** free plan, signed in through the form, with an empty shared bank like live. Run the live commit beside the working copy to compare.
 - The local bank has tasks and live has none. That difference hid the teacher bugs found on 2026-11-06.

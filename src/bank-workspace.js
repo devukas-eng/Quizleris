@@ -1730,47 +1730,17 @@ async function pickFromTopic(topicId, available, anchor) {
     return questionsFor(res.data.ids);
 }
 
-// Quiz questions from bank tasks: new IDs, a note of where they came from, pictures embedded
-// again (a quiz carries its own pictures)
+// Quiz questions from bank tasks: copies with new IDs and a note of which task, as it was then, they
+// came from. Their pictures stay where they are: the quiz only points at them
 async function questionsFor(ids) {
-    const items = (await api.loadItems(ids)).filter(Boolean);
-    const lost = { pictures: 0 };
-    const questions = await Promise.all(items.map(item => toQuestion(item, lost)));
-    if (items.length) api.markUsed(items.map(item => item.id));
-    if (lost.pictures) toast(t("bank.pictureLost"), "error");
-    return questions;
+    return (await api.loadItems(ids)).filter(Boolean).map(toQuestion);
 }
 
-async function toQuestion(item, lost) {
+function toQuestion(item) {
     const question = JSON.parse(JSON.stringify(item.content));
     question.id = `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-    question.source = { bankId: item.id };
-    // A picture that can't be fetched is left out rather than shown broken; the teacher is told
-    const embed = async (holder, key) => {
-        try {
-            holder[key] = await inlineImage(holder[key]);
-        } catch (error) {
-            console.warn("A bank picture could not be loaded", error);
-            delete holder[key];
-            lost.pictures++;
-        }
-    };
-    if (question.image) await embed(question, "image");
-    for (const choice of question.choices || []) if (choice.image) await embed(choice, "image");
+    question.source = { bankId: item.id, hash: item.hash };
     return question;
-}
-
-async function inlineImage(src) {
-    if (typeof src !== "string" || !src.startsWith("/api/media/")) return src;
-    const res = await fetch(src);
-    if (!res.ok) throw new Error(`Picture ${res.status}`);
-    const blob = await res.blob();
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(blob);
-    });
 }
 
 async function addTasks(ids, fromEl) {

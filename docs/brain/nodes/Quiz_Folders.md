@@ -1,7 +1,7 @@
 ---
 tags: [node, admin]
 status: active
-last_verified: 2026-11-06
+last_verified: 2026-11-07
 ---
 
 ## Purpose & Boundaries
@@ -10,7 +10,7 @@ Owns the admin All quizzes tab: a server-side folder tree loaded one folder at a
 
 ## Canonical File Map
 
-- `src/backend/quiz-folders.js`: tables, folder rules, the router, `ensureQuizFolderSchema` and `cleanupQuizFolders`.
+- `src/backend/quiz-folders.js`: tables, folder rules, the router, `ensureQuizFolderSchema` and `forgetQuizFolders`.
 - `src/admin-quiz-browser.js`: the tab's interface (`renderQuizBrowser`, `flattenTree`, `folderName`).
 - `src/api.js`: `browseAdminQuizzes`, `lookupAdminQuizzes`, `createQuizFolder`, `updateQuizFolder`, `deleteQuizFolder` and `moveQuizzesToFolder`.
 - `server.js`: mounts the router at `/api/admin` with `guards` and `attemptsReady`.
@@ -33,4 +33,5 @@ Owns the admin All quizzes tab: a server-side folder tree loaded one folder at a
 - `folderPath` survives a loop in stored data instead of hanging.
 - `premadeSubject` sorts premade quizzes into System subjects by id or stored subject, and falls back to `math`.
 - `cleanFolderName` strips angle brackets, collapses spaces and cuts the name to 80 characters.
+- A deleted quiz leaves its folder through `forgetQuizFolders`, by name, see [[Data_Lifetime]]. A failure there is only logged: filing never stops a delete.
 - Admin-only folders are an unconfirmed default, see [[01_STATE]].

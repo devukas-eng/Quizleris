@@ -32,7 +32,10 @@ const MAX_OPEN_REPORTS = 30; // a teacher's reports waiting for an admin: enough
 const REPORT_REASONS = ['answer', 'wording', 'classification', 'duplicate', 'other'];
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_CONTENT_BYTES = 1024 * 1024; // the question JSON once its pictures are in bank_media
-const MEDIA_GRACE_HOURS = 24; // unused pictures are kept this long, so an import in progress never loses one
+const MEDIA_GRACE_HOURS = 7 * 24; // a picture nothing uses any more is kept this long, counted from then
+// The cleanup's brake: this many pictures can always go, more only while they are a small part of all
+const SWEEP_ALWAYS = 100;
+const SWEEP_SHARE = 0.25;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const MEDIA_URL_RE = /^\/api\/media\/([0-9a-f]{64})$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -208,15 +211,18 @@ const SCHEMA = [
         CONSTRAINT bank_item_values_value_fk FOREIGN KEY (value_id) REFERENCES bank_values (id) ON DELETE CASCADE,
         CONSTRAINT bank_item_values_item_fk FOREIGN KEY (item_id) REFERENCES bank_items (id) ON DELETE CASCADE
     ) ${TABLE_OPTIONS}`,
-    // Pictures by content hash: stored once however many tasks use them, served at /api/media/<sha256>
+    // Pictures by content hash: stored once however many tasks and quizzes use them, served at
+    // /api/media/<sha256>. unused_since: when the hourly cleanup first found nothing using it
     `CREATE TABLE IF NOT EXISTS bank_media (
         sha256 CHAR(64) ${ASCII} PRIMARY KEY,
         mime VARCHAR(40) NOT NULL,
         bytes INT UNSIGNED NOT NULL,
         data MEDIUMBLOB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        unused_since DATETIME NULL DEFAULT NULL
     ) ${TABLE_OPTIONS}`,
-    // Which task shows which picture, so pictures no task uses any more can be found and deleted
+    // Which task uses which picture, so pictures nothing uses any more can be found (quizzes have
+    // quiz_media, see quiz-links.js). A shared task also keeps its old pictures: its log can bring them back
     `CREATE TABLE IF NOT EXISTS bank_item_media (
         item_id INT UNSIGNED NOT NULL,
         sha256 CHAR(64) ${ASCII} NOT NULL,
@@ -365,6 +371,11 @@ const MIGRATIONS = [
     async pool => {
         if (await hasColumn(pool, 'bank_submissions', 'batch_id')) return;
         await pool.query('ALTER TABLE bank_submissions ADD COLUMN batch_id INT UNSIGNED NULL AFTER item_id, ADD INDEX bank_submissions_batch (batch_id, status)');
+    },
+    // When a picture stopped being used
+    async pool => {
+        if (await hasColumn(pool, 'bank_media', 'unused_since')) return;
+        await pool.query('ALTER TABLE bank_media ADD COLUMN unused_since DATETIME NULL DEFAULT NULL');
     }
 ];
 
@@ -889,7 +900,8 @@ async function storeImage(conn, dataUrl) {
     const data = Buffer.from(dataUrl.slice(comma + 1), 'base64');
     if (!data.length || data.length > MAX_IMAGE_BYTES) throw new BankError('Picture too large');
     const sha = crypto.createHash('sha256').update(data).digest('hex');
-    await conn.query('INSERT IGNORE INTO bank_media (sha256, mime, bytes, data) VALUES (?, ?, ?, ?)', [sha, header[1], data.length, data]);
+    // Stored again means wanted again: the cleanup's clock stops, and this row is locked until the save ends
+    await conn.query('INSERT INTO bank_media (sha256, mime, bytes, data) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE unused_since = NULL', [sha, header[1], data.length, data]);
     return sha;
 }
 
@@ -935,9 +947,10 @@ async function derivedColumns(conn, content) {
     };
 }
 
-async function linkMedia(conn, itemId, shas) {
-    await conn.query('DELETE FROM bank_item_media WHERE item_id = ?', [itemId]);
-    if (shas.length) await conn.query('INSERT INTO bank_item_media (item_id, sha256) VALUES ?', [shas.map(sha => [itemId, sha])]);
+/** `keepOld`: a shared task's log can undo an edit, so the pictures it showed before stay linked too. */
+async function linkMedia(conn, itemId, shas, keepOld = false) {
+    if (!keepOld) await conn.query('DELETE FROM bank_item_media WHERE item_id = ?', [itemId]);
+    if (shas.length) await conn.query('INSERT IGNORE INTO bank_item_media (item_id, sha256) VALUES ?', [shas.map(sha => [itemId, sha])]);
 }
 
 async function findDuplicate(conn, ownerId, hash) {
@@ -1126,7 +1139,7 @@ async function updateItem(pool, user, rawId, body, log = {}) {
         if (item.values.length) {
             await conn.query('INSERT INTO bank_item_values (value_id, item_id) VALUES ?', [item.values.map(v => [v, row.id])]);
         }
-        await linkMedia(conn, row.id, d.media);
+        await linkMedia(conn, row.id, d.media, shared);
         if (!shared) return;
         if (item.status !== row.status) await statusMoved(conn, user, [row.id], item.status);
         const { kind, status, subjectId, gradeId, topicId, difficultyId, source } = item;
@@ -1251,8 +1264,9 @@ async function snapshots(db, ids) {
 
 /**
  * Archives tasks (they leave the listings). `purge` deletes one's own archived tasks for good, with
- * their content, classifier values and picture links (their pictures go in the hourly cleanup). The
- * shared bank's tasks are never deleted: archived, they stay in the log and can come back.
+ * their content, classifier values and picture links (a picture nothing else uses goes in the hourly
+ * cleanup, a week later). The shared bank's tasks are never deleted: archived, they stay in the log
+ * and can come back.
  */
 async function archiveItems(pool, user, body) {
     const ownerId = writeScope(user, body.scope);
@@ -1608,7 +1622,7 @@ async function fetchItems(pool, user, ids) {
     const visible = admin ? '' : staff ? ' AND (i.owner_id = 0 OR i.owner_id = ?)'
         : " AND ((i.owner_id = 0 AND i.status = 'published') OR i.owner_id = ?)";
     const [rows] = await pool.query(
-        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, c.content
+        `SELECT i.id, i.owner_id, i.kind, i.qtype, i.preview, i.subject_id, i.grade_id, i.topic_id, i.difficulty_id, i.folder_id, i.status, i.uses, i.source, i.content_hash, c.content
          FROM bank_items i JOIN bank_item_content c ON c.item_id = i.id
          WHERE i.id IN (?)${visible}`,
         admin ? [ids] : [ids, user.id]
@@ -1657,6 +1671,7 @@ async function fetchItems(pool, user, ids) {
         status: row.status,
         uses: row.uses,
         source: row.source,
+        hash: row.content_hash,
         values: valuesOf.get(row.id) || [],
         reportedByMe: reported.has(row.id),
         ...(staff ? { reports: reportsOf.get(row.id) || [] } : {}),
@@ -1880,15 +1895,6 @@ function createBankRouter({ pool, authenticateToken, requireAdmin }) {
     router.post('/bank/items/fetch', route(async req => ({ items: await fetchItems(pool, req.user, idList(req.body?.ids ?? [], MAX_FETCH)) })));
 
     router.post('/bank/sample', route(async req => ({ ids: await sampleItems(pool, req.user, req.body || {}) })));
-
-    // Each drop into a quiz counts towards "most used"; IDs counted once per request
-    router.post('/bank/used', route(async req => {
-        const ids = idList(req.body?.ids ?? [], MAX_FETCH);
-        if (ids.length) {
-            await pool.query('UPDATE bank_items SET uses = uses + 1, updated_at = updated_at WHERE id IN (?) AND (owner_id = 0 OR owner_id = ?)', [ids, req.user.id]);
-        }
-        return { ok: true };
-    }));
 
     // A teacher's own folders, with how many of their tasks each holds (archived ones not counted)
     const folderOwner = user => {
@@ -2304,23 +2310,55 @@ async function ensureBankSchema(pool) {
 }
 
 /**
- * Hourly upkeep: a deleted account's own tasks and folders go with it, and pictures no task shows any
- * more are deleted once older than `graceHours` (an import in progress may not have linked its new ones yet).
+ * A deleted account's own tasks, folders and labels. By name, on purpose: nothing here is ever removed
+ * for not finding its account, so a bad restore of `users` cannot empty teachers' banks.
  */
-async function cleanupBank(pool, graceHours = MEDIA_GRACE_HOURS) {
+async function removeBankOwner(pool, userId) {
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error('Not an account'); // owner 0 is the shared bank
     if (!bankReady) return;
-    const [tasks] = await pool.query('DELETE i FROM bank_items i LEFT JOIN users u ON u.id = i.owner_id WHERE i.owner_id <> 0 AND u.id IS NULL');
-    // Top-level folders only: their subfolders go with them
-    await pool.query('DELETE f FROM bank_folders f LEFT JOIN users u ON u.id = f.owner_id WHERE f.parent_id IS NULL AND u.id IS NULL');
-    await pool.query('DELETE f FROM bank_favorites f LEFT JOIN users u ON u.id = f.user_id WHERE u.id IS NULL');
-    await pool.query('DELETE n FROM bank_nicknames n LEFT JOIN users u ON u.id = n.user_id WHERE u.id IS NULL');
-    await pool.query('DELETE t FROM bank_tags t LEFT JOIN users u ON u.id = t.user_id WHERE u.id IS NULL');
-    const [pictures] = await pool.query(
-        `DELETE m FROM bank_media m LEFT JOIN bank_item_media l ON l.sha256 = m.sha256
-         WHERE l.sha256 IS NULL AND m.created_at <= NOW() - INTERVAL ? HOUR`, [graceHours]);
-    if (tasks.affectedRows || pictures.affectedRows) {
-        console.log(`[CLEANUP] task bank: ${tasks.affectedRows} task(s) of deleted accounts, ${pictures.affectedRows} unused picture(s)`);
-    }
+    await inTransaction(pool, async conn => {
+        await conn.query('DELETE FROM bank_items WHERE owner_id = ?', [userId]);
+        // Top-level folders only: their subfolders go with them
+        await conn.query('DELETE FROM bank_folders WHERE owner_id = ? AND parent_id IS NULL', [userId]);
+        await conn.query('DELETE FROM bank_favorites WHERE user_id = ?', [userId]);
+        await conn.query('DELETE FROM bank_nicknames WHERE user_id = ?', [userId]);
+        await conn.query('DELETE FROM bank_tags WHERE user_id = ?', [userId]);
+    });
 }
 
-module.exports = { ensureBankSchema, createBankRouter, cleanupBank, loadMeta, listItems, contextFor, bankLimits, createOwner, labelStatuses };
+// Pictures are the one thing deleted for having nothing left: many tasks and quizzes share them and no
+// single action owns them. A missing table makes these queries fail, and then nothing is deleted.
+const PICTURE_UNUSED = `NOT EXISTS (SELECT 1 FROM bank_item_media l WHERE l.sha256 = m.sha256)
+    AND NOT EXISTS (SELECT 1 FROM quiz_media q WHERE q.sha256 = m.sha256)`;
+
+/** The brake: so many pictures looking unused at once more likely means lost links than a big clear-out. */
+function sweepAllowed(due, total) {
+    return due <= SWEEP_ALWAYS || due <= total * SWEEP_SHARE;
+}
+
+/** Starts the clock of pictures nothing uses, stops it for ones in use again, deletes the ones past `graceHours`. */
+async function sweepPictures(pool, graceHours = MEDIA_GRACE_HOURS) {
+    await pool.query(`UPDATE bank_media m SET m.unused_since = NOW() WHERE m.unused_since IS NULL AND ${PICTURE_UNUSED}`);
+    await pool.query(`UPDATE bank_media m SET m.unused_since = NULL WHERE m.unused_since IS NOT NULL AND NOT (${PICTURE_UNUSED})`);
+    const [due] = await pool.query(`SELECT m.sha256 FROM bank_media m WHERE m.unused_since <= NOW() - INTERVAL ? HOUR AND ${PICTURE_UNUSED}`, [graceHours]);
+    if (!due.length) return 0;
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM bank_media');
+    if (!sweepAllowed(due.length, Number(total))) {
+        console.error(`[CLEANUP] ${due.length} of ${total} pictures look unused: deleting none, check quiz_media and bank_item_media`);
+        return 0;
+    }
+    const [gone] = await pool.query(`DELETE m FROM bank_media m WHERE m.sha256 IN (?) AND ${PICTURE_UNUSED}`, [due.map(row => row.sha256)]);
+    return gone.affectedRows;
+}
+
+/** Hourly upkeep of the bank. */
+async function cleanupBank(pool) {
+    if (!bankReady) return;
+    const pictures = await sweepPictures(pool);
+    if (pictures) console.log(`[CLEANUP] task bank: ${pictures} unused picture(s)`);
+}
+
+module.exports = {
+    ensureBankSchema, createBankRouter, cleanupBank, removeBankOwner, sweepPictures, sweepAllowed, loadMeta, listItems, contextFor,
+    bankLimits, createOwner, labelStatuses, inTransaction, storeImage, BankError, MEDIA_URL_RE, bankIsReady: () => bankReady
+};

@@ -18,11 +18,12 @@ Owns how tasks reach the shared bank: creators sorting them when they send, admi
 - `src/admin-bank-log.js`: the log and a task's own story (`renderBankLog`, `renderTaskHistory`).
 - `src/admin-task-cards.js`: slim rows and cards shared by those screens (`createTaskRows`, `createPager`).
 - `src/text-diff.js`: the log's diff (`diffRows`).
-- `src/backend/bank.js`: `submitItems`, `decideDraft`, `decideBatch`, `restoreItem`, `revertChange` and `createOwner`.
+- `src/backend/bank.js`: `submitItems`, `decideDraft`, `decideBatch`, `statusMoved`, `publishExisting`, `restoreItem`, `statusBeforeArchive`, `reopenSubmissions`, `revertChange` and `createOwner`.
 - `src/backend/bank-history.js`: `taskChanges`, `recordHistory` and `listHistory`.
 - `src/backend/bank-pool.js`: `poolDecision`, `poolRoutes`, `addToPool` and `leavePool`.
 - `tests/bank-history.test.js`: the log, votes and the feed cursor.
 - `tests/bank-send.test.js`: the send rules and the diff.
+- `scripts/bank-flow-test.js`: the whole flow through the real API.
 
 ## Connections & Data Flow
 
@@ -35,10 +36,10 @@ Owns how tasks reach the shared bank: creators sorting them when they send, admi
 
 - **The way in:** a creator cannot add to the shared bank directly (`createOwner`). Tasks reach it through a send, or by an admin. An admin's send publishes at once.
 - A send needs a topic, grade and difficulty on every task (`fullClassification`), so an admin only has to say yes. Tasks lacking one are held back as `incomplete`.
-- **Shared tasks are never deleted.** Purging is refused for the shared bank, and a rejected copy is archived. Sending it again brings the same row back. Only teachers' own tasks can go for good.
+- **Shared tasks are never deleted.** Purging is refused for the shared bank, and a rejected copy is archived, or goes back to the unsorted tasks if it came from there. Sending an archived one again brings the same row back. Only teachers' own tasks can go for good.
 - **Unsorted tasks** have status `pool` in `bank_items`: the same table, so one hash check stops duplicates between them and the bank, and every teacher path already filters on `published`. `pool` is reached only by adding (`scope: pool`) or restoring, because a task also needs a `bank_pool` row.
 - `bank_pool.shuffle` is a random place set once, so a feed page is an index range and not `ORDER BY RAND()`. Each session starts at a random place and walks the ring. Measured with 150,000 tasks: about 15 ms a page.
-- A `bank_pool` row marks a task that came from the unsorted ones and is still sorted out of them: a rejected one goes back there, and `leavePool` drops the row on publishing, so a published task taken out later returns to the bank.
+- A `bank_pool` row marks a task that came from the unsorted ones and is still sorted out of them: a rejected one goes back there, and `leavePool` drops the row on publishing. Restoring reads the log first, and the row only decides for a task archived before the log existed.
 - Votes: `poolDecision` is the whole rule. The limits live in `bank_settings` (`pool_likes`, `pool_dislikes`), default 2, and an admin sets them. Lowering a limit applies to votes already cast. One creator alone needs a limit of 1.
 - A task voted out stays out when added again, and an admin can restore it with a clean slate.
 - Staff's #tags also hold unsorted and waiting tasks (`labelStatuses`). A sent unsorted task moves in place, with no copy.
